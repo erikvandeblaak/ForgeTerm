@@ -18,6 +18,7 @@ forgeterm-settings.workspace = true
 forgeterm-agents.workspace = true
 forgeterm-prompts.workspace = true
 forgeterm-git.workspace = true
+forgeterm-viewer.workspace = true
 iced.workspace = true
 anyhow.workspace = true
 tracing.workspace = true

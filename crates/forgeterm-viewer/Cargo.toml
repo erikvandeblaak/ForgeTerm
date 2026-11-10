@@ -1,0 +1,15 @@
+[package]
+name = "forgeterm-viewer"
+description = "ForgeTerm code viewer: load text files safely and highlight them (syntect). UI-agnostic, read-only."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# Pure-Rust regex engine (no C onig): builds the same on Windows and Linux.
+syntect = { version = "5", default-features = false, features = ["default-syntaxes", "parsing", "regex-fancy"] }
+
+[lints]
+workspace = true

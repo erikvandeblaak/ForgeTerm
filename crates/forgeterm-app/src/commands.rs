@@ -45,6 +45,8 @@ pub enum CommandId {
     ZoomOut,
     ZoomReset,
     ToggleExplorer,
+    ToggleViewer,
+    ViewSelectedFile,
     ExplorerToggleHidden,
     ExplorerToggleFollow,
     ExplorerRefresh,
@@ -95,6 +97,8 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::ZoomOut,
     CommandId::ZoomReset,
     CommandId::ToggleExplorer,
+    CommandId::ToggleViewer,
+    CommandId::ViewSelectedFile,
     CommandId::ExplorerToggleHidden,
     CommandId::ExplorerToggleFollow,
     CommandId::ExplorerRefresh,
@@ -136,6 +140,7 @@ impl CommandId {
             | CopySelectedPath
             | NewTabInSelectedFolder => "Explorer",
             OpenSettings | ReloadSettings => "Settings",
+            ToggleViewer | ViewSelectedFile => "Viewer",
             ToggleAiPanel | AiRefresh | StartAgent(..) | OpenPromptStudio | OpenPromptsFolder => {
                 "AI"
             }
@@ -192,6 +197,8 @@ impl CommandId {
             OpenPromptStudio => "Prompt Studio",
             OpenPromptsFolder => "Open Prompts Folder",
             ToggleGitPanel => "Toggle Git Panel",
+            ToggleViewer => "Toggle Code Viewer",
+            ViewSelectedFile => "View Selected File",
             GitRefresh => "Refresh Git Status",
             GitShowHistory => "Show History and Activity",
             ReloadSettings => "Reload Settings",
@@ -295,6 +302,7 @@ impl Default for Keymap {
             (b(CS, Char('a')), ToggleAiPanel),
             (b(CS, Char('i')), OpenPromptStudio),
             (b(CS, Char('g')), ToggleGitPanel),
+            (b(CS, Char('o')), ToggleViewer),
             (b(C, Tab), NextTab),
             (b(CS, Tab), PreviousTab),
             (b(AS, Char('=')), SplitRight),

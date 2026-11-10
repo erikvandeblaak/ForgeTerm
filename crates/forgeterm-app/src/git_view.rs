@@ -996,6 +996,11 @@ pub fn view_diff(diff: &DiffView) -> Element<'_, Message> {
         text(diff.path.as_str()).size(14).color(theme::TEXT),
         text(kind).size(11).color(theme::TEXT_MUTED),
         space::horizontal(),
+        small_button(
+            "Open in viewer",
+            Some(Message::GitOpenInViewer(diff.path.clone())),
+            "Show the whole file in the code viewer"
+        ),
         small_button("Close (Esc)", Some(Message::GitDiffClose), "Close"),
     ]
     .spacing(10)

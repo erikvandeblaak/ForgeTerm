@@ -15,6 +15,7 @@ mod prompt_studio;
 mod terminal_pane;
 mod terminal_view;
 mod theme;
+mod viewer_view;
 mod workspace;
 
 use tracing_subscriber::EnvFilter;

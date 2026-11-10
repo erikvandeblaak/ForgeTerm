@@ -32,6 +32,7 @@ use crate::palette::{self as command_palette, CommandPalette, Entry};
 use crate::prompt_studio::PromptStudio;
 use crate::terminal_pane::{Outcome, SessionOptions, Status, TermId, TermMsg, TerminalPane};
 use crate::terminal_view::{Metrics, TerminalCanvas};
+use crate::viewer_view::{self, Viewer, ViewerMsg, ViewerTab};
 use crate::workspace::Workspace;
 use crate::{explorer_view, keys, theme};
 
@@ -134,6 +135,9 @@ pub enum Message {
     GitNewBranchName(String),
     GitCreateBranch,
     GitToggleRemotes,
+    /// "Open in viewer" in the diff overlay (path relative to the repository root).
+    GitOpenInViewer(String),
+    Viewer(ViewerMsg),
 }
 
 /// History overlay data for one repository root.
@@ -203,6 +207,7 @@ pub struct App {
     prompt_studio: Option<PromptStudio>,
     git_visible: bool,
     git: GitState,
+    viewer: Viewer,
 }
 
 impl App {
@@ -243,6 +248,7 @@ impl App {
             prompt_studio: None,
             git_visible: false,
             git: GitState::default(),
+            viewer: Viewer::default(),
         };
         app.menus = menu::menus(app.shells.len());
         app.load_settings(true);
@@ -502,6 +508,7 @@ impl App {
     }
 
     fn focus_terminal(&mut self, id: TermId) {
+        self.viewer.focused = false;
         if self.workspace.focused() == Some(id) {
             return;
         }
@@ -782,6 +789,24 @@ impl App {
                 if self.settings_changed_on_disk() {
                     self.load_settings(false);
                 }
+                // Files open in the viewer that changed on disk are reloaded.
+                let changed: Vec<PathBuf> = self
+                    .viewer
+                    .tabs
+                    .iter_mut()
+                    .filter(|t| !t.reloading)
+                    .filter(|t| {
+                        let now = forgeterm_viewer::modified(&t.doc.path);
+                        now.is_some() && now != t.doc.modified
+                    })
+                    .map(|t| {
+                        t.reloading = true;
+                        t.doc.path.clone()
+                    })
+                    .collect();
+                if !changed.is_empty() {
+                    return Task::batch(changed.into_iter().map(load_document));
+                }
             }
             Message::DismissSettingsProblems => self.settings_problems.clear(),
             Message::AgentsDetected(found) => {
@@ -922,6 +947,13 @@ impl App {
                 }
             }
             Message::GitToggleRemotes => self.git.show_remotes = !self.git.show_remotes,
+            Message::GitOpenInViewer(rel) => {
+                if let Some(root) = self.git.root().cloned() {
+                    self.git.diff = None;
+                    return self.viewer_msg(ViewerMsg::Open(root.join(rel)));
+                }
+            }
+            Message::Viewer(msg) => return self.viewer_msg(msg),
             Message::FileDropped(path) => {
                 self.drop_hover = false;
                 self.insert_paths(&[path]);
@@ -1020,9 +1052,25 @@ impl App {
             }
             return Task::none();
         }
+        // The viewer's find bar closes with Esc, also while its input has focus.
+        if self.viewer.visible
+            && self.viewer.find_open
+            && matches!(key, keyboard::Key::Named(Named::Escape))
+            && (self.viewer.focused || captured)
+        {
+            return self.viewer_msg(ViewerMsg::CloseFind);
+        }
         // Keys handled by a widget never reach the terminal.
         if captured {
             return Task::none();
+        }
+        // The focused viewer takes navigation keys; app shortcuts still work, the
+        // terminal gets nothing.
+        if self.viewer.visible && self.viewer.focused {
+            if let Some(msg) = viewer_key(&key, mods, &self.viewer) {
+                return self.viewer_msg(msg);
+            }
+            return self.app_shortcut(&key, mods).unwrap_or_else(Task::none);
         }
 
         if let Some(task) = self.app_shortcut(&key, mods) {
@@ -1322,6 +1370,22 @@ impl App {
                 return detect_agents();
             }
             CommandId::StartAgent(kind, split) => return self.start_agent(kind, split),
+            CommandId::ToggleViewer => {
+                self.viewer.visible = !self.viewer.visible;
+                if !self.viewer.visible {
+                    self.viewer.focused = false;
+                }
+            }
+            CommandId::ViewSelectedFile => {
+                if let Some(path) = self
+                    .explorer
+                    .selected()
+                    .filter(|e| !e.is_dir)
+                    .map(|e| e.path.clone())
+                {
+                    return self.viewer_msg(ViewerMsg::Open(path));
+                }
+            }
             CommandId::ToggleGitPanel => {
                 self.git_visible = !self.git_visible;
                 if self.git_visible {
@@ -1443,6 +1507,8 @@ impl App {
             CommandId::SelectTab(i) => i < self.workspace.tabs.len() && i != self.workspace.active,
             CommandId::OpenPromptsFolder => self.prompts_dir().is_some(),
             CommandId::GitShowHistory => self.git.root().is_some(),
+            CommandId::ToggleViewer => true,
+            CommandId::ViewSelectedFile => self.explorer.selected().is_some_and(|e| !e.is_dir),
             CommandId::CommandPalette
             | CommandId::OpenPromptStudio
             | CommandId::ToggleGitPanel
@@ -1493,6 +1559,213 @@ impl App {
         } else if let Some(s) = t.session() {
             s.paste(&text);
         }
+    }
+
+    // ---- viewer -------------------------------------------------------------------
+
+    fn viewer_msg(&mut self, msg: ViewerMsg) -> Task<Message> {
+        let v = &mut self.viewer;
+        match msg {
+            ViewerMsg::Open(path) => {
+                v.visible = true;
+                v.error = None;
+                if let Some(i) = v.index_of(&path) {
+                    v.active = i;
+                    v.focused = true;
+                    if v.find_open {
+                        v.refresh_matches();
+                    }
+                    return Task::none();
+                }
+                return load_document(path);
+            }
+            ViewerMsg::Loaded(path, result) => match result {
+                Err(e) => {
+                    if let Some(i) = v.index_of(&path) {
+                        v.tabs[i].reloading = false;
+                    } else {
+                        v.error = Some(e);
+                    }
+                }
+                Ok(doc) => {
+                    let index = match v.index_of(&path) {
+                        Some(i) => {
+                            v.tabs[i].replace(*doc);
+                            i
+                        }
+                        None => {
+                            v.tabs.push(ViewerTab::new(*doc));
+                            v.active = v.tabs.len() - 1;
+                            v.focused = true;
+                            v.tabs.len() - 1
+                        }
+                    };
+                    if index == v.active && v.find_open {
+                        v.refresh_matches();
+                    }
+                    let tab = &mut v.tabs[index];
+                    if tab.doc.highlightable() && tab.doc.syntax != "Plain Text" {
+                        tab.highlighting = true;
+                        let doc = tab.doc.clone();
+                        return background(
+                            move || {
+                                let spans = forgeterm_viewer::highlight(&doc);
+                                (doc.path, doc.modified, spans)
+                            },
+                            |(path, modified, spans)| {
+                                Message::Viewer(ViewerMsg::Highlighted(path, modified, spans))
+                            },
+                        );
+                    }
+                }
+            },
+            ViewerMsg::Highlighted(path, modified, spans) => {
+                // Only for the version that is still shown.
+                if let Some(t) = v
+                    .tabs
+                    .iter_mut()
+                    .find(|t| t.doc.path == path && t.doc.modified == modified)
+                {
+                    t.spans = spans;
+                    t.highlighting = false;
+                    t.cache.clear();
+                }
+            }
+            ViewerMsg::Scroll(lines) => {
+                if let Some(t) = v.tab_mut() {
+                    t.scroll_by(lines);
+                }
+            }
+            ViewerMsg::ScrollFraction(f) => {
+                v.focused = true;
+                if let Some(t) = v.tab_mut() {
+                    t.scroll_to_fraction(f);
+                }
+            }
+            ViewerMsg::CenterOn(line) => {
+                v.focused = true;
+                if let Some(t) = v.tab_mut() {
+                    t.center_on(line);
+                }
+            }
+            ViewerMsg::Rows(rows) => {
+                if let Some(t) = v.tab_mut() {
+                    t.rows = rows.max(1);
+                    t.top = t.top.min(t.doc.line_count().saturating_sub(t.rows));
+                    t.cache.clear();
+                }
+            }
+            ViewerMsg::SelectStart(line, extend) => {
+                v.focused = true;
+                if let Some(t) = v.tab_mut() {
+                    t.selection = match (extend, t.selection) {
+                        (true, Some((anchor, _))) => Some((anchor, line)),
+                        _ => Some((line, line)),
+                    };
+                    t.cache.clear();
+                }
+            }
+            ViewerMsg::SelectTo(line) => {
+                if let Some(t) = v.tab_mut() {
+                    let line = line.min(t.doc.line_count().saturating_sub(1));
+                    if let Some((anchor, _)) = t.selection {
+                        t.selection = Some((anchor, line));
+                    }
+                    t.reveal(line);
+                }
+            }
+            ViewerMsg::SelectTab(i) => {
+                if i < v.tabs.len() {
+                    v.active = i;
+                    v.focused = true;
+                    if v.find_open {
+                        v.refresh_matches();
+                    }
+                }
+            }
+            ViewerMsg::CloseTab(i) => {
+                if i < v.tabs.len() {
+                    v.tabs.remove(i);
+                    if v.active >= v.tabs.len() {
+                        v.active = v.tabs.len().saturating_sub(1);
+                    } else if i < v.active {
+                        v.active -= 1;
+                    }
+                    if v.tabs.is_empty() {
+                        v.focused = false;
+                    }
+                    v.refresh_matches();
+                }
+            }
+            ViewerMsg::FindQuery(q) => {
+                v.query = q;
+                v.refresh_matches();
+            }
+            ViewerMsg::FindNext => v.step_match(true),
+            ViewerMsg::FindPrev => v.step_match(false),
+            ViewerMsg::OpenFind => {
+                v.visible = true;
+                v.find_open = true;
+                v.refresh_matches();
+                return iced::widget::operation::focus(viewer_view::FIND_INPUT_ID);
+            }
+            ViewerMsg::CloseFind => {
+                v.find_open = false;
+                v.focused = !v.tabs.is_empty();
+                if let Some(t) = v.tab_mut() {
+                    t.cache.clear();
+                }
+            }
+            ViewerMsg::CopySelection => {
+                if let Some(t) = v.tab()
+                    && let Some((a, b)) = t.selected_range()
+                {
+                    let text = forgeterm_viewer::copy_lines(&t.doc, a, b);
+                    let text = if cfg!(windows) {
+                        text.replace('\n', "\r\n")
+                    } else {
+                        text
+                    };
+                    return clipboard::write(text);
+                }
+            }
+            ViewerMsg::CopyPath => {
+                if let Some(t) = v.tab() {
+                    return clipboard::write(t.doc.path.display().to_string());
+                }
+            }
+            ViewerMsg::InsertPath => {
+                if let Some(path) = v.tab().map(|t| t.doc.path.clone()) {
+                    self.insert_paths(&[path]);
+                }
+            }
+            ViewerMsg::Reload => {
+                if let Some(t) = v.tab_mut() {
+                    t.reloading = true;
+                    return load_document(t.doc.path.clone());
+                }
+            }
+            ViewerMsg::ClosePanel => {
+                v.visible = false;
+                v.focused = false;
+            }
+            ViewerMsg::Escape => {
+                let had_selection = v.tab().is_some_and(|t| t.selection.is_some());
+                if let Some(t) = v.tab_mut().filter(|_| had_selection) {
+                    t.selection = None;
+                    t.cache.clear();
+                } else {
+                    v.focused = false;
+                }
+            }
+            ViewerMsg::SelectAll => {
+                if let Some(t) = v.tab_mut() {
+                    t.selection = Some((0, t.doc.line_count().saturating_sub(1)));
+                    t.cache.clear();
+                }
+            }
+        }
+        Task::none()
     }
 
     // ---- git ----------------------------------------------------------------------
@@ -1795,6 +2068,16 @@ impl App {
             row![ai_view::view(&self.agents, self.ai_context.as_ref()), body].into()
         } else if self.git_visible {
             row![git_view::view(&self.git), body].into()
+        } else {
+            body
+        };
+        let body: Element<'_, Message> = if self.viewer.visible {
+            row![
+                container(body).width(Length::FillPortion(5)),
+                container(viewer_view::view(&self.viewer, self.metrics.font_size))
+                    .width(Length::FillPortion(4)),
+            ]
+            .into()
         } else {
             body
         };
@@ -2424,6 +2707,41 @@ fn detect_agents() -> Task<Message> {
                 .collect()
         },
         Message::AgentsDetected,
+    )
+}
+
+/// Keys of the focused viewer; `None` lets the key fall through to app shortcuts.
+fn viewer_key(key: &keyboard::Key, mods: keyboard::Modifiers, v: &Viewer) -> Option<ViewerMsg> {
+    let rows = v.tab().map_or(30, |t| t.rows) as i32;
+    let ctrl = mods.control() && !mods.alt();
+    Some(match key {
+        keyboard::Key::Named(Named::ArrowUp) => ViewerMsg::Scroll(1),
+        keyboard::Key::Named(Named::ArrowDown) => ViewerMsg::Scroll(-1),
+        keyboard::Key::Named(Named::PageUp) => ViewerMsg::Scroll(rows - 1),
+        keyboard::Key::Named(Named::PageDown) => ViewerMsg::Scroll(-(rows - 1)),
+        keyboard::Key::Named(Named::Home) => ViewerMsg::Scroll(i32::MAX / 2),
+        keyboard::Key::Named(Named::End) => ViewerMsg::Scroll(-(i32::MAX / 2)),
+        keyboard::Key::Named(Named::F3) if mods.shift() => ViewerMsg::FindPrev,
+        keyboard::Key::Named(Named::F3) => ViewerMsg::FindNext,
+        keyboard::Key::Named(Named::Escape) => ViewerMsg::Escape,
+        keyboard::Key::Character(c) if ctrl && !mods.shift() && c.eq_ignore_ascii_case("c") => {
+            ViewerMsg::CopySelection
+        }
+        keyboard::Key::Character(c) if ctrl && !mods.shift() && c.eq_ignore_ascii_case("f") => {
+            ViewerMsg::OpenFind
+        }
+        keyboard::Key::Character(c) if ctrl && !mods.shift() && c.eq_ignore_ascii_case("a") => {
+            ViewerMsg::SelectAll
+        }
+        _ => return None,
+    })
+}
+
+fn load_document(path: PathBuf) -> Task<Message> {
+    let key = path.clone();
+    background(
+        move || forgeterm_viewer::load(&path).map(Box::new),
+        move |result| Message::Viewer(ViewerMsg::Loaded(key.clone(), result)),
     )
 }
 

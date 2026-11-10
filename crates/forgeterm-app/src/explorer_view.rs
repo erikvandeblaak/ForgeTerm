@@ -46,10 +46,15 @@ pub fn view(tree: &Tree, follow: bool) -> Element<'_, Message> {
 
     let root = column![
         text(root_name).size(13).color(theme::TEXT),
-        text(tree.root().to_string_lossy().into_owned())
-            .size(11)
-            .color(theme::TEXT_MUTED)
-            .wrapping(text::Wrapping::None),
+        // A long path is cut at the panel edge instead of running over the terminal.
+        container(
+            text(tree.root().to_string_lossy().into_owned())
+                .size(11)
+                .color(theme::TEXT_MUTED)
+                .wrapping(text::Wrapping::None)
+        )
+        .width(Length::Fill)
+        .clip(true),
     ]
     .spacing(1);
 
@@ -180,22 +185,27 @@ fn footer(name: &str, is_dir: bool) -> Element<'_, Message> {
     };
     container(
         column![
-            text(name)
-                .size(12)
-                .color(theme::TEXT)
-                .wrapping(text::Wrapping::None),
+            container(
+                text(name)
+                    .size(12)
+                    .color(theme::TEXT)
+                    .wrapping(text::Wrapping::None)
+            )
+            .width(Length::Fill)
+            .clip(true),
             row![
                 action("Insert path", CommandId::InsertSelectedPath),
                 action("Copy", CommandId::CopySelectedPath),
-                action(
-                    if is_dir {
-                        "Open tab here"
-                    } else {
-                        "Tab in folder"
-                    },
-                    CommandId::NewTabInSelectedFolder
-                ),
             ]
+            .spacing(4),
+            if is_dir {
+                row![action("Open tab here", CommandId::NewTabInSelectedFolder)]
+            } else {
+                row![
+                    action("View", CommandId::ViewSelectedFile),
+                    action("Tab in folder", CommandId::NewTabInSelectedFolder),
+                ]
+            }
             .spacing(4),
         ]
         .spacing(6),

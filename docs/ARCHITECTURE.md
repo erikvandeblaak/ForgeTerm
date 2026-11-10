@@ -49,6 +49,7 @@ ForgeTerm/
 │   ├── forgeterm-agents/         # AI-agents: detectie, versie, start-commando, projectcontext; unit-getest
 │   ├── forgeterm-prompts/        # Prompt Studio-sjablonen: parsen, variabelen, invullen; unit-getest
 │   ├── forgeterm-git/            # Git via de CLI: status (porcelain v2), diff, log, stage/unstage, commit; tests tegen echte git
+│   ├── forgeterm-viewer/         # Code-viewer: laden, decoderen, kleuren (syntect, pure-Rust regex), zoeken; unit-getest
 │   ├── forgeterm-settings/       # settings.toml: tolerant laden, template, pad; unit-getest
 │   └── forgeterm-app/            # GUI (binary `forgeterm`)
 │       ├── src/app.rs            # state, messages, update, layout, sneltoetsen
@@ -162,6 +163,13 @@ Alleen gedocumenteerde interfaces (Claude Code-documentatie op code.claude.com, 
 - **Branches** (`refs.rs`): `for-each-ref` met NUL-gescheiden velden (naam, HEAD, upstream, ahead/behind of `gone`, datum, onderwerp), `origin/HEAD` overgeslagen. Wisselen = `git switch --no-guess <naam>` na bevestiging in de UI; nieuwe branch = `git check-ref-format --branch` en dan `git switch -c`; volgen = `git switch --track`. Namen die met `-` beginnen worden geweigerd (geen optie-injectie).
 - **History** (`history.rs`): `git log --format` met %x1f/%x1e-scheiding (300 commits), `git show --format=fuller --stat --patch` (alleen hex-hash geaccepteerd), activiteit = `git log --since=<unix>` → authored-tijden → lokale kalenderdag via `chrono` (`daily_counts` is puur en getest). Grafiekkleur `CHART_CYAN` (#26A6B6) gevalideerd met de dataviz-validator tegen het donkere oppervlak; één reeks dus geen legenda, tooltip per staaf (datum + aantal), alleen max en de datumuiteinden gelabeld.
 - **Lijsten** max 150 rijen per sectie, diffs max 5000 regels (gemarkeerd als afgekapt).
+
+## 4j. Code-viewer
+
+- **Laden** (`forgeterm-viewer::load`, achtergrondthread): max 8 MB; NUL in de eerste 8 KB zonder UTF-16-BOM = binair (geweigerd); UTF-8, UTF-8-BOM, UTF-16 LE/BE, anders lossy (zichtbaar in de statusregel). Twee versies per regel: het origineel (kopiëren) en een weergaveregel (tabs naar 4 kolommen, besturingstekens naar U+2400-symbolen, afgekapt op 2000 kolommen). Een ESC-reeks in een bestand wordt dus getoond, nooit geïnterpreteerd.
+- **Kleuren** met syntect (standaard-syntaxen, `regex-fancy`: geen C-afhankelijkheid, bouwt gelijk op Linux) en een eigen thema uit de Forge-tokens; tot 2 MB / 50.000 regels, op een achtergrondthread (≈0,2 s voor 2.500 regels), daarna pas getoond (versie-check op mtime). Syntax op extensie, een paar aliassen (Makefile, Dockerfile, jsonc, mjs), daarna op de eerste regel (shebang).
+- **Weergave**: eigen canvas (zoals de terminal) met regelnummers, selectie per regel, zoektreffers en een minimap (2 px per regel; bij lange bestanden schuift de minimap proportioneel mee). Klik in de minimap centreert die regel, slepen werkt als scrollbalk (fractie, geen terugkoppeling). Wijzigingen op schijf: mtime-check elke 2 s, herladen houdt de positie.
+- **Toetsenbord**: alleen als de viewer de focus heeft (klik erin); app-sneltoetsen blijven werken, de terminal krijgt dan niets. Klikken in een terminal geeft de focus terug.
 
 ## 5. Rendering
 

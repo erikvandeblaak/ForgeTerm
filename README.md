@@ -33,6 +33,7 @@ Vereist: Rust (stable) en op Windows de Visual Studio C++ Build Tools + Windows 
 | Instellingen openen (`settings.toml`, wordt live toegepast) | **Ctrl+,** of File → Open Settings File |
 | AI-werkplek (Claude Code / Codex starten, projectcontext) | **Ctrl+Shift+A** of menu AI |
 | Prompt Studio (sjabloon kiezen, variabelen invullen, invoegen zonder Enter) | **Ctrl+Shift+I** of AI → Prompt Studio |
+| Code-viewer (bestanden bekijken met kleuring, minimap, zoeken) | **Ctrl+Shift+O**, View in de verkenner, of *Open in viewer* in een Git-diff |
 | Git-paneel (status, diff, stage/unstage, commit, recente commits) | **Ctrl+Shift+G**, menu Git, of klik op de branch in de statusbalk |
 | Pad in de terminal zetten (gequote voor de shell, níet uitgevoerd) | dubbelklik op bestand, knop *Insert path*, of sleep een bestand uit Windows Verkenner op het venster |
 | Kopiëren | **Ctrl+C** als er een selectie is (zonder selectie gaat Ctrl+C als onderbreking naar het programma), Ctrl+Shift+C |
@@ -47,6 +48,10 @@ Vereist: Rust (stable) en op Windows de Visual Studio C++ Build Tools + Windows 
 Sjablonen met `{{variabelen}}`. ForgeTerm vult in wat het echt weet (`project`, `project_path`, `cwd`, `selection` = geselecteerde terminaltekst, `file` = in de verkenner geselecteerd bestand, relatief aan de projectroot); al het andere typ je zelf. **Insert (no Enter)** zet de tekst bij de prompt van de terminal die gefocust was toen de studio openging; jij beslist wanneer je verstuurt. Meerregelige tekst in een shell zonder bracketed paste vraagt eerst bevestiging. **Copy** zet hem op het klembord.
 
 Eigen sjablonen: `.md`-bestanden in de map `prompts` naast `settings.toml` (AI → Open Prompts Folder maakt de map met een voorbeeld). Optionele front matter `name:` en `description:`; een eigen bestand met dezelfde naam als een ingebouwd sjabloon (bijv. `review-file.md`) vervangt dat.
+
+## Code-viewer
+
+Bekijk bestanden naast je terminals, alleen lezen: syntaxkleuring (Rust, Python, JS, C/C++, C#, Go, Java, JSON, YAML, Markdown, shell, HTML, CSS, SQL, Makefile, …; onbekend = platte tekst), regelnummers en een **minimap** (code glance) rechts: klik om erheen te springen, sleep om te scrollen. Meerdere bestanden als tabbladen. Klik en sleep om regels te selecteren (Shift+klik breidt uit), **Ctrl+C** kopieert ze, Ctrl+A alles, **Ctrl+F** zoekt (Enter/F3 volgende, Shift+F3 vorige, Esc sluit). Pijltjes, PgUp/PgDn, Home/End scrollen zolang de viewer de focus heeft (klik in de terminal geeft de focus terug). Een bestand dat buiten ForgeTerm wijzigt, wordt automatisch opnieuw geladen. Limieten: tot 8 MB, kleuring tot 2 MB / 50.000 regels, binaire bestanden worden geweigerd; UTF-8 en UTF-16 (met BOM) worden herkend, besturingstekens zichtbaar gemaakt (nooit uitgevoerd).
 
 ## Git
 
