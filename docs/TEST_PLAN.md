@@ -246,6 +246,14 @@ Let op: Kladblok in Windows 11 opent het bestand als tabblad in een al geopend K
 | M5 | Na `ping`: "1 process · waiting at the prompt"; ForgeTerm hard beëindigd → geen achtergebleven ping | ✅ |
 | I1 | Venstericoon (titelbalk) = logo; `forgeterm.exe` bevat het icoon (ExtractAssociatedIcon toont het F-logo) | ✅ |
 
+### Release-build (2026-11-10, Windows 11)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| B1 | `cargo build --release` (lto thin): 60 s, `forgeterm.exe` 18,4 MB | ✅ |
+| B2 | Release gestart in de ForgeTerm-repo, Git-paneel + AI-paneel open (git status elke 4 s, log, branches, `claude.cmd`/`codex.cmd --version`); zichtbare console-/Terminal-vensters elke 0,1 s geteld gedurende 45 s: maximum = beginwaarde (1) → geen enkel flitsend consolevenster | ✅ |
+| B3 | `scripts/package-windows.ps1` → zip (8,2 MB) met exe, README, OFL, THIRD-PARTY.txt (248 crates, elk met licentie; geen copyleft-verplichting: `self_cell` is Apache-2.0 OR GPL-2.0) + SHA-256 | ✅ |
+
 ### Sessie herstellen (2026-11-10, Windows 11, FORGETERM_SETTINGS naar de testmap)
 
 | # | Scenario | Resultaat |

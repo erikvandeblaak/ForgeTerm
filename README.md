@@ -62,6 +62,14 @@ De statusbalk toont branch, ahead/behind en het aantal gewijzigde bestanden van 
 
 Veilig in onbekende repositories: lezen voert nooit door de repository geconfigureerde programma's uit (`core.fsmonitor` uit, diffs met `--no-ext-diff --no-textconv`), achtergrond-status neemt geen `index.lock` (`--no-optional-locks`), git vraagt nooit om invoer. Vereist `git` op PATH.
 
+## Release bouwen (Windows, draagbaar)
+
+```
+pwsh scripts\package-windows.ps1
+```
+
+Maakt `dist\ForgeTerm-<versie>-windows-x64.zip` (+ `.sha256`) met `forgeterm.exe` (met icoon, zonder consolevenster), deze README, de lettertypelicentie en `THIRD-PARTY.txt`: alle meegecompileerde crates met hun licentie, gegenereerd uit `cargo tree`. Installeert niets; uitpakken en `forgeterm.exe` starten. Een MSI/winget-pakket volgt (vereist WiX of een gepubliceerde release).
+
 ## Ontwikkelen in VS Code
 
 Open de map in VS Code; aanbevolen extensies worden voorgesteld (`.vscode/extensions.json`).

@@ -51,7 +51,7 @@ Git Control Center: statusbalk (branch, ahead/behind, wijzigingen), paneel met d
 
 ## Fase 7 — Release
 
-App-icoon: venster (gerenderd uit het SVG-logo) en `forgeterm.exe` (ICO via build.rs + Windows SDK rc) ✅ Windows · Linux Mint-validatie ⬜ · installers (MSI/winget, .deb/AppImage) ⬜ · benchmarks ⬜ · security review ⬜ · documentatie ⬜.
+App-icoon: venster (gerenderd uit het SVG-logo) en `forgeterm.exe` (ICO via build.rs + Windows SDK rc) ✅ Windows · Linux Mint-validatie ⬜ · draagbare Windows-zip met licentielijst en SHA-256 (`scripts/package-windows.ps1`) ✅ · installers (MSI/winget, .deb/AppImage) ⬜ · benchmarks ⬜ · security review ⬜ · documentatie ⬜.
 
 ## Bekende beperkingen (eerlijk)
 
