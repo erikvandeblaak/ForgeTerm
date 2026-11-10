@@ -1,0 +1,6 @@
+# Cross-platform project (Windows + Linux): store and check out text with LF.
+* text=auto eol=lf
+*.ttf binary
+*.otf binary
+*.png binary
+*.ico binary

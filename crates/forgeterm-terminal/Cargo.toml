@@ -1,0 +1,17 @@
+[package]
+name = "forgeterm-terminal"
+description = "ForgeTerm terminal engine: PTY/ConPTY sessions and VT emulation, UI-agnostic."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+alacritty_terminal.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

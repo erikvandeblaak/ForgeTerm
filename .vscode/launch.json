@@ -1,0 +1,42 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "ForgeTerm — Debug (MSVC, aanbevolen op Windows)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/forgeterm.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                { "name": "RUST_BACKTRACE", "value": "1" },
+                { "name": "RUST_LOG", "value": "forgeterm=debug,forgeterm_terminal=debug" }
+            ],
+            "console": "integratedTerminal",
+            "preLaunchTask": "cargo build"
+        },
+        {
+            "name": "ForgeTerm — Debug (LLDB, ook Linux)",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": ["build", "--bin=forgeterm", "--package=forgeterm-app"],
+                "filter": { "name": "forgeterm", "kind": "bin" }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": { "RUST_BACKTRACE": "1", "RUST_LOG": "forgeterm=debug,forgeterm_terminal=debug" }
+        },
+        {
+            "name": "Terminal-engine tests debuggen (LLDB)",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": ["test", "--no-run", "--package=forgeterm-terminal"],
+                "filter": { "kind": "lib" }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

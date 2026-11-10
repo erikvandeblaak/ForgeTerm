@@ -1,0 +1,49 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "cargo build",
+            "type": "cargo",
+            "command": "build",
+            "args": ["--workspace"],
+            "problemMatcher": ["$rustc"],
+            "group": { "kind": "build", "isDefault": true }
+        },
+        {
+            "label": "cargo run (ForgeTerm)",
+            "type": "cargo",
+            "command": "run",
+            "args": ["--bin", "forgeterm"],
+            "problemMatcher": ["$rustc"]
+        },
+        {
+            "label": "cargo test (workspace)",
+            "type": "cargo",
+            "command": "test",
+            "args": ["--workspace"],
+            "problemMatcher": ["$rustc"],
+            "group": { "kind": "test", "isDefault": true }
+        },
+        {
+            "label": "cargo clippy (workspace)",
+            "type": "cargo",
+            "command": "clippy",
+            "args": ["--workspace", "--all-targets", "--", "-D", "warnings"],
+            "problemMatcher": ["$rustc"]
+        },
+        {
+            "label": "cargo fmt",
+            "type": "cargo",
+            "command": "fmt",
+            "args": ["--all"],
+            "problemMatcher": []
+        },
+        {
+            "label": "cargo build --release",
+            "type": "cargo",
+            "command": "build",
+            "args": ["--release", "--bin", "forgeterm"],
+            "problemMatcher": ["$rustc"]
+        }
+    ]
+}

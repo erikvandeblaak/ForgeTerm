@@ -1,0 +1,22 @@
+[package]
+name = "forgeterm-app"
+description = "ForgeTerm desktop application."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "forgeterm"
+path = "src/main.rs"
+
+[dependencies]
+forgeterm-terminal.workspace = true
+iced.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true
