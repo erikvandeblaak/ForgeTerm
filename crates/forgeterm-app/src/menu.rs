@@ -60,7 +60,14 @@ pub fn menus(shell_count: usize) -> Vec<Menu> {
         },
         Menu {
             title: "Edit",
-            items: vec![C(Copy), C(Paste), Sep, C(ClearScrollback)],
+            items: vec![
+                C(Copy),
+                C(Paste),
+                Sep,
+                C(FindInTerminal),
+                Sep,
+                C(ClearScrollback),
+            ],
         },
         Menu {
             title: "View",

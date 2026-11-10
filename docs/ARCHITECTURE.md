@@ -172,6 +172,10 @@ Alleen gedocumenteerde interfaces (Claude Code-documentatie op code.claude.com, 
 - **Weergave**: eigen canvas (zoals de terminal) met regelnummers, selectie per regel, zoektreffers en een minimap (2 px per regel; bij lange bestanden schuift de minimap proportioneel mee). Klik in de minimap centreert die regel, slepen werkt als scrollbalk (fractie, geen terugkoppeling). Wijzigingen op schijf: mtime-check elke 2 s, herladen houdt de positie.
 - **Toetsenbord**: alleen als de viewer de focus heeft (klik erin); app-sneltoetsen blijven werken, de terminal krijgt dan niets. Klikken in een terminal geeft de focus terug.
 
+## 4j2. Zoeken in de terminal
+
+`Session::search` gebruikt alacritty's regex-zoeker (scherm + scrollback, loopt rond aan de randen, smart case) met een letterlijk geëscapete zoektekst (`search::escape`: elke ASCII-leesteken krijgt een backslash). Start naast de vorige treffer (de huidige selectie) of bij de cursor; de treffer wordt de selectie (dus Ctrl+C kopieert hem) en de weergave scrollt ernaartoe. Zoekbalk Ctrl+Shift+F: typen zoekt vanaf de cursor omhoog (nieuwste eerst), Enter/F3 ouder, Shift+F3 nieuwer; Esc, F3 en Ctrl+C werken ook terwijl het invoerveld de focus heeft.
+
 ## 4k. Veilig sluiten
 
 Quit (menu, venster-× via `exit_on_close_request: false` + `close_requests`), tab sluiten en pane sluiten gaan via `App::request_close`: van de betrokken shells (pid uit de PTY: ConPTY `child_watcher().pid()`, Unix `child().id()`) worden de kindprocessen opgezocht (`forgeterm-system`, achtergrondthread; `conhost`/`OpenConsole` genegeerd). Geen kinderen → direct sluiten; anders een bevestiging met de programmanamen per tab (Enter = sluiten, Esc/klik ernaast = annuleren). Een pane die zelf eindigt (exit 0) sluit zonder vraag.

@@ -3,7 +3,9 @@
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use forgeterm_terminal::{GridSize, Palette, Session, SessionConfig, SessionEvent, ShellSpec};
+use forgeterm_terminal::{
+    GridSize, Palette, SearchOutcome, Session, SessionConfig, SessionEvent, ShellSpec,
+};
 
 #[cfg(windows)]
 fn test_shell() -> (ShellSpec, &'static str) {
@@ -119,4 +121,42 @@ fn scrollback_scroll_and_clear() {
     let cleared = session.snapshot(&palette);
     assert_eq!(cleared.history, 0);
     assert!(cleared.text().contains("line80"), "visible screen is kept");
+}
+
+#[test]
+fn search_finds_output_literally_and_selects_it() {
+    let (shell, command) = test_shell();
+    let (tx, rx) = mpsc::channel();
+    let config = SessionConfig {
+        shell: Some(shell),
+        size: GridSize::new(100, 30, 8, 16),
+        ..Default::default()
+    };
+    let session = Session::spawn(config, move |e| {
+        let _ = tx.send(e);
+    })
+    .expect("spawn shell");
+    session.input(command.as_bytes().to_vec());
+    wait_for(&session, &rx, "1234000");
+
+    // Found, selected (so Ctrl+C copies it); searching again wraps to the same one.
+    assert_eq!(session.search("1234000", true), SearchOutcome::Found);
+    assert_eq!(session.selection_text().as_deref(), Some("1234000"));
+    assert_eq!(session.search("1234000", true), SearchOutcome::Found);
+    assert_eq!(session.selection_text().as_deref(), Some("1234000"));
+    // Regex characters are literal: the typed command contains "1234*1000".
+    assert_eq!(session.search("1234*1000", true), SearchOutcome::Found);
+    assert_eq!(session.selection_text().as_deref(), Some("1234*1000"));
+    // Smart case: capitals make it case-sensitive.
+    let typed = command.trim_end().split(' ').next().unwrap();
+    assert_eq!(
+        session.search(&typed.to_uppercase(), false),
+        SearchOutcome::NotFound
+    );
+    assert_eq!(session.search(typed, false), SearchOutcome::Found);
+    assert_eq!(
+        session.search("zz-not-on-screen-zz", true),
+        SearchOutcome::NotFound
+    );
+    assert_eq!(session.search("", true), SearchOutcome::NotFound);
 }

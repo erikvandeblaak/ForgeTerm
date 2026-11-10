@@ -41,6 +41,7 @@ pub enum CommandId {
     ScrollPageDown,
     Copy,
     Paste,
+    FindInTerminal,
     ZoomIn,
     ZoomOut,
     ZoomReset,
@@ -93,6 +94,7 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::ScrollPageDown,
     CommandId::Copy,
     CommandId::Paste,
+    CommandId::FindInTerminal,
     CommandId::ZoomIn,
     CommandId::ZoomOut,
     CommandId::ZoomReset,
@@ -129,7 +131,7 @@ impl CommandId {
             SplitRight | SplitDown | ClosePane | TogglePaneZoom | FocusPane(_) => "Pane",
             RestartShell | ClearScrollback | ScrollToTop | ScrollToBottom | ScrollPageUp
             | ScrollPageDown => "Terminal",
-            Copy | Paste => "Edit",
+            Copy | Paste | FindInTerminal => "Edit",
             ToggleExplorer
             | ExplorerToggleHidden
             | ExplorerToggleFollow
@@ -178,6 +180,7 @@ impl CommandId {
             ScrollPageDown => "Scroll Page Down",
             Copy => "Copy Selection",
             Paste => "Paste",
+            FindInTerminal => "Find in Terminal",
             ZoomIn => "Increase Font Size",
             ZoomOut => "Decrease Font Size",
             ZoomReset => "Reset Font Size",
@@ -303,6 +306,7 @@ impl Default for Keymap {
             (b(CS, Char('i')), OpenPromptStudio),
             (b(CS, Char('g')), ToggleGitPanel),
             (b(CS, Char('o')), ToggleViewer),
+            (b(CS, Char('f')), FindInTerminal),
             (b(C, Tab), NextTab),
             (b(CS, Tab), PreviousTab),
             (b(AS, Char('=')), SplitRight),

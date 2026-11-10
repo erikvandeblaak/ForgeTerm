@@ -17,7 +17,7 @@ use iced::widget::canvas::Canvas;
 use iced::widget::pane_grid::{self, Axis, Direction, PaneGrid};
 use iced::widget::{
     button, column, container, mouse_area, opaque, pick_list, row, scrollable, space, stack, svg,
-    text,
+    text, text_input,
 };
 use iced::{
     Border, Color, Element, Event, Length, Shadow, Subscription, Task, Vector, clipboard, event,
@@ -144,6 +144,19 @@ pub enum Message {
     CloseChecked(CloseTarget, Vec<String>),
     ConfirmClose,
     CancelClose,
+    TermFindQuery(String),
+    /// Search again: `true` = older output (up), `false` = newer (down).
+    TermFindStep(bool),
+    TermFindClose,
+}
+
+const TERM_FIND_ID: &str = "forgeterm-terminal-find";
+
+/// The terminal search bar: query and the outcome of the last search.
+#[derive(Debug, Default)]
+struct TermFind {
+    query: String,
+    outcome: Option<forgeterm_terminal::SearchOutcome>,
 }
 
 /// What a close action would end.
@@ -225,6 +238,7 @@ pub struct App {
     viewer: Viewer,
     /// A close that waits for confirmation, with the programs it would end.
     pending_close: Option<(CloseTarget, Vec<String>)>,
+    term_find: Option<TermFind>,
 }
 
 impl App {
@@ -267,6 +281,7 @@ impl App {
             git: GitState::default(),
             viewer: Viewer::default(),
             pending_close: None,
+            term_find: None,
         };
         app.menus = menu::menus(app.shells.len());
         app.load_settings(true);
@@ -724,6 +739,27 @@ impl App {
                 }
             }
             Message::CancelClose => self.pending_close = None,
+            Message::TermFindQuery(query) => {
+                // Search as you type: from the cursor upwards, most recent match first.
+                if let Some(s) = self.focused().and_then(TerminalPane::session) {
+                    s.clear_selection();
+                }
+                let outcome = self.term_search(&query, true);
+                if let Some(f) = &mut self.term_find {
+                    f.query = query;
+                    f.outcome = outcome;
+                }
+            }
+            Message::TermFindStep(older) => {
+                let query = self.term_find.as_ref().map(|f| f.query.clone());
+                if let Some(query) = query {
+                    let outcome = self.term_search(&query, older);
+                    if let Some(f) = &mut self.term_find {
+                        f.outcome = outcome;
+                    }
+                }
+            }
+            Message::TermFindClose => self.term_find = None,
             Message::FocusPane(pane) => {
                 if let Some(tab) = self.workspace.active_tab_mut()
                     && tab.focus != pane
@@ -1098,6 +1134,33 @@ impl App {
             }
             return Task::none();
         }
+        // Terminal search bar: Esc closes, F3 / Shift+F3 step, also from its input.
+        if self.term_find.is_some() && !self.viewer.focused {
+            match key {
+                keyboard::Key::Named(Named::Escape) => {
+                    self.term_find = None;
+                    return Task::none();
+                }
+                keyboard::Key::Named(Named::F3) => {
+                    return self.update(Message::TermFindStep(!mods.shift()));
+                }
+                // The match is the terminal selection: Ctrl+C copies it, even while
+                // the search field (which would swallow the key) has the focus.
+                keyboard::Key::Character(c)
+                    if mods.control()
+                        && !mods.shift()
+                        && !mods.alt()
+                        && c.eq_ignore_ascii_case("c")
+                        && self
+                            .focused()
+                            .and_then(TerminalPane::session)
+                            .is_some_and(|s| s.selection_text().is_some()) =>
+                {
+                    return self.copy_selection();
+                }
+                _ => {}
+            }
+        }
         // The viewer's find bar closes with Esc, also while its input has focus.
         if self.viewer.visible
             && self.viewer.find_open
@@ -1385,6 +1448,12 @@ impl App {
                 }
             }
             CommandId::Copy => return self.copy_selection(),
+            CommandId::FindInTerminal => {
+                if self.term_find.is_none() {
+                    self.term_find = Some(TermFind::default());
+                }
+                return iced::widget::operation::focus(TERM_FIND_ID);
+            }
             CommandId::Paste => return Task::done(Message::Paste),
             CommandId::ZoomIn => self.set_font_size(self.metrics.font_size + 1.0),
             CommandId::ZoomOut => self.set_font_size(self.metrics.font_size - 1.0),
@@ -1546,6 +1615,7 @@ impl App {
                 .and_then(TerminalPane::session)
                 .is_some_and(|s| s.selection_text().is_some()),
             CommandId::Paste
+            | CommandId::FindInTerminal
             | CommandId::ClearScrollback
             | CommandId::ScrollToTop
             | CommandId::ScrollToBottom
@@ -1612,6 +1682,22 @@ impl App {
         } else if let Some(s) = t.session() {
             s.paste(&text);
         }
+    }
+
+    /// Searches the focused terminal and refreshes its view.
+    fn term_search(
+        &mut self,
+        query: &str,
+        older: bool,
+    ) -> Option<forgeterm_terminal::SearchOutcome> {
+        let id = self.workspace.focused()?;
+        let t = self.terminals.get_mut(&id)?;
+        if query.is_empty() {
+            return None;
+        }
+        let outcome = t.session()?.search(query, older);
+        t.refresh(&self.palette);
+        Some(outcome)
     }
 
     // ---- closing ------------------------------------------------------------------
@@ -2161,6 +2247,9 @@ impl App {
         if let Some((_, pending)) = &self.pending_paste {
             layout = layout.push(paste_banner(pending));
         }
+        if let Some(f) = &self.term_find {
+            layout = layout.push(term_find_bar(f));
+        }
         let body: Element<'_, Message> = match (&self.error, self.workspace.active_tab()) {
             (Some(err), _) => container(text(err.as_str()).color(theme::CORAL))
                 .center(Length::Fill)
@@ -2629,6 +2718,78 @@ fn drop_hint(shell: &str) -> Element<'_, Message> {
             ..Default::default()
         })
         .into()
+}
+
+/// Find bar above the terminals (Ctrl+Shift+F).
+fn term_find_bar(f: &TermFind) -> Element<'_, Message> {
+    let status = match (f.query.is_empty(), f.outcome) {
+        (true, _) => "Type to search the output and scrollback",
+        (false, Some(forgeterm_terminal::SearchOutcome::NotFound)) => "Not found",
+        (false, Some(forgeterm_terminal::SearchOutcome::Found)) => {
+            "Found · Enter/F3 older · Shift+F3 newer · Ctrl+C copies"
+        }
+        (false, None) => "",
+    };
+    let not_found = f.outcome == Some(forgeterm_terminal::SearchOutcome::NotFound);
+    let small = |label: &'static str, msg: Message| {
+        button(text(label).size(12))
+            .on_press(msg)
+            .padding([3, 9])
+            .style(|_, status| ghost_button(status, theme::CYAN))
+    };
+    container(
+        row![
+            text("Find").size(12).color(theme::TEXT_MUTED),
+            text_input("in terminal output", &f.query)
+                .id(iced::widget::Id::new(TERM_FIND_ID))
+                .on_input(Message::TermFindQuery)
+                .on_submit(Message::TermFindStep(true))
+                .size(13)
+                .padding([4, 8])
+                .width(Length::Fixed(320.0))
+                .style(move |_, status| text_input::Style {
+                    background: theme::OBSIDIAN.into(),
+                    border: Border {
+                        color: if not_found {
+                            theme::CORAL
+                        } else if matches!(status, text_input::Status::Focused { .. }) {
+                            theme::CYAN
+                        } else {
+                            theme::BORDER
+                        },
+                        width: 1.0,
+                        radius: 4.0.into(),
+                    },
+                    icon: theme::TEXT_MUTED,
+                    placeholder: theme::TEXT_MUTED,
+                    value: theme::TEXT,
+                    selection: theme::SELECTION,
+                }),
+            small("↑", Message::TermFindStep(true)),
+            small("↓", Message::TermFindStep(false)),
+            text(status).size(12).color(if not_found {
+                theme::CORAL
+            } else {
+                theme::TEXT_MUTED
+            }),
+            space::horizontal(),
+            small("× (Esc)", Message::TermFindClose),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([6, 12])
+    .width(Length::Fill)
+    .style(|_| container::Style {
+        background: Some(theme::SURFACE.into()),
+        border: Border {
+            color: theme::BORDER,
+            width: 1.0,
+            radius: 0.0.into(),
+        },
+        ..Default::default()
+    })
+    .into()
 }
 
 /// "Programs are still running" confirmation for quit / close tab / close pane.

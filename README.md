@@ -36,6 +36,7 @@ Vereist: Rust (stable) en op Windows de Visual Studio C++ Build Tools + Windows 
 | Code-viewer (bestanden bekijken met kleuring, minimap, zoeken) | **Ctrl+Shift+O**, View in de verkenner, of *Open in viewer* in een Git-diff |
 | Git-paneel (status, diff, stage/unstage, commit, recente commits) | **Ctrl+Shift+G**, menu Git, of klik op de branch in de statusbalk |
 | Pad in de terminal zetten (gequote voor de shell, níet uitgevoerd) | dubbelklik op bestand, knop *Insert path*, of sleep een bestand uit Windows Verkenner op het venster |
+| Zoeken in terminaluitvoer en scrollback | **Ctrl+Shift+F** (typen zoekt meteen; Enter/F3 ouder, Shift+F3 nieuwer, Ctrl+C kopieert de treffer, Esc sluit) |
 | Kopiëren | **Ctrl+C** als er een selectie is (zonder selectie gaat Ctrl+C als onderbreking naar het programma), Ctrl+Shift+C |
 | Plakken | **Ctrl+V** (Windows), Ctrl+Shift+V, Shift+Insert, rechtermuisklik. Meerdere regels zonder bracketed paste vragen eerst bevestiging. Op Linux blijft Ctrl+V van het programma (zoals in andere Linux-terminals) |
 | Knippen | Niet in de terminal: terminaltekst is uitvoer en kan niet worden weggeknipt. In tekstvelden (palette) werken Ctrl+X/C/V gewoon |

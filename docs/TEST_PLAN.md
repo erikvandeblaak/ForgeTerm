@@ -218,6 +218,15 @@ Let op: Kladblok in Windows 11 opent het bestand als tabblad in een al geopend K
 | V5 | Tweede tab (Python), bestand buiten ForgeTerm gewijzigd → binnen 4 s herladen met nieuwe inhoud | ✅ |
 | V6 | Minimap-kader slepen tot 46 % van de hoogte → regel 1319 van 2864 (scrollbalk-gedrag, geen terugkoppeling); zoeken naar `fn load_document` → treffer 2740 in het midden; lang pad in de verkenner afgekapt bij de paneelrand | ✅ |
 
+### Zoeken in de terminal (2026-11-10, Windows 11)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| S2 | Integratietest met echte cmd/ConPTY: treffer geselecteerd, rondlopen, `1234*1000` letterlijk, smart case (hoofdletters = hoofdlettergevoelig), niet gevonden, lege zoektekst | ✅ |
+| S3 | Ctrl+Shift+F, `343` (niet in de uitvoer) → "Not found" met rode rand; `spelling` → nieuwste treffer onderaan gemarkeerd | ✅ |
+| S4 | 25× Enter → oudere treffers, weergave schuift het scrollback in (`↑ 19 / 131`), treffer bovenaan | ✅ |
+| S5 | Ctrl+C terwijl het zoekveld de focus heeft: eerst kopieerde het níet (veld ving de toets); opgelost en hertest: klembord = treffer `77-fo` | ✅ |
+
 ### Veilig sluiten (2026-11-10, Windows 11)
 
 | # | Scenario | Resultaat |

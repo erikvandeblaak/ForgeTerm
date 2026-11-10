@@ -61,7 +61,7 @@ Linux Mint-validatie ⬜ · installers (MSI/winget, .deb/AppImage) ⬜ · benchm
 - **Geen IME-ondersteuning** (Chinees/Japans invoeren). Dode toetsen (US-International) werken wél.
 - **Celbreedte afgeleid van JetBrains Mono** (0,6 em). Een andere font vereist meting van de advance — gepland bij font-instellingen.
 - **Muismodifiers** (Shift/Ctrl bij muisrapportage) worden nog niet meegestuurd.
-- **Geen cursor-knipperen**, geen URL-detectie, geen zoekfunctie in output.
+- **Geen cursor-knipperen**, geen URL-detectie. Zoeken in de output vindt één treffer per keer (geen totaal aantal).
 - **Werkmap volgen** werkt in PowerShell 7, Windows PowerShell, cmd en Git Bash (getest). Niet voor zsh (vereist een hook in de eigen config), WSL (Windows-omgeving gaat niet mee) en fish (alleen als fish zelf OSC 7 stuurt). Een eigen rc die `PROMPT_COMMAND` overschrijft, schakelt het voor bash uit. Wat een programma tijdens het draaien als map meldt, wordt overgenomen als het een bestaande map is.
 - **Tabbalk** scrolt horizontaal bij veel tabs; de positie van de actieve tab is een benadering (tabs verschillen in breedte).
 - **Explorer:** geen toetsenbordnavigatie in de boom, geen automatische verversing bij wijzigingen (knop Refresh), geen bestandsbewerkingen (bewust: alleen lezen), root start in de map van ForgeTerm (geen mapkiezer). Paneelbreedte vast (270 px).

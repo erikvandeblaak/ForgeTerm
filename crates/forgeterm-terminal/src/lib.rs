@@ -10,6 +10,7 @@ mod input;
 mod integration;
 mod palette;
 mod quote;
+mod search;
 mod session;
 mod shell;
 mod snapshot;
@@ -19,6 +20,6 @@ pub use input::{
 };
 pub use palette::{Palette, Rgb};
 pub use quote::{quote_path, quote_paths};
-pub use session::{GridSize, Modes, Session, SessionConfig, SessionEvent};
+pub use session::{GridSize, Modes, SearchOutcome, Session, SessionConfig, SessionEvent};
 pub use shell::{ShellKind, ShellSpec, default_shell, detect_shells};
 pub use snapshot::{CellFlags, CellView, CursorShape, CursorView, Snapshot};

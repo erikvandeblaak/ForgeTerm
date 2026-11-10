@@ -8,10 +8,11 @@ use std::sync::{Arc, Mutex, OnceLock};
 use alacritty_terminal::event::{Event as AlacEvent, EventListener, OnResize, WindowSize};
 use alacritty_terminal::event_loop::{EventLoop, EventLoopSender, Msg};
 use alacritty_terminal::grid::{Dimensions, Scroll};
-use alacritty_terminal::index::{Column, Point, Side};
+use alacritty_terminal::index::{Boundary, Column, Direction, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionType};
 use alacritty_terminal::sync::FairMutex;
 use alacritty_terminal::term::cell::Flags;
+use alacritty_terminal::term::search::RegexSearch;
 use alacritty_terminal::term::{self, Term, TermMode, viewport_to_point};
 use alacritty_terminal::tty::{self, ChildEvent, EventedPty, EventedReadWrite};
 use alacritty_terminal::vte::ansi::CursorShape as AlacCursorShape;
@@ -260,6 +261,13 @@ impl<P: OnResize> OnResize for ScanPty<P> {
     }
 }
 
+/// Result of [`Session::search`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SearchOutcome {
+    Found,
+    NotFound,
+}
+
 /// One live shell: PTY + child process + emulator state.
 pub struct Session {
     term: Arc<FairMutex<Term<Listener>>>,
@@ -476,6 +484,40 @@ impl Session {
 
     pub fn clear_selection(&self) {
         self.term.lock().selection = None;
+    }
+
+    /// Finds `query` as literal text (smart case: case-insensitive unless it
+    /// contains capitals) in the screen and scrollback, starting next to the
+    /// current selection (the previous match) or at the cursor. `older` searches
+    /// upwards. The match becomes the selection (so Ctrl+C copies it) and the view
+    /// scrolls to it. Wraps around at the ends.
+    pub fn search(&self, query: &str, older: bool) -> SearchOutcome {
+        if query.is_empty() {
+            return SearchOutcome::NotFound;
+        }
+        let Ok(mut regex) = RegexSearch::new(&crate::search::escape(query)) else {
+            return SearchOutcome::NotFound;
+        };
+        let mut term = self.term.lock();
+        let origin = match term.selection.as_ref().and_then(|s| s.to_range(&*term)) {
+            // Step off the previous match so the next one is found.
+            Some(range) if older => range.start.sub(&*term, Boundary::None, 1),
+            Some(range) => range.end.add(&*term, Boundary::None, 1),
+            None => term.grid().cursor.point,
+        };
+        let direction = if older {
+            Direction::Left
+        } else {
+            Direction::Right
+        };
+        let Some(found) = term.search_next(&mut regex, origin, direction, Side::Left, None) else {
+            return SearchOutcome::NotFound;
+        };
+        let mut selection = Selection::new(SelectionType::Simple, *found.start(), Side::Left);
+        selection.update(*found.end(), Side::Right);
+        term.selection = Some(selection);
+        term.scroll_to_point(*found.start());
+        SearchOutcome::Found
     }
 
     pub fn selection_text(&self) -> Option<String> {
