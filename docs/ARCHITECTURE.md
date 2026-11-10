@@ -47,6 +47,7 @@ ForgeTerm/
 │   │   └── examples/probe.rs     # diagnose: dump gestylede cellen van een programma
 │   ├── forgeterm-explorer/       # bestandsboom-model, GUI-vrij, unit-getest
 │   ├── forgeterm-agents/         # AI-agents: detectie, versie, start-commando, projectcontext; unit-getest
+│   ├── forgeterm-prompts/        # Prompt Studio-sjablonen: parsen, variabelen, invullen; unit-getest
 │   ├── forgeterm-settings/       # settings.toml: tolerant laden, template, pad; unit-getest
 │   └── forgeterm-app/            # GUI (binary `forgeterm`)
 │       ├── src/app.rs            # state, messages, update, layout, sneltoetsen
@@ -96,6 +97,7 @@ Belangrijke details:
 
 - `App.terminals: HashMap<TermId, TerminalPane>` bezit alle terminals; `Workspace { tabs: Vec<Tab>, active }` beschrijft alleen de indeling. Een `Tab` is een iced `pane_grid::State<TermId>` plus de gefocuste pane. Zo kan een terminal later tussen panes/tabs verhuizen zonder zijn sessie te verliezen.
 - Elk bericht van een canvas draagt zijn `TermId` (`Message::Term(id, TermMsg)`); sessie-events dragen `(id, generation)`.
+- **Start op de echte grootte.** Een nieuwe pane start zijn shell pas bij de eerste layout (`TerminalPane::resize`), niet op een 80×24-placeholder: een shell die zijn prompt tekent en direct daarna wordt verkleind/vergroot (ConPTY-reflow) heeft een verkeerde cursorpositie, waardoor PowerShell over zijn prompt typte.
 - **Onzichtbare terminals renderen niet.** Een `Wakeup` voor een terminal buiten de actieve tab zet alleen `dirty`; bij tabwissel worden dirty terminals ververst. Output gaat nooit verloren (die staat in de emulator), alleen het kopiëren naar een snapshot wordt uitgesteld.
 - **Afsluiten:** exitcode 0 sluit de pane (en tab, en app als het de laatste was); een andere exitcode laat de pane met melding staan (Enter = herstart).
 - Focus bepaalt de cursorstijl (blok vs. hol), dus bij iedere focuswissel worden de caches van de actieve tab gewist.
@@ -141,6 +143,14 @@ Alleen gedocumenteerde interfaces (Claude Code-documentatie op code.claude.com, 
 - **Projectcontext** (alleen lezen): `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `.claude/rules/*.md`, `AGENTS.md`, `.claude/skills/*/SKILL.md`, `.claude/commands/**/*.md`, `.claude/agents/*.md`, `.claude/settings(.local).json`, `.mcp.json`; `name`/`description` uit de front matter.
 - **Invoegen**: klik op een contextbestand → in een Claude Code-terminal `@pad` (relatief aan de projectroot; met spaties het volledige pad), in Codex het volledige pad, in een shell het gequote pad. Nooit een Enter.
 - **Niet gedaan / bewust niet:** ForgeTerm verstuurt geen prompts, leest geen sessies of tokens en toont geen kosten (geen gedocumenteerde bron). Hooks worden niet geïnterpreteerd (alleen het settings-bestand wordt getoond).
+
+## 4h. Prompt Studio
+
+- **Sjablonen** (`forgeterm-prompts`): Markdown met optionele front matter (`name`, `description`) en `{{naam}}`-placeholders (`[A-Za-z0-9_-]`, spaties binnen de haken toegestaan; al het andere blijft letterlijke tekst). Ingebouwd: 6 sjablonen (`include_str!`). Eigen: `.md` in `<settings-map>/prompts` (niet recursief, max 256 KB, UTF-8; problemen als tekst), overschrijven een ingebouwd sjabloon met dezelfde bestandsnaam. Laden op een achtergrondthread, bij elke opening en via Reload.
+- **Invullen** (`render`): waarden worden letterlijk ingevoegd (niet opnieuw op placeholders gescand), lege waarden tellen als ontbrekend en blijven `{{naam}}`; het resultaat eindigt nooit op een newline. *Insert* is uitgeschakeld zolang er iets ontbreekt.
+- **Automatische waarden** alleen uit echte state: projectroot (`project_root` vanaf de map van de gefocuste terminal), die map, de terminalselectie en het in de verkenner geselecteerde bestand. Onbekend = niet ingevuld.
+- **Invoegen** gaat naar de terminal die gefocust was bij het openen, via hetzelfde pad als plakken (bracketed paste; zonder bracketed paste + meerdere regels → bevestiging). Is die terminal intussen gestopt, dan blijft de studio open met alleen Copy.
+- **Toetsenbord**: de studio is modaal; editors krijgen typen en Ctrl+C/V/X, Tab/Shift+Tab wisselt veld, Esc sluit. Niets bereikt de terminal.
 
 ## 5. Rendering
 

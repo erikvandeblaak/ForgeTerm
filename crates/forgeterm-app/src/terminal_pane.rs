@@ -85,6 +85,10 @@ pub struct TerminalPane {
     pub agent: Option<forgeterm_agents::AgentKind>,
     /// New output arrived while the terminal was not visible.
     dirty: bool,
+    /// The shell starts on the first layout, at the pane's real size: a shell that
+    /// draws its prompt at a placeholder size and is resized right after ends up with
+    /// a wrong cursor position (PowerShell then types over its own prompt).
+    awaiting_size: bool,
 }
 
 impl TerminalPane {
@@ -93,10 +97,9 @@ impl TerminalPane {
         shell: ShellSpec,
         working_directory: Option<PathBuf>,
         options: SessionOptions,
-        metrics: Metrics,
         palette: &Palette,
-    ) -> (Self, Task<Message>) {
-        let mut pane = Self {
+    ) -> Self {
+        Self {
             id,
             shell,
             working_directory,
@@ -107,14 +110,19 @@ impl TerminalPane {
             snapshot: blank_snapshot(palette, 80, 24),
             modes: Modes::default(),
             cache: Cache::new(),
-            grid: (80, 24),
+            // Differs from any real grid, so the first layout always reports one.
+            grid: (0, 0),
             title: None,
             cwd: None,
             agent: None,
             dirty: false,
-        };
-        let task = pane.start(metrics, palette);
-        (pane, task)
+            awaiting_size: true,
+        }
+    }
+
+    /// Not started yet: waiting for the first layout to know the pane's size.
+    pub fn is_awaiting_size(&self) -> bool {
+        self.awaiting_size
     }
 
     pub fn session(&self) -> Option<&Session> {
@@ -248,13 +256,28 @@ impl TerminalPane {
         Outcome::None
     }
 
-    pub fn resize(&mut self, cols: u16, rows: u16, metrics: Metrics, palette: &Palette) {
+    /// Applies the pane's grid size; the first call starts the shell at that size.
+    pub fn resize(
+        &mut self,
+        cols: u16,
+        rows: u16,
+        metrics: Metrics,
+        palette: &Palette,
+    ) -> Task<Message> {
+        if cols == 0 || rows == 0 {
+            return Task::none();
+        }
         self.grid = (cols, rows);
+        if self.awaiting_size {
+            self.awaiting_size = false;
+            return self.start(metrics, palette);
+        }
         let size = self.grid_size(metrics);
         if let Some(session) = &mut self.session {
             session.resize(size);
         }
         self.refresh(palette);
+        Task::none()
     }
 
     /// Text for tabs and the window title.

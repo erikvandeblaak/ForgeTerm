@@ -765,6 +765,7 @@ dependencies = [
  "anyhow",
  "forgeterm-agents",
  "forgeterm-explorer",
+ "forgeterm-prompts",
  "forgeterm-settings",
  "forgeterm-terminal",
  "iced",
@@ -774,6 +775,10 @@ dependencies = [
 
 [[package]]
 name = "forgeterm-explorer"
+version = "0.1.0"
+
+[[package]]
+name = "forgeterm-prompts"
 version = "0.1.0"
 
 [[package]]

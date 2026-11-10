@@ -10,6 +10,7 @@ mod glyphs;
 mod keys;
 mod menu;
 mod palette;
+mod prompt_studio;
 mod terminal_pane;
 mod terminal_view;
 mod theme;

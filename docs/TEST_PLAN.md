@@ -18,6 +18,7 @@
 | `cwd::tests` (6) + `integration::tests` (4) | OSC 7 (percent-decoding, UTF-8) en OSC 9;9 (met/zonder quotes), gesplitst over reads, laatste melding wint, andere OSC's genegeerd, misvormd/te lang/CAN genegeerd en herstel daarna, Windows/MSYS-padconversie; integratie per shell, bestaande PROMPT/PROMPT_COMMAND behouden | ✅ |
 | `tests/cwd_tracking.rs` | Elke geïnstalleerde shell in echte ConPTY met integratie: startmap gemeld, `cd` naar `it's a dir` gemeld. Geslaagd: PowerShell 7, Windows PowerShell, cmd, Git Bash (eerste poging faalde voor Git Bash: `/tmp/…` → opgelost met `pwd -W`) | ✅ |
 | `forgeterm-agents` (7) | PATH-zoeken (Windows: `.exe` vóór `.cmd`, `.ps1` overgeslagen; ontbrekend = None), `.cmd` → `cmd.exe /d /c`, `--version` van een echt script (lege regel overgeslagen), falend script = fout, hangend script → timeout en beëindigd; front matter; projectscan vanuit submap (git-root, rules, skills, commands in submappen, subagents, settings, MCP); zonder git = startmap | ✅ |
+| `forgeterm-prompts` (8) | Front matter (BOM, CRLF, quotes, zonder afsluiting = body), variabelen in volgorde zonder dubbelingen (ongeldige `{{a b}}` / `{{}}` genegeerd, `{{{x}}}`), waarden letterlijk (geen herexpansie), leeg = ontbrekend, nooit een afsluitende newline, ingebouwde sjablonen geldig, eigen map: override, `.MD`, geen submappen/`.txt`, niet-UTF-8 gemeld, ontbrekende map = geen probleem | ✅ |
 | `forgeterm-settings` (7) | Template = exact de defaults, leeg = defaults, alle waarden toegepast, 7 fouten → 7 meldingen met fallback, syntaxfout (één regel, `unreadable`), sectie geen tabel, `ensure_file` maakt één keer aan en overschrijft nooit | ✅ |
 | `forgeterm-explorer` (6) | Sortering, verborgen, ontbrekende map = fout, lazy uitklappen/inklappen, verouderde resultaten genegeerd, fouten + selectie | ✅ |
 | `terminal_pane::tests` (3) | Tabtitels: exe-pad → shellnaam, `cmd.exe - ping …` → `ping …`, programmatitels blijven | ✅ |
@@ -171,6 +172,18 @@ Let op: Kladblok in Windows 11 opent het bestand als tabblad in een al geopend K
 | A2 | Start Claude Code in project als tab en als split: start in de git-root (ook vanuit een submap), vertrouwensvraag van Claude Code verschijnt; Esc / dubbel Ctrl+C sluit af, tab/pane gaat dicht, geen weesprocessen; Alt+Shift+- vanuit de agent-pane opent PowerShell in de projectroot; venster sluiten met draaiende agent laat niets achter | ✅ |
 | A3 | In een (vertrouwde, lege) testrepo: klik CLAUDE.md en `.claude/rules/style.md` in de Claude Code-tab → prompt `@CLAUDE.md @.claude/rules/style.md ` zonder Enter; in PowerShell → pad zonder Enter. Gevonden en opgelost: in een agent-tab toonde het paneel de context van de app-startmap (agents melden geen map) → panes vallen nu terug op hun startmap | ✅ |
 | A4 | Start Codex in project: vertrouwensvraag verschijnt; Ctrl+C (2×) sluit af zonder weesprocessen van ForgeTerm. Codex laat bewust zijn eigen achtergronddienst draaien (`codex app-server --managed-daemon`, eigen ontwerp van Codex, ook buiten ForgeTerm) | ✅ |
+
+### Prompt Studio (2026-11-10, Windows 11)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| P1 | Ctrl+Shift+I: 6 ingebouwde sjablonen, "Inserts into: PowerShell 7", `cwd` automatisch ingevuld, `selection` leeg → "Fill in: selection", Insert uit | ✅ |
+| P2 | Review file: `src/main.rs` getypt → voorbeeld live bijgewerkt, Insert aan; Tab springt naar het volgende veld | ✅ |
+| P3 | Insert in PowerShell → tekst bij de prompt, niet uitgevoerd | ✅ |
+| P4 | Plan a feature (`project` = aiproj automatisch, `feature` = Dark mode) in Claude Code → `[Pasted text #1 +4 lines]`, niet verstuurd; Ctrl+C wist, afsluiten zonder weesprocessen | ✅ |
+| P5 | Open Prompts Folder → `prompts/example.md` aangemaakt, Verkenner opent die map; eigen `review-file.md` + Reload → "Mijn review" (yours) vervangt het ingebouwde, selectie blijft; Copy → klembord bevat de tekst | ✅ |
+| P6 | Esc sluit; tijdens de studio getypte tekst kwam niet in de terminal | ✅ |
+| S1 | Opstarten en direct typen: shell start op de echte grootte (log: `cols=140 rows=35`, was 80×24), prompt niet overschreven | ✅ |
 
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)
 

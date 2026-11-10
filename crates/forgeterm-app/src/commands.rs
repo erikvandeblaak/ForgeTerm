@@ -59,6 +59,8 @@ pub enum CommandId {
     AiRefresh,
     /// Start an agent in the project root (`true` = in a split).
     StartAgent(AgentKind, bool),
+    OpenPromptStudio,
+    OpenPromptsFolder,
     About,
     Quit,
 }
@@ -102,6 +104,8 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::ReloadSettings,
     CommandId::ToggleAiPanel,
     CommandId::AiRefresh,
+    CommandId::OpenPromptStudio,
+    CommandId::OpenPromptsFolder,
     CommandId::About,
     CommandId::Quit,
 ];
@@ -126,7 +130,9 @@ impl CommandId {
             | CopySelectedPath
             | NewTabInSelectedFolder => "Explorer",
             OpenSettings | ReloadSettings => "Settings",
-            ToggleAiPanel | AiRefresh | StartAgent(..) => "AI",
+            ToggleAiPanel | AiRefresh | StartAgent(..) | OpenPromptStudio | OpenPromptsFolder => {
+                "AI"
+            }
             About => "Help",
             Quit => "App",
         }
@@ -176,6 +182,8 @@ impl CommandId {
             ToggleAiPanel => "Toggle AI Workspace",
             AiRefresh => "Refresh Agents and Project Context",
             StartAgent(..) => "Start Agent",
+            OpenPromptStudio => "Prompt Studio",
+            OpenPromptsFolder => "Open Prompts Folder",
             ReloadSettings => "Reload Settings",
             About => "About ForgeTerm",
             Quit => "Quit ForgeTerm",
@@ -275,6 +283,7 @@ impl Default for Keymap {
             (b(CS, Char('e')), ToggleExplorer),
             (b(C, Char(',')), OpenSettings),
             (b(CS, Char('a')), ToggleAiPanel),
+            (b(CS, Char('i')), OpenPromptStudio),
             (b(C, Tab), NextTab),
             (b(CS, Tab), PreviousTab),
             (b(AS, Char('=')), SplitRight),

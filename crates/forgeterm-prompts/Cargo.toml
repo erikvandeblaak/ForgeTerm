@@ -1,0 +1,13 @@
+[package]
+name = "forgeterm-prompts"
+description = "ForgeTerm Prompt Studio: prompt templates with {{variables}} (built-in and user files). UI-agnostic."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

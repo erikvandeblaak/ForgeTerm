@@ -28,6 +28,7 @@ use crate::ai_view::{self, AgentState};
 use crate::commands::{CommandId, Dir, Keymap, STATIC_COMMANDS};
 use crate::menu::{self, Menu, MenuState};
 use crate::palette::{self as command_palette, CommandPalette, Entry};
+use crate::prompt_studio::PromptStudio;
 use crate::terminal_pane::{Outcome, SessionOptions, Status, TermId, TermMsg, TerminalPane};
 use crate::terminal_view::{Metrics, TerminalCanvas};
 use crate::workspace::Workspace;
@@ -97,6 +98,13 @@ pub enum Message {
     ContextScanned(PathBuf, ProjectContext),
     /// Insert a project file into the focused terminal (agent: `@path`).
     AiInsert(PathBuf),
+    PromptsLoaded(forgeterm_prompts::Library),
+    PromptSelect(usize),
+    PromptEdit(String, iced::widget::text_editor::Action),
+    PromptInsert,
+    PromptCopy,
+    PromptReload,
+    PromptClose,
 }
 
 /// Entry of the "new tab with shell…" dropdown.
@@ -155,6 +163,7 @@ pub struct App {
     ai_context: Option<ProjectContext>,
     /// Folder the context was (or is being) scanned for.
     ai_context_for: Option<PathBuf>,
+    prompt_studio: Option<PromptStudio>,
 }
 
 impl App {
@@ -192,6 +201,7 @@ impl App {
                 .collect(),
             ai_context: None,
             ai_context_for: None,
+            prompt_studio: None,
         };
         app.menus = menu::menus(app.shells.len());
         app.load_settings(true);
@@ -205,12 +215,9 @@ impl App {
 
     // ---- terminal lifecycle -------------------------------------------------------
 
-    /// Starts a terminal in `cwd` (default: the directory ForgeTerm started in).
-    fn spawn_terminal(
-        &mut self,
-        shell: ShellSpec,
-        cwd: Option<PathBuf>,
-    ) -> (TermId, Task<Message>) {
+    /// Creates a terminal in `cwd` (default: the directory ForgeTerm started in).
+    /// Its shell starts on the first layout, at the pane's real size.
+    fn spawn_terminal(&mut self, shell: ShellSpec, cwd: Option<PathBuf>) -> TermId {
         self.spawn_terminal_for(shell, cwd, None)
     }
 
@@ -220,7 +227,7 @@ impl App {
         shell: ShellSpec,
         cwd: Option<PathBuf>,
         agent: Option<AgentKind>,
-    ) -> (TermId, Task<Message>) {
+    ) -> TermId {
         let id = self.next_id;
         self.next_id += 1;
         let cwd = Some(cwd.unwrap_or_else(|| self.start_dir.clone()));
@@ -228,11 +235,10 @@ impl App {
             scrollback: self.settings.terminal.scrollback,
             shell_integration: agent.is_none() && self.settings.terminal.shell_integration,
         };
-        let (mut pane, task) =
-            TerminalPane::new(id, shell, cwd, options, self.metrics, &self.palette);
+        let mut pane = TerminalPane::new(id, shell, cwd, options, &self.palette);
         pane.agent = agent;
         self.terminals.insert(id, pane);
-        (id, task)
+        id
     }
 
     fn shell_at(&self, index: Option<usize>) -> Option<ShellSpec> {
@@ -342,9 +348,9 @@ impl App {
             return Task::none();
         };
         let cwd = cwd.or_else(|| self.focused_cwd());
-        let (id, task) = self.spawn_terminal(shell, cwd);
+        let id = self.spawn_terminal(shell, cwd);
         self.workspace.push_tab(id);
-        task
+        Task::none()
     }
 
     fn split(&mut self, axis: Axis) -> Task<Message> {
@@ -361,14 +367,14 @@ impl App {
         };
         self.restore_zoom();
         let cwd = self.focused_cwd();
-        let (id, task) = self.spawn_terminal(shell, cwd);
+        let id = self.spawn_terminal(shell, cwd);
         let split = self
             .workspace
             .active_tab_mut()
             .and_then(|tab| tab.split(axis, id));
         if split.is_some() {
             self.refresh_visible();
-            task
+            Task::none()
         } else {
             self.terminals.remove(&id);
             Task::none()
@@ -552,7 +558,7 @@ impl App {
         if split {
             self.restore_zoom();
         }
-        let (id, task) = self.spawn_terminal_for(shell, Some(root), Some(kind));
+        let id = self.spawn_terminal_for(shell, Some(root), Some(kind));
         if split {
             let ok = self
                 .workspace
@@ -567,7 +573,7 @@ impl App {
         } else {
             self.workspace.push_tab(id);
         }
-        task
+        Task::none()
     }
 
     /// Scrolls the tab strip so the active tab is visible after it changed.
@@ -745,6 +751,33 @@ impl App {
                 }
             }
             Message::AiInsert(path) => self.insert_context_file(&path),
+            Message::PromptsLoaded(library) => {
+                if let Some(studio) = &mut self.prompt_studio {
+                    studio.set_library(library);
+                }
+            }
+            Message::PromptSelect(index) => {
+                if let Some(studio) = &mut self.prompt_studio {
+                    studio.select(index);
+                }
+            }
+            Message::PromptEdit(name, action) => {
+                if let Some(studio) = &mut self.prompt_studio {
+                    studio.edit(name, action);
+                }
+            }
+            Message::PromptInsert => self.insert_prompt(),
+            Message::PromptCopy => {
+                if let Some(r) = self.prompt_studio.take().and_then(|s| s.rendered()) {
+                    return clipboard::write(r.text);
+                }
+            }
+            Message::PromptReload => {
+                if self.prompt_studio.is_some() {
+                    return load_prompts(self.prompts_dir());
+                }
+            }
+            Message::PromptClose => self.prompt_studio = None,
             Message::FileDropped(path) => {
                 self.drop_hover = false;
                 self.insert_paths(&[path]);
@@ -762,7 +795,7 @@ impl App {
             return Task::none();
         };
         match msg {
-            TermMsg::GridResized(cols, rows) => t.resize(cols, rows, metrics, palette),
+            TermMsg::GridResized(cols, rows) => return t.resize(cols, rows, metrics, palette),
             TermMsg::Scroll(lines) => {
                 if let Some(s) = t.session() {
                     s.scroll(lines);
@@ -828,6 +861,9 @@ impl App {
         if self.command_palette.is_some() {
             return self.palette_key(&key, text.as_deref(), mods, captured);
         }
+        if self.prompt_studio.is_some() {
+            return self.prompt_studio_key(&key, mods, captured);
+        }
         // Keys handled by a widget never reach the terminal.
         if captured {
             return Task::none();
@@ -846,7 +882,8 @@ impl App {
 
         // A pane whose shell ended: Enter starts it again.
         if !t.is_running() {
-            if matches!(key, keyboard::Key::Named(Named::Enter)) {
+            // Not started yet (first layout pending): nothing to restart.
+            if matches!(key, keyboard::Key::Named(Named::Enter)) && !t.is_awaiting_size() {
                 return t.start(self.metrics, &self.palette);
             }
             return Task::none();
@@ -904,6 +941,31 @@ impl App {
                     p.push_query(t);
                 }
             }
+        }
+        Task::none()
+    }
+
+    /// The studio owns the keyboard: its editors take typing (including Ctrl+C/V/X),
+    /// Tab moves between fields, Esc closes. Nothing reaches the terminal.
+    fn prompt_studio_key(
+        &mut self,
+        key: &keyboard::Key,
+        mods: keyboard::Modifiers,
+        captured: bool,
+    ) -> Task<Message> {
+        let toggle = keys::binding(key, mods)
+            .and_then(|b| self.keymap.lookup(b))
+            .is_some_and(|id| id == CommandId::OpenPromptStudio);
+        if matches!(key, keyboard::Key::Named(Named::Escape)) || (toggle && !captured) {
+            self.prompt_studio = None;
+            return Task::none();
+        }
+        if !captured && matches!(key, keyboard::Key::Named(Named::Tab)) {
+            return if mods.shift() {
+                iced::widget::operation::focus_previous()
+            } else {
+                iced::widget::operation::focus_next()
+            };
         }
         Task::none()
     }
@@ -1102,6 +1164,18 @@ impl App {
                 return detect_agents();
             }
             CommandId::StartAgent(kind, split) => return self.start_agent(kind, split),
+            CommandId::OpenPromptStudio => {
+                if self.prompt_studio.take().is_none() {
+                    return self.open_prompt_studio();
+                }
+            }
+            CommandId::OpenPromptsFolder => {
+                if let Some(dir) = self.prompts_dir()
+                    && let Err(e) = open_prompts_folder(&dir)
+                {
+                    self.settings_problems = vec![e];
+                }
+            }
             CommandId::ExplorerToggleFollow => {
                 self.explorer_follow = !self.explorer_follow;
                 // Turning it on jumps to the shell's directory right away.
@@ -1183,7 +1257,9 @@ impl App {
             | CommandId::SplitDown => focused.is_some(),
             CommandId::NewTabWithShell(i) => i < self.shells.len(),
             CommandId::SelectTab(i) => i < self.workspace.tabs.len() && i != self.workspace.active,
+            CommandId::OpenPromptsFolder => self.prompts_dir().is_some(),
             CommandId::CommandPalette
+            | CommandId::OpenPromptStudio
             | CommandId::NewTab
             | CommandId::ZoomIn
             | CommandId::ZoomOut
@@ -1216,13 +1292,93 @@ impl App {
     /// Inserts text at the focused terminal's prompt like a paste: never followed by
     /// Enter, and multi-line text without bracketed paste asks for confirmation.
     fn insert_text(&mut self, text: String) {
-        let Some(t) = self.focused() else {
+        if let Some(id) = self.workspace.focused() {
+            self.insert_text_into(id, text);
+        }
+    }
+
+    fn insert_text_into(&mut self, id: TermId, text: String) {
+        let Some(t) = self.terminals.get(&id) else {
             return;
         };
         if paste_needs_confirmation(&text, t.modes.bracketed_paste) {
-            self.pending_paste = Some((t.id, text));
+            self.pending_paste = Some((id, text));
         } else if let Some(s) = t.session() {
             s.paste(&text);
+        }
+    }
+
+    // ---- prompt studio ------------------------------------------------------------
+
+    /// `<settings dir>/prompts`, or `None` without a config directory.
+    fn prompts_dir(&self) -> Option<PathBuf> {
+        self.settings_path
+            .as_deref()
+            .and_then(forgeterm_prompts::user_dir)
+    }
+
+    fn open_prompt_studio(&mut self) -> Task<Message> {
+        self.menu = None;
+        self.command_palette = None;
+        let target = self.focused().filter(|t| t.is_running());
+        let target_id = target.map(|t| t.id);
+        let target_name = target.map_or_else(|| "no terminal".to_owned(), |t| t.shell.name.clone());
+        let auto = self.auto_prompt_values();
+        self.prompt_studio = Some(PromptStudio::new(target_id, target_name, auto));
+        load_prompts(self.prompts_dir())
+    }
+
+    /// Values ForgeTerm really knows; anything unknown is simply left out.
+    fn auto_prompt_values(&self) -> HashMap<String, String> {
+        let dir = self.focused_cwd().unwrap_or_else(|| self.start_dir.clone());
+        let root = forgeterm_agents::project_root(&dir).0;
+        let mut values = HashMap::new();
+        if let Some(name) = root.file_name() {
+            values.insert("project".to_owned(), name.to_string_lossy().into_owned());
+        }
+        values.insert("project_path".to_owned(), root.display().to_string());
+        values.insert("cwd".to_owned(), dir.display().to_string());
+        if let Some(selection) = self
+            .focused()
+            .and_then(TerminalPane::session)
+            .and_then(|s| s.selection_text())
+        {
+            values.insert("selection".to_owned(), selection);
+        }
+        if let Some(file) = self.explorer.selected().filter(|e| !e.is_dir) {
+            let shown = file.path.strip_prefix(&root).map_or_else(
+                |_| file.path.display().to_string(),
+                |rel| rel.to_string_lossy().replace('\\', "/"),
+            );
+            values.insert("file".to_owned(), shown);
+        }
+        values
+    }
+
+    /// Inserts the rendered prompt into the studio's target terminal, without Enter.
+    fn insert_prompt(&mut self) {
+        let Some(studio) = &mut self.prompt_studio else {
+            return;
+        };
+        let Some(r) = studio
+            .rendered()
+            .filter(|r| r.missing.is_empty() && !r.text.is_empty())
+        else {
+            return;
+        };
+        match studio.target {
+            Some(id)
+                if self
+                    .terminals
+                    .get(&id)
+                    .is_some_and(TerminalPane::is_running) =>
+            {
+                self.prompt_studio = None;
+                self.focus_terminal(id);
+                self.insert_text_into(id, r.text);
+            }
+            // The terminal ended while the studio was open: keep the text, offer Copy.
+            _ => studio.target = None,
         }
     }
 
@@ -1388,6 +1544,9 @@ impl App {
         }
         if let Some(p) = &self.command_palette {
             layers = layers.push(p.view());
+        }
+        if let Some(studio) = &self.prompt_studio {
+            layers = layers.push(studio.view());
         }
         if self.about_open {
             layers = layers.push(view_about());
@@ -1982,6 +2141,44 @@ fn detect_agents() -> Task<Message> {
         },
         Message::AgentsDetected,
     )
+}
+
+fn load_prompts(dir: Option<PathBuf>) -> Task<Message> {
+    background(
+        move || forgeterm_prompts::load(dir.as_deref()),
+        Message::PromptsLoaded,
+    )
+}
+
+/// Example written when the prompts folder is created, so it is clear what goes in.
+const EXAMPLE_PROMPT: &str = "---
+name: Example (edit me)
+description: Your own template. Every .md file in this folder appears in the Prompt Studio.
+---
+Explain {{file}} in {{project}} in simple terms. Focus on: {{focus}}
+";
+
+/// Creates the prompts folder (with an example on first use) and opens it in the
+/// system file manager.
+fn open_prompts_folder(dir: &Path) -> Result<(), String> {
+    if !dir.exists() {
+        std::fs::create_dir_all(dir)
+            .map_err(|e| format!("could not create {}: {e}", dir.display()))?;
+        std::fs::write(dir.join("example.md"), EXAMPLE_PROMPT)
+            .map_err(|e| format!("could not write the example template: {e}"))?;
+    }
+    let program = if cfg!(windows) {
+        "explorer.exe"
+    } else if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    std::process::Command::new(program)
+        .arg(dir)
+        .spawn()
+        .map(drop)
+        .map_err(|e| format!("could not open {} with {program}: {e}", dir.display()))
 }
 
 fn scan_context(dir: PathBuf) -> Task<Message> {
