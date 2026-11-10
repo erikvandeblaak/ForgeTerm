@@ -13,7 +13,7 @@ use crate::theme;
 pub const WIDTH: f32 = 270.0;
 const INDENT: f32 = 14.0;
 
-pub fn view(tree: &Tree) -> Element<'_, Message> {
+pub fn view(tree: &Tree, follow: bool) -> Element<'_, Message> {
     let root_name = folder_name(tree.root());
     let header = row![
         text("EXPLORER").size(11).color(theme::TEXT_MUTED),
@@ -24,6 +24,13 @@ pub fn view(tree: &Tree) -> Element<'_, Message> {
             CommandId::ExplorerParent,
             tree.parent().is_some(),
             false
+        ),
+        icon_button(
+            "cd",
+            "Follow Terminal Folder",
+            CommandId::ExplorerToggleFollow,
+            true,
+            follow
         ),
         icon_button("↻", "Refresh", CommandId::ExplorerRefresh, true, false),
         icon_button(

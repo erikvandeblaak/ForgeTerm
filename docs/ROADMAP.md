@@ -8,7 +8,7 @@ Legenda: ✅ klaar en getest · 🟡 deels · ⬜ open. "Getest" betekent: daadw
 |---|---|---|
 | Rust-toolchain + MSVC Build Tools + Windows SDK | ✅ | rustc 1.99.1, VS 2022 Build Tools, SDK 10.0.26100 |
 | Library-onderzoek + architectuur | ✅ | docs/ARCHITECTURE.md |
-| Cross-platform PTY-prototype | 🟡 | Windows ConPTY ✅ (integratietest + handmatig). Linux ⬜ niet getest. |
+| Cross-platform PTY-prototype | 🟡 | Windows ConPTY ✅ (integratietest + handmatig). Linux: compileert + clippy schoon voor x86_64-unknown-linux-gnu, ⬜ niet uitgevoerd. |
 | Terminalemulatie valideren | ✅ | Kleuren 16/256/truecolor, attributen, CJK, combining, alt screen (vim), resize |
 | **Verticale slice: venster → PTY → rendering → shell → Claude Code** | ✅ Windows | Claude Code start, rendert, reageert op pijltjes/Esc |
 
@@ -26,6 +26,7 @@ Legenda: ✅ klaar en getest · 🟡 deels · ⬜ open. "Getest" betekent: daadw
 | Command Palette (Ctrl+Shift+P, fuzzy, recent, alleen toepasbare acties) | ✅ Windows (2026-11-10) |
 | Menubalk (leest uit de registry; File/Edit/View/Terminal/Help, About-venster) | ✅ Windows (2026-11-10) |
 | File Explorer (zijpaneel, lazy boom, verborgen bestanden, refresh, map omhoog / als root, nieuwe tab in map) | ✅ Windows (2026-11-10) |
+| Werkmap volgen: nieuwe tab/split/herstart in de map van de shell, verkenner volgt, map in statusbalk | ✅ Windows (2026-11-10): pwsh, Windows PowerShell, cmd, Git Bash |
 | Drag-and-drop bestanden → terminal (shell-specifieke escaping) | ✅ Windows: vanuit Windows Verkenner; quoting getest in pwsh, Windows PowerShell, cmd, Git Bash. Slepen vanuit het eigen explorer-paneel ⬜ (nu dubbelklik / *Insert path*) |
 | Instellingen (TOML) + workspace-opslag (SQLite) | ⬜ |
 
@@ -58,7 +59,8 @@ Linux Mint-validatie ⬜ · installers (MSI/winget, .deb/AppImage) ⬜ · benchm
 - **Celbreedte afgeleid van JetBrains Mono** (0,6 em). Een andere font vereist meting van de advance — gepland bij font-instellingen.
 - **Muismodifiers** (Shift/Ctrl bij muisrapportage) worden nog niet meegestuurd.
 - **Geen cursor-knipperen**, geen URL-detectie, geen zoekfunctie in output.
-- **Nieuwe tabs/splits starten in de map van ForgeTerm**, niet in de huidige map van de gefocuste shell (vereist OSC 7-cwd-tracking).
+- **Werkmap volgen** werkt in PowerShell 7, Windows PowerShell, cmd en Git Bash (getest). Niet voor zsh (vereist een hook in de eigen config), WSL (Windows-omgeving gaat niet mee) en fish (alleen als fish zelf OSC 7 stuurt). Een eigen rc die `PROMPT_COMMAND` overschrijft, schakelt het voor bash uit. Wat een programma tijdens het draaien als map meldt, wordt overgenomen als het een bestaande map is.
+- **Tabbalk** scrolt horizontaal bij veel tabs; de positie van de actieve tab is een benadering (tabs verschillen in breedte).
 - **Explorer:** geen toetsenbordnavigatie in de boom, geen automatische verversing bij wijzigingen (knop Refresh), geen bestandsbewerkingen (bewust: alleen lezen), root start in de map van ForgeTerm (geen mapkiezer). Paneelbreedte vast (270 px).
 - **cmd en `%VAR%`:** in interactieve cmd wordt `%NAAM%` ook binnen quotes uitgebreid als die variabele bestaat; dat is in cmd niet te escapen.
 - **WSL-quoting** (`/mnt/c/…`) is unit-getest maar niet in een echte WSL-shell uitgevoerd.

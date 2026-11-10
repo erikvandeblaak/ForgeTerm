@@ -39,8 +39,11 @@ ForgeTerm/
 │   │   ├── src/snapshot.rs       # Snapshot: render-klare kopie van de viewport
 │   │   ├── src/shell.rs          # shelldetectie + ShellKind (pwsh, powershell, cmd, Git Bash, WSL / $SHELL, bash, zsh, fish)
 │   │   ├── src/quote.rs          # paden quoten per shell (+ /c/… en /mnt/c/… conversie), unit-getest
+│   │   ├── src/cwd.rs            # OSC 7 / OSC 9;9-scanner (werkmap-meldingen), unit-getest
+│   │   ├── src/integration.rs    # shell-integratie: args/env zodat shells hun map melden
 │   │   ├── tests/pty_roundtrip.rs# end-to-end test met echte shell
 │   │   ├── tests/quote_real_shells.rs # gequote paden met lastige namen door elke geïnstalleerde shell laten lezen
+│   │   ├── tests/cwd_tracking.rs # elke geïnstalleerde shell in PTY: cd → juiste map gemeld
 │   │   └── examples/probe.rs     # diagnose: dump gestylede cellen van een programma
 │   ├── forgeterm-explorer/       # bestandsboom-model, GUI-vrij, unit-getest
 │   └── forgeterm-app/            # GUI (binary `forgeterm`)
@@ -112,6 +115,13 @@ Belangrijke details:
 - **Pad invoegen** (dubbelklik, *Insert path*, of OS-drag-and-drop via iced `window::Event::FileDropped`) gaat via `quote_path(shell.kind, …)` en daarna dezelfde weg als plakken (`App::insert_text`): nooit een Enter, meerregelig zonder bracketed paste vraagt bevestiging. Per shell: PowerShell `'…'` met verdubbelde (ook typografische) enkele quotes, cmd `"…"`, POSIX `'…'\''…'`, fish `\'`/`\\`, Git Bash `/c/…`, WSL `/mnt/c/…`.
 - `ShellKind` wordt afgeleid uit het programmapad (System32\bash.exe = WSL, …\Git\…\bash.exe = Git Bash).
 
+## 4e. Werkmap volgen (shell integration)
+
+- **Bron:** shells melden hun map met OSC 7 (`file://host/pad`) of OSC 9;9 (Windows Terminal-stijl). vte/alacritty negeren beide, dus `ScanPty` wikkelt de PTY in: alle uitvoer gaat ongewijzigd door naar de emulator, terwijl `CwdScanner` (incrementeel, sequenties mogen over reads verdeeld zijn, max. 4 KB) meeleest. Alleen bestaande mappen worden gemeld (`is_dir` op de I/O-thread, zodat een trage netwerkschijf de UI niet raakt) als `SessionEvent::Cwd`.
+- **Integratie zonder profielwijzigingen** (`integration.rs`): PowerShell krijgt na het laden van het profiel `-NoExit -Command` dat de bestaande `prompt` omwikkelt (OSC 9;9 met `ProviderPath`, alleen voor FileSystem). cmd: `PROMPT=$e]9;9;$P$e\…` vóór een bestaande PROMPT. Git Bash: `PROMPT_COMMAND` met de builtin `pwd -W` (Windows-pad; MSYS-paden als `/tmp` zijn anders niet te vertalen). Linux-bash: OSC 7 met `$PWD`. zsh/fish/WSL: geen injectie (zie ROADMAP).
+- **Veiligheid:** een melding is een hint die elk programma kan printen. Ze bepaalt alleen waar nieuwe tabs/splits starten en wat de verkenner toont; nooit uitgevoerd.
+- **App:** `TerminalPane.cwd`; nieuwe tab/split start in de map van de gefocuste shell, Restart Shell in de laatst gemelde map. `App::update` = `handle` + `sync_explorer` + `reveal_active_tab`: de verkenner volgt de gefocuste shell alleen als diens map veranderde sinds de vorige sync, zodat handmatig navigeren in de verkenner blijft staan tot de volgende `cd`. Volgen is uit te zetten (`cd`-knop, *Follow Terminal Folder*).
+
 ## 5. Rendering
 
 - Eén `canvas::Cache`, gewist bij iedere nieuwe snapshot.
@@ -134,4 +144,4 @@ Belangrijke details:
 
 Alle platformspecifieke code zit nu in `shell.rs` (`#[cfg(windows)]` / `#[cfg(unix)]`) en in alacritty's `tty`. Bij het eerste platformspecifieke onderdeel buiten de engine (GPU-metrics, bestandsbeheer) komt `forgeterm-platform` met traits per functie.
 
-Linux is **nog niet gevalideerd** (geen Linux-machine getest). De code compileert alleen met de Unix-paden in theorie; zie TEST_PLAN.
+Linux is **nog niet gevalideerd** (geen Linux-machine getest). Wel compileert de hele workspace (incl. tests) voor `x86_64-unknown-linux-gnu` zonder clippy-waarschuwingen; daarbij bleek dat iced's `x11`/`wayland`-features ontbraken (de app zou op Linux niet gebouwd hebben) — nu toegevoegd. Zie TEST_PLAN.

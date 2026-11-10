@@ -9,6 +9,8 @@ rust-version.workspace = true
 
 [dependencies]
 alacritty_terminal.workspace = true
+# Same version alacritty_terminal uses; needed to name its PTY trait's types.
+polling = "3.8"
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

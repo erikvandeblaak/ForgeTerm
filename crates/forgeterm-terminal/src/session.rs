@@ -1,10 +1,11 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::io;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use alacritty_terminal::event::{Event as AlacEvent, EventListener, WindowSize};
+use alacritty_terminal::event::{Event as AlacEvent, EventListener, OnResize, WindowSize};
 use alacritty_terminal::event_loop::{EventLoop, EventLoopSender, Msg};
 use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::index::{Column, Point, Side};
@@ -12,10 +13,11 @@ use alacritty_terminal::selection::{Selection, SelectionType};
 use alacritty_terminal::sync::FairMutex;
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::{self, Term, TermMode, viewport_to_point};
-use alacritty_terminal::tty;
+use alacritty_terminal::tty::{self, ChildEvent, EventedPty, EventedReadWrite};
 use alacritty_terminal::vte::ansi::CursorShape as AlacCursorShape;
 use anyhow::Context;
 
+use crate::cwd::CwdScanner;
 use crate::palette::Palette;
 use crate::shell::ShellSpec;
 use crate::snapshot::{CellFlags, CellView, CursorShape, CursorView, Snapshot};
@@ -73,6 +75,8 @@ pub struct SessionConfig {
     pub size: GridSize,
     pub scrollback: usize,
     pub palette: Palette,
+    /// Let the shell report its working directory (see [`crate::integration`]).
+    pub shell_integration: bool,
 }
 
 impl Default for SessionConfig {
@@ -84,6 +88,7 @@ impl Default for SessionConfig {
             size: GridSize::new(80, 24, 8, 16),
             scrollback: 10_000,
             palette: Palette::default(),
+            shell_integration: true,
         }
     }
 }
@@ -101,6 +106,10 @@ pub enum SessionEvent {
     ClipboardStore(String),
     /// The child process exited (exit code if known).
     Exited(Option<i32>),
+    /// The shell reported its working directory (OSC 7 / OSC 9;9); only sent for
+    /// existing directories. A hint printed by whatever runs in the terminal: use it
+    /// to pick directories, never execute it.
+    Cwd(String),
 }
 
 /// Terminal modes relevant to input handling.
@@ -175,6 +184,82 @@ impl EventListener for Listener {
     }
 }
 
+/// The PTY with a tap on its output: everything is passed through unchanged to the
+/// emulator, while [`CwdScanner`] looks for working-directory reports.
+struct ScanPty<P> {
+    inner: P,
+    scanner: CwdScanner,
+    last: Option<String>,
+    listener: Listener,
+}
+
+impl<P: EventedReadWrite> io::Read for ScanPty<P> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let n = self.inner.reader().read(buf)?;
+        // Checked here, on the I/O thread, so a slow (network) path never stalls the UI.
+        if let Some(cwd) = self.scanner.feed(&buf[..n])
+            && self.last.as_ref() != Some(&cwd)
+            && std::path::Path::new(&cwd).is_dir()
+        {
+            self.last = Some(cwd.clone());
+            (self.listener.0.sink)(SessionEvent::Cwd(cwd));
+        }
+        Ok(n)
+    }
+}
+
+impl<P: EventedReadWrite> EventedReadWrite for ScanPty<P> {
+    type Reader = Self;
+    type Writer = P::Writer;
+
+    // Pure delegation: the trait method is `unsafe` because the caller must keep the
+    // sources alive while registered. That contract is passed on unchanged to the
+    // wrapped PTY, which owns the sources; this wrapper adds no unsafe operation.
+    #[allow(unsafe_code)]
+    unsafe fn register(
+        &mut self,
+        poller: &Arc<polling::Poller>,
+        interest: polling::Event,
+        mode: polling::PollMode,
+    ) -> io::Result<()> {
+        // SAFETY: same contract as this method; the caller upholds it.
+        unsafe { self.inner.register(poller, interest, mode) }
+    }
+
+    fn reregister(
+        &mut self,
+        poller: &Arc<polling::Poller>,
+        interest: polling::Event,
+        mode: polling::PollMode,
+    ) -> io::Result<()> {
+        self.inner.reregister(poller, interest, mode)
+    }
+
+    fn deregister(&mut self, poller: &Arc<polling::Poller>) -> io::Result<()> {
+        self.inner.deregister(poller)
+    }
+
+    fn reader(&mut self) -> &mut Self {
+        self
+    }
+
+    fn writer(&mut self) -> &mut P::Writer {
+        self.inner.writer()
+    }
+}
+
+impl<P: EventedPty> EventedPty for ScanPty<P> {
+    fn next_child_event(&mut self) -> Option<ChildEvent> {
+        self.inner.next_child_event()
+    }
+}
+
+impl<P: OnResize> OnResize for ScanPty<P> {
+    fn on_resize(&mut self, window_size: WindowSize) {
+        self.inner.on_resize(window_size);
+    }
+}
+
 /// One live shell: PTY + child process + emulator state.
 pub struct Session {
     term: Arc<FairMutex<Term<Listener>>>,
@@ -206,8 +291,17 @@ impl Session {
             env!("CARGO_PKG_VERSION").into(),
         );
 
+        let mut args = shell.args.clone();
+        if config.shell_integration {
+            let extra = crate::integration::integration(&shell, |key| {
+                env.get(key).cloned().or_else(|| std::env::var(key).ok())
+            });
+            args.extend(extra.args);
+            env.extend(extra.env);
+        }
+
         let options = tty::Options {
-            shell: Some(tty::Shell::new(shell.program.clone(), shell.args.clone())),
+            shell: Some(tty::Shell::new(shell.program.clone(), args)),
             working_directory: config.working_directory,
             drain_on_exit: true,
             env,
@@ -226,6 +320,12 @@ impl Session {
 
         let pty = tty::new(&options, size.window_size(), 0)
             .with_context(|| format!("failed to start shell '{}'", shell.program))?;
+        let pty = ScanPty {
+            inner: pty,
+            scanner: CwdScanner::default(),
+            last: None,
+            listener: listener.clone(),
+        };
 
         let term_config = term::Config {
             scrolling_history: config.scrollback,

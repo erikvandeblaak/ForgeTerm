@@ -44,6 +44,7 @@ pub enum CommandId {
     ZoomReset,
     ToggleExplorer,
     ExplorerToggleHidden,
+    ExplorerToggleFollow,
     ExplorerRefresh,
     ExplorerParent,
     ExplorerOpenSelected,
@@ -82,6 +83,7 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::ZoomReset,
     CommandId::ToggleExplorer,
     CommandId::ExplorerToggleHidden,
+    CommandId::ExplorerToggleFollow,
     CommandId::ExplorerRefresh,
     CommandId::ExplorerParent,
     CommandId::ExplorerOpenSelected,
@@ -104,6 +106,7 @@ impl CommandId {
             Copy | Paste => "Edit",
             ToggleExplorer
             | ExplorerToggleHidden
+            | ExplorerToggleFollow
             | ExplorerRefresh
             | ExplorerParent
             | ExplorerOpenSelected
@@ -148,6 +151,7 @@ impl CommandId {
             ZoomReset => "Reset Font Size",
             ToggleExplorer => "Toggle Explorer",
             ExplorerToggleHidden => "Show Hidden Files",
+            ExplorerToggleFollow => "Follow Terminal Folder",
             ExplorerRefresh => "Refresh",
             ExplorerParent => "Go to Parent Folder",
             ExplorerOpenSelected => "Open Selected Folder as Root",

@@ -15,6 +15,8 @@
 | `menu::tests` (6) | Elk command staat in een menu, shells per detectie, geen losse/dubbele scheidingslijnen, dropdownpositie volgt titelbreedtes, ↑↓ slaat scheidingslijnen en uitgeschakelde items over (wrap), uitgeschakeld item wordt nooit uitgevoerd | ✅ |
 | `quote::tests` (9) + `shell::tests` (1) | Pad-quoting per shell (spaties, `'`, typografische quotes, `$(…)`, `~`, backslash, lege string), Git Bash- en WSL-conversie, `\\?\`-prefix, ShellKind-detectie | ✅ |
 | `tests/quote_real_shells.rs` | 6 bestanden met lastige namen; elke geïnstalleerde shell leest ze via het gequote pad: PowerShell 7, Windows PowerShell, cmd, Git Bash (WSL overgeslagen). Mutatiecheck: zonder typografische-quote-regel faalt pwsh | ✅ |
+| `cwd::tests` (6) + `integration::tests` (4) | OSC 7 (percent-decoding, UTF-8) en OSC 9;9 (met/zonder quotes), gesplitst over reads, laatste melding wint, andere OSC's genegeerd, misvormd/te lang/CAN genegeerd en herstel daarna, Windows/MSYS-padconversie; integratie per shell, bestaande PROMPT/PROMPT_COMMAND behouden | ✅ |
+| `tests/cwd_tracking.rs` | Elke geïnstalleerde shell in echte ConPTY met integratie: startmap gemeld, `cd` naar `it's a dir` gemeld. Geslaagd: PowerShell 7, Windows PowerShell, cmd, Git Bash (eerste poging faalde voor Git Bash: `/tmp/…` → opgelost met `pwd -W`) | ✅ |
 | `forgeterm-explorer` (6) | Sortering, verborgen, ontbrekende map = fout, lazy uitklappen/inklappen, verouderde resultaten genegeerd, fouten + selectie | ✅ |
 | `terminal_pane::tests` (3) | Tabtitels: exe-pad → shellnaam, `cmd.exe - ping …` → `ping …`, programmatitels blijven | ✅ |
 
@@ -23,8 +25,11 @@ Kwaliteitspoort voor iedere wijziging:
 ```
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --workspace --all-targets --target x86_64-unknown-linux-gnu -- -D warnings
 cargo test --workspace
 ```
+
+De Linux-clippy is alleen een compile-check (`rustup target add x86_64-unknown-linux-gnu`), geen validatie.
 
 ## Handmatige / gescripte GUI-validatie
 
@@ -120,6 +125,22 @@ Testvalkuil: de GUI-scripts klikken op schermcoördinaten. Ligt een ander venste
 Gevonden en opgelost: "Erik van de Blaak Edition" brak over twee regels bij een volle tabbalk; chevrons te klein.
 
 Testvalkuil: de OLE-drag-simulatie (`dragdrop.ps1`: eigen bronvenster, knop indrukken, cursor naar ForgeTerm, loslaten) mislukt soms door timing (`effect: None`); dan opnieuw proberen en pas Enter geven nadat het ingevoegde pad op een screenshot is gezien.
+
+### Werkmap volgen (2026-11-10, Windows 11)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| W1 | Start: statusbalk toont `C:\Erik\work\ForgeTerm`, prompt ongewijzigd (profiel geladen, geen extra uitvoer) | ✅ |
+| W2 | `cd docs` → verkenner-root en statusbalk volgen direct | ✅ |
+| W3 | Ctrl+Shift+T, Alt+Shift+= en Ctrl+Shift+4 (Git Bash) starten in `docs` | ✅ |
+| W4 | Git Bash `cd ..` → verkenner naar ForgeTerm; Alt+1 → verkenner terug naar `docs` (map van gefocuste tab) | ✅ |
+| W5 | Handmatig ↑ in verkenner blijft staan, ook na een nieuwe prompt in dezelfde map | ✅ |
+| W6 | Volgen uit (`cd`-knop) + `cd C:\Erik` → verkenner blijft, statusbalk volgt; volgen aan → springt naar `C:\Erik` | ✅ |
+| W7 | Restart Shell → nieuwe shell start in `C:\Erik` | ✅ |
+| W8 | 4 tabs: branding blijft zichtbaar, nieuwe tab scrolt in beeld (met `+`), Alt+1 scrolt naar begin | ✅ |
+| W9 | Alt+F4 met 4 tabs: alle 9 childprocessen weg | ✅ |
+
+Gevonden en opgelost: Git Bash meldde MSYS-paden (`/tmp/…`); "Erik van de Blaak Edition" werd bij 3+ tabs afgekapt; actieve tab buiten beeld.
 
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)
 

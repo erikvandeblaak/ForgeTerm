@@ -66,6 +66,7 @@ pub fn menus(shell_count: usize) -> Vec<Menu> {
                 Sep,
                 C(ToggleExplorer),
                 C(ExplorerToggleHidden),
+                C(ExplorerToggleFollow),
                 C(ExplorerRefresh),
                 C(ExplorerParent),
                 C(ExplorerOpenSelected),

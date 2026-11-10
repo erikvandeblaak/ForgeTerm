@@ -54,6 +54,8 @@ pub enum Outcome {
     /// The shell ended cleanly; the pane should close.
     Close,
     Task(Task<Message>),
+    /// The shell reported a new working directory.
+    CwdChanged,
 }
 
 pub struct TerminalPane {
@@ -69,6 +71,8 @@ pub struct TerminalPane {
     pub cache: Cache,
     pub grid: (u16, u16),
     pub title: Option<String>,
+    /// Last directory the shell reported (shell integration); `None` until it does.
+    pub cwd: Option<PathBuf>,
     /// New output arrived while the terminal was not visible.
     dirty: bool,
 }
@@ -93,6 +97,7 @@ impl TerminalPane {
             cache: Cache::new(),
             grid: (80, 24),
             title: None,
+            cwd: None,
             dirty: false,
         };
         let task = pane.start(metrics, palette);
@@ -153,8 +158,11 @@ impl TerminalPane {
     /// Ends the current shell (if any) and starts a fresh one in the same pane.
     pub fn restart(&mut self, metrics: Metrics, palette: &Palette) -> Task<Message> {
         // Dropping the session shuts its PTY down; its late events carry the old
-        // generation and are ignored.
+        // generation and are ignored. The new shell starts where the old one was.
         self.session = None;
+        if let Some(cwd) = self.cwd.clone() {
+            self.working_directory = Some(cwd);
+        }
         self.start(metrics, palette)
     }
 
@@ -195,6 +203,13 @@ impl TerminalPane {
             SessionEvent::Title(t) => self.title = Some(t),
             SessionEvent::ResetTitle => self.title = None,
             SessionEvent::Bell => {}
+            SessionEvent::Cwd(path) => {
+                let path = PathBuf::from(path);
+                if self.cwd.as_ref() != Some(&path) {
+                    self.cwd = Some(path);
+                    return Outcome::CwdChanged;
+                }
+            }
             SessionEvent::ClipboardStore(t) => {
                 return Outcome::Task(iced::clipboard::write(t));
             }

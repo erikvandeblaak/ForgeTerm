@@ -16,7 +16,9 @@ forgeterm-terminal = { path = "crates/forgeterm-terminal" }
 forgeterm-explorer = { path = "crates/forgeterm-explorer" }
 
 alacritty_terminal = "0.26"
-iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "canvas", "svg", "tokio", "fira-sans"] }
+# x11 + wayland: winit's Linux backends (no effect on Windows). Without them the app
+# does not build on Linux at all.
+iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "canvas", "svg", "tokio", "fira-sans", "x11", "wayland"] }
 anyhow = "1"
 thiserror = "2"
 tracing = "0.1"

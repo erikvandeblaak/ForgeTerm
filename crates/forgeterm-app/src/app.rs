@@ -13,7 +13,8 @@ use iced::keyboard::{self, key::Named};
 use iced::widget::canvas::Canvas;
 use iced::widget::pane_grid::{self, Axis, Direction, PaneGrid};
 use iced::widget::{
-    button, column, container, mouse_area, opaque, pick_list, row, space, stack, svg, text,
+    button, column, container, mouse_area, opaque, pick_list, row, scrollable, space, stack, svg,
+    text,
 };
 use iced::{
     Border, Color, Element, Event, Length, Shadow, Subscription, Task, Vector, clipboard, event,
@@ -31,6 +32,8 @@ use crate::{explorer_view, keys, theme};
 const LOGO: &[u8] = include_bytes!("../../../assets/branding/forgeterm-logo.svg");
 const DEFAULT_FONT_SIZE: f32 = 14.0;
 const MAX_TAB_TITLE: usize = 28;
+/// The horizontally scrolling tab strip.
+const TABS_ID: &str = "forgeterm-tabs";
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -118,6 +121,13 @@ pub struct App {
     about_open: bool,
     explorer: Tree,
     explorer_visible: bool,
+    /// The explorer follows the focused shell's directory.
+    explorer_follow: bool,
+    /// Shell directory the explorer was last moved to; manual navigation in the
+    /// explorer stays until the shell reports a different directory.
+    explorer_synced: Option<PathBuf>,
+    /// (active tab, tab count) the tab strip was last scrolled for.
+    revealed_tab: (usize, usize),
     /// Files from the OS are being dragged over the window.
     drop_hover: bool,
 }
@@ -141,6 +151,9 @@ impl App {
             about_open: false,
             explorer: Tree::new(start_dir()),
             explorer_visible: false,
+            explorer_follow: true,
+            explorer_synced: None,
+            revealed_tab: (0, 0),
             drop_hover: false,
         };
         app.menus = menu::menus(app.shells.len());
@@ -177,6 +190,7 @@ impl App {
             self.error = Some("No supported shell was found on this system.".into());
             return Task::none();
         };
+        let cwd = cwd.or_else(|| self.focused_cwd());
         let (id, task) = self.spawn_terminal(shell, cwd);
         self.workspace.push_tab(id);
         task
@@ -194,7 +208,8 @@ impl App {
             return Task::none();
         };
         self.restore_zoom();
-        let (id, task) = self.spawn_terminal(shell, None);
+        let cwd = self.focused_cwd();
+        let (id, task) = self.spawn_terminal(shell, cwd);
         let split = self
             .workspace
             .active_tab_mut()
@@ -263,6 +278,28 @@ impl App {
             .and_then(|id| self.terminals.get(&id))
     }
 
+    /// Directory the focused shell last reported.
+    fn focused_cwd(&self) -> Option<PathBuf> {
+        self.focused().and_then(|t| t.cwd.clone())
+    }
+
+    /// Moves the explorer to the focused shell's directory when that directory (or
+    /// the focused shell) changed since the last sync.
+    fn sync_explorer(&mut self) -> Option<Task<Message>> {
+        if !self.explorer_visible || !self.explorer_follow {
+            return None;
+        }
+        let cwd = self.focused_cwd()?;
+        if self.explorer_synced.as_ref() == Some(&cwd) {
+            return None;
+        }
+        self.explorer_synced = Some(cwd.clone());
+        if self.explorer.root() == cwd {
+            return None;
+        }
+        Some(load_dir(self.explorer.set_root(cwd)))
+    }
+
     fn focus_terminal(&mut self, id: TermId) {
         if self.workspace.focused() == Some(id) {
             return;
@@ -309,6 +346,38 @@ impl App {
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        let task = self.handle(message);
+        let follow_ups: Vec<Task<Message>> = [self.sync_explorer(), self.reveal_active_tab()]
+            .into_iter()
+            .flatten()
+            .collect();
+        if follow_ups.is_empty() {
+            task
+        } else {
+            Task::batch(std::iter::once(task).chain(follow_ups))
+        }
+    }
+
+    /// Scrolls the tab strip so the active tab is visible after it changed.
+    /// Approximate (tabs differ in width): first tab = start, last = end.
+    fn reveal_active_tab(&mut self) -> Option<Task<Message>> {
+        let key = (self.workspace.active, self.workspace.tabs.len());
+        if self.revealed_tab == key {
+            return None;
+        }
+        self.revealed_tab = key;
+        let x = if key.1 <= 1 {
+            0.0
+        } else {
+            key.0 as f32 / (key.1 - 1) as f32
+        };
+        Some(iced::widget::operation::snap_to(
+            TABS_ID,
+            iced::widget::operation::RelativeOffset { x, y: 0.0 },
+        ))
+    }
+
+    fn handle(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Session {
                 id,
@@ -323,6 +392,8 @@ impl App {
                     Outcome::None => {}
                     Outcome::Task(task) => return task,
                     Outcome::Close => return self.close_terminal(id),
+                    // Picked up by `sync_explorer` after this message.
+                    Outcome::CwdChanged => {}
                 }
             }
             Message::Term(id, msg) => return self.on_term_msg(id, msg),
@@ -770,6 +841,11 @@ impl App {
             CommandId::ZoomOut => self.set_font_size(self.metrics.font_size - 1.0),
             CommandId::ZoomReset => self.set_font_size(DEFAULT_FONT_SIZE),
             CommandId::ToggleExplorer => self.explorer_visible = !self.explorer_visible,
+            CommandId::ExplorerToggleFollow => {
+                self.explorer_follow = !self.explorer_follow;
+                // Turning it on jumps to the shell's directory right away.
+                self.explorer_synced = None;
+            }
             CommandId::ExplorerToggleHidden => {
                 let show = !self.explorer.show_hidden();
                 self.explorer.set_show_hidden(show);
@@ -854,7 +930,9 @@ impl App {
             | CommandId::About
             | CommandId::Quit
             | CommandId::ToggleExplorer => true,
-            CommandId::ExplorerToggleHidden | CommandId::ExplorerRefresh => self.explorer_visible,
+            CommandId::ExplorerToggleHidden
+            | CommandId::ExplorerRefresh
+            | CommandId::ExplorerToggleFollow => self.explorer_visible,
             CommandId::ExplorerParent => self.explorer_visible && self.explorer.parent().is_some(),
             CommandId::ExplorerOpenSelected => {
                 self.explorer_visible && self.explorer.selected().is_some_and(|e| e.is_dir)
@@ -991,7 +1069,11 @@ impl App {
             (None, None) => space::vertical().into(),
         };
         let body: Element<'_, Message> = if self.explorer_visible {
-            row![explorer_view::view(&self.explorer), body].into()
+            row![
+                explorer_view::view(&self.explorer, self.explorer_follow),
+                body
+            ]
+            .into()
         } else {
             body
         };
@@ -1097,10 +1179,18 @@ impl App {
                 brand,
                 menu::view_titles(&self.menus, self.menu.as_ref()),
                 space::horizontal().width(10),
-                tabs,
-                new_tab,
-                shell_menu,
-                space::horizontal(),
+                // Many tabs scroll horizontally (wheel / trackpad) instead of pushing
+                // the branding out of the window.
+                scrollable(
+                    row![tabs, new_tab, shell_menu]
+                        .spacing(8)
+                        .align_y(iced::Alignment::Center)
+                )
+                .id(TABS_ID)
+                .direction(scrollable::Direction::Horizontal(
+                    scrollable::Scrollbar::new().width(0).scroller_width(0),
+                ))
+                .width(Length::Fill),
                 text("Erik van de Blaak Edition")
                     .size(12)
                     .color(theme::TEXT_MUTED)
@@ -1200,6 +1290,9 @@ impl App {
         };
         let shell = focused.map_or_else(|| "—".to_owned(), |t| t.shell.name.clone());
         let grid = focused.map_or_else(String::new, |t| format!("{}×{}", t.grid.0, t.grid.1));
+        let cwd = focused
+            .and_then(|t| t.cwd.as_deref())
+            .map_or_else(String::new, short_path);
         let scrolled = focused
             .filter(|t| t.snapshot.display_offset > 0)
             .map_or_else(String::new, |t| {
@@ -1224,6 +1317,10 @@ impl App {
             row![
                 text(status).size(12).color(color),
                 text(shell).size(12).color(theme::TEXT),
+                text(cwd)
+                    .size(12)
+                    .color(theme::TEXT)
+                    .wrapping(text::Wrapping::None),
                 text(grid).size(12).color(theme::TEXT_MUTED),
                 text(layout).size(12).color(theme::TEXT_MUTED),
                 text(scrolled).size(12).color(theme::VIOLET),
@@ -1239,6 +1336,25 @@ impl App {
         .width(Length::Fill)
         .style(|_| bar_style())
         .into()
+    }
+}
+
+/// Status-bar form of a directory: home as `~`, long paths cut at the front.
+fn short_path(path: &Path) -> String {
+    const MAX: usize = 48;
+    let home =
+        std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from);
+    let shown = match home.as_deref().and_then(|h| path.strip_prefix(h).ok()) {
+        Some(rest) if rest.as_os_str().is_empty() => "~".to_owned(),
+        Some(rest) => format!("~{}{}", std::path::MAIN_SEPARATOR, rest.display()),
+        None => path.display().to_string(),
+    };
+    let count = shown.chars().count();
+    if count <= MAX {
+        shown
+    } else {
+        let tail: String = shown.chars().skip(count - (MAX - 1)).collect();
+        format!("…{tail}")
     }
 }
 

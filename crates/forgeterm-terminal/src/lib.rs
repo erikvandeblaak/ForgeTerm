@@ -5,7 +5,9 @@
 //! resolved, renderer-friendly [`Snapshot`]s plus input encoders. No GUI types leak
 //! out of this crate, so it can be tested headless.
 
+mod cwd;
 mod input;
+mod integration;
 mod palette;
 mod quote;
 mod session;
