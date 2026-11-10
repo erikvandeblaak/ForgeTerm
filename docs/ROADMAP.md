@@ -24,7 +24,7 @@ Legenda: ✅ klaar en getest · 🟡 deels · ⬜ open. "Getest" betekent: daadw
 | Maximaliseren van één pane (zoom) | ✅ Ctrl+Shift+Enter |
 | Centrale command registry (acties + sneltoetsen op één plek) | ✅ |
 | Command Palette (Ctrl+Shift+P, fuzzy, recent, alleen toepasbare acties) | ✅ Windows (2026-11-10) |
-| Menubalk (leest uit de registry; File/Edit/View/Terminal/Help, About-venster) | 🟡 Windows: muisbediening getest (2026-11-10); toetsenbordnavigatie, About en Quit nog niet in de GUI getest |
+| Menubalk (leest uit de registry; File/Edit/View/Terminal/Help, About-venster) | ✅ Windows (2026-11-10) |
 | File Explorer | ⬜ |
 | Drag-and-drop bestanden → terminal (shell-specifieke escaping) | ⬜ |
 | Instellingen (TOML) + workspace-opslag (SQLite) | ⬜ |

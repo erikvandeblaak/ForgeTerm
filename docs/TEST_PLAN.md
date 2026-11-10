@@ -91,9 +91,9 @@ Gevonden en opgelost: (1) de Enter die de palette bevestigde kwam óók in de ni
 | M4 | Niet-toepasbaar is grijs: Copy zonder selectie, Focus Pane / Toggle Zoom bij één pane | ✅ |
 | M5 | Klik buiten het menu sluit het, zonder doorklik naar de terminal | ✅ |
 | M6 | Terminal → Split Right voert de split uit (2 panes, 68×35) | ✅ |
-| M7 | Toetsen bij open menu: ←→ wisselt, ↑↓ navigeert, Enter voert uit, Esc sluit, getypte tekst komt níet in de shell | ⬜ nog niet in GUI (logica unit-getest) |
-| M8 | Help → About: versie, maker, componenten + licenties; Esc / klik sluit | ⬜ |
-| M9 | File → Quit: app sluit, geen weesprocessen | ⬜ |
+| M7 | Toetsen bij open menu: → wisselt View → Terminal, ↓↓ = Split Down (grijze items overgeslagen), Esc sluit; getypt `abc` komt níet in de shell | ✅ |
+| M8 | Help → ↓ Enter opent About (versie 0.1.0, maker, componenten + licenties); getypt `xyz` gaat niet naar de shell; Esc sluit | ✅ |
+| M9 | File → Quit met 2 tabs: app sluit; alle 5 childprocessen (2× pwsh, 3× conhost) zijn weg | ✅ |
 
 Gevonden en opgelost: lange items ("New Tab with Windows PowerShell") liepen buiten de dropdown → breedte 340 px.
 
