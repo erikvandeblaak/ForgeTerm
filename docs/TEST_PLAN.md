@@ -295,6 +295,8 @@ Gemeten 2026-11-10. Opstarttijden uit de eigen tracing-tijdstempels; geheugen = 
 | Geheugen, **DX12 + iGPU, MSAA uit (nieuwe standaard)** | **147–165 MB** |
 | Release-binary | 15 MB |
 
+**Hermeting 2026-11-10 (avond, release met viewer, git, monitor, syntect, sysinfo):** idle met één tab **163 MB** working set (179 MB private) — binnen het budget van 175 MB; met de viewer (app.rs, 3.697 regels, gekleurd) en de Monitor open 184 MB. Release-binary nu 18,4 MB (was 15 MB; syntect-syntaxen en sysinfo).
+
 Beslissingen hieruit: `WGPU_POWER_PREF=low` en (Windows) `WGPU_BACKEND=dx12` als standaard, beide door de gebruiker te overschrijven; MSAA uit (terminal = rechte vlakken + tekst, visueel geen verschil).
 
 Prestatiebudgetten (doel, nog te bewaken in CI): venster < 300 ms, idle geheugen < 175 MB, invoerlatentie < 1 frame.
