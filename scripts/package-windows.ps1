@@ -1,9 +1,12 @@
 # Builds a portable Windows release of ForgeTerm:
 #   dist\ForgeTerm-<version>-windows-x64.zip  (+ .sha256)
+#   dist\ForgeTerm-<version>-setup-x64.exe    (+ .sha256; only when NSIS 3 is available)
 # containing forgeterm.exe, README.md, the font license and a generated list of
 # third-party crates with their licenses. Installs nothing; writes only to dist\.
 #
 # Usage (from the repository root):  pwsh scripts\package-windows.ps1
+
+param([string]$Makensis)
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
@@ -52,3 +55,27 @@ Set-Content -Path "$zip.sha256" -Value "$hash  $name.zip" -Encoding ascii
 Write-Host "Created $zip"
 Write-Host "SHA-256 $hash"
 Write-Host ("{0} third-party crates listed in THIRD-PARTY.txt" -f $crates.Count)
+
+# Installer (per user, no admin rights) when NSIS 3 is available: on PATH, in its
+# default install folder, or given with -Makensis / $env:MAKENSIS.
+$makensis = @($Makensis, $env:MAKENSIS, (Get-Command makensis -ErrorAction SilentlyContinue).Source,
+    "${env:ProgramFiles(x86)}\NSIS\makensis.exe", "$env:ProgramFiles\NSIS\makensis.exe") |
+    Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+if (-not $makensis) {
+    Write-Host "NSIS (makensis) not found: installer skipped. See README, 'Installeren'."
+    return
+}
+# The icon build.rs rendered for forgeterm.exe.
+$ico = Get-ChildItem target\release\build\forgeterm-app-*\out\forgeterm.ico |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if (-not $ico) { throw "forgeterm.ico not found under target\release\build" }
+$sidebar = Join-Path $dist "installer-sidebar.bmp"
+& (Join-Path $PSScriptRoot "installer-art.ps1") -Out $sidebar
+$setup = Join-Path $dist "ForgeTerm-$version-setup-x64.exe"
+& $makensis /V2 /INPUTCHARSET UTF8 "/DVERSION=$version" "/DSTAGE=$stage" "/DICON=$($ico.FullName)" `
+    "/DSIDEBAR=$sidebar" "/DOUTFILE=$setup" packaging\windows\forgeterm.nsi
+if ($LASTEXITCODE -ne 0) { throw "makensis failed" }
+$hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLower()
+Set-Content -Path "$setup.sha256" -Value "$hash  $(Split-Path -Leaf $setup)" -Encoding ascii
+Write-Host "Created $setup"
+Write-Host "SHA-256 $hash"

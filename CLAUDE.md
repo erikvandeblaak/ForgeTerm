@@ -11,6 +11,8 @@ cargo test --workspace                             # alle tests (incl. echte PTY
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all
 cargo run -p forgeterm-terminal --example probe -- <programma> [args]   # dump gestylede cellen
+pwsh scripts\package-windows.ps1                   # dist\: zip + NSIS-installer (als makensis er is)
+bash scripts/package-linux.sh                      # dist/: .deb (in WSL, vereist cargo-deb)
 ```
 
 Kwaliteitspoort vóór "klaar": fmt-check, clippy zonder warnings, alle tests groen.

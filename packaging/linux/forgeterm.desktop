@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=ForgeTerm
+GenericName=Terminal
+Comment=AI-native terminal — Erik van de Blaak Edition
+Exec=forgeterm
+Icon=forgeterm
+Terminal=false
+Categories=System;TerminalEmulator;Development;
+Keywords=terminal;shell;console;prompt;git;
+StartupNotify=true
+StartupWMClass=forgeterm

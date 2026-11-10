@@ -26,6 +26,11 @@ use tracing_subscriber::EnvFilter;
 const DEFAULT_LOG_FILTER: &str =
     "info,wgpu_hal=error,wgpu_core=warn,iced_wgpu=warn,iced_winit=warn";
 
+/// Linux application id (Wayland app id, X11 WM_CLASS): the basename of the installed
+/// `packaging/linux/forgeterm.desktop`, so the desktop shows ForgeTerm's name and icon.
+#[cfg(target_os = "linux")]
+const APP_ID: &str = "forgeterm";
+
 fn main() -> iced::Result {
     // GPU defaults, each overridable by the user through the same variable:
     // - low-power adapter: a terminal should not wake a laptop's discrete GPU;
@@ -82,6 +87,11 @@ fn main() -> iced::Result {
             // The window's × asks first when programs still run (App::request_close).
             exit_on_close_request: false,
             icon: icon::window_icon(),
+            #[cfg(target_os = "linux")]
+            platform_specific: iced::window::settings::PlatformSpecific {
+                application_id: APP_ID.to_string(),
+                ..Default::default()
+            },
             ..Default::default()
         })
         .antialiasing(false)
