@@ -123,6 +123,10 @@ pub struct Modes {
     pub sgr_mouse: bool,
     pub alt_screen: bool,
     pub alternate_scroll: bool,
+    /// Kitty keyboard protocol flags the program enabled (0 = legacy encoding):
+    /// 1 disambiguate, 2 event types, 4 alternate keys, 8 all keys as escape
+    /// codes, 16 associated text.
+    pub keyboard: u8,
 }
 
 type Sink = Box<dyn Fn(SessionEvent) + Send + Sync>;
@@ -343,7 +347,7 @@ impl Session {
 
         let term_config = term::Config {
             scrolling_history: config.scrollback,
-            kitty_keyboard: false,
+            kitty_keyboard: true,
             ..Default::default()
         };
         let term = Arc::new(FairMutex::new(Term::new(
@@ -454,6 +458,7 @@ impl Session {
             sgr_mouse: m.contains(TermMode::SGR_MOUSE),
             alt_screen: m.contains(TermMode::ALT_SCREEN),
             alternate_scroll: m.contains(TermMode::ALTERNATE_SCROLL),
+            keyboard: ((m & TermMode::KITTY_KEYBOARD_PROTOCOL).bits() >> 18) as u8,
         }
     }
 

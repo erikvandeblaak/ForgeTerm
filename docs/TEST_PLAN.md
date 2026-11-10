@@ -246,6 +246,15 @@ Let op: Kladblok in Windows 11 opent het bestand als tabblad in een al geopend K
 | M5 | Na `ping`: "1 process · waiting at the prompt"; ForgeTerm hard beëindigd → geen achtergebleven ping | ✅ |
 | I1 | Venstericoon (titelbalk) = logo; `forgeterm.exe` bevat het icoon (ExtractAssociatedIcon toont het F-logo) | ✅ |
 
+### Kitty-toetsenbordprotocol (2026-11-10, Windows 11)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| KB1 | Unit: vlag 1 (Shift+Enter `CSI 13;2u`, Enter `\r`, Esc `CSI 27u`, Ctrl+C `CSI 99;5u`, Alt+a, Ctrl+Shift+A `CSI 97;6u`, tekst blijft tekst, pijlen legacy), vlag 8+16 (tekst als `CSI 97;1;97u`, Enter `CSI 13u`), zonder vlaggen = legacy | ✅ |
+| KB2 | Claude Code starten → log: vlaggen 5; afsluiten → 0 | ✅ |
+| KB3 | Byte-echo (Node, zet vlag 1 aan) in ForgeTerm via ConPTY: Shift+Enter `1b 5b 31 33 3b 32 75`, Enter `0d`, Ctrl+A `CSI 97;5u`, Esc `CSI 27u`, `a` — ConPTY laat de reeksen ongewijzigd door | ✅ |
+| KB4 | Claude Code: `/zz`, Shift+Enter, `yy` → twee regels in de invoer, niets verstuurd; Backspace werkt; Ctrl+C wist; 2× Ctrl+C sluit af | ✅ |
+
 ### Linux: WSL Ubuntu 24.04 (basis van Linux Mint 22), 2026-11-10
 
 Rust 1.99.1 per gebruiker (rustup, geen sudo); verse clone in het Linux-bestandssysteem. Geen `-dev`-pakketten nodig: iced laadt X11/Wayland/xkbcommon via dlopen, alleen gcc als linker.

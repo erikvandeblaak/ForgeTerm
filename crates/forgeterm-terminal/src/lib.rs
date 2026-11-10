@@ -19,7 +19,8 @@ mod snapshot;
 mod url;
 
 pub use input::{
-    Key, Modifiers, MouseButton, encode_key, encode_mouse, encode_paste, paste_needs_confirmation,
+    KITTY_ALL_AS_ESCAPES, KITTY_ASSOCIATED_TEXT, KITTY_DISAMBIGUATE, Key, Modifiers, MouseButton,
+    encode_key, encode_key_kitty, encode_mouse, encode_paste, paste_needs_confirmation,
 };
 pub use palette::{Palette, Rgb};
 pub use quote::{quote_path, quote_paths};

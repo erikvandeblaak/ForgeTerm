@@ -9,8 +9,7 @@ use forgeterm_agents::{Agent, AgentKind, ProjectContext};
 use forgeterm_explorer::{Listing, Tree, list_dir};
 use forgeterm_settings::Settings;
 use forgeterm_terminal::{
-    Palette, SessionEvent, ShellSpec, detect_shells, encode_key, paste_needs_confirmation,
-    quote_path,
+    Palette, SessionEvent, ShellSpec, detect_shells, paste_needs_confirmation, quote_path,
 };
 use iced::keyboard::{self, key::Named};
 use iced::widget::canvas::Canvas;
@@ -1271,7 +1270,12 @@ impl App {
         }
 
         if let Some((tkey, tmods)) = keys::translate(&key, text.as_deref(), mods)
-            && let Some(bytes) = encode_key(&tkey, tmods, t.modes.app_cursor)
+            && let Some(bytes) = forgeterm_terminal::encode_key_kitty(
+                &tkey,
+                tmods,
+                t.modes.app_cursor,
+                t.modes.keyboard,
+            )
             && let Some(session) = t.session()
         {
             session.input(bytes);

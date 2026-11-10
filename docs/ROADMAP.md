@@ -56,7 +56,7 @@ App-icoon: venster (gerenderd uit het SVG-logo) en `forgeterm.exe` (ICO via buil
 ## Bekende beperkingen (eerlijk)
 
 - **Linux getest in WSL Ubuntu 24.04** (dezelfde basis als Linux Mint 22): build, alle tests en de GUI onder WSLg. Een echte Mint-desktop (Cinnamon/X11) is nog niet getest.
-- **Kitty keyboard protocol uit.** Legacy encoding: Shift+Enter is niet te onderscheiden van Enter. In Claude Code werkt `\` + Enter voor een nieuwe regel.
+- **Kitty keyboard protocol** staat aan (vlaggen 1, 8 en 16 geïmplementeerd; 2 = alleen indrukken, 4 = alternatieve toetsen weggelaten, beide toegestaan). Claude Code vraagt vlaggen 5 aan, dus **Shift+Enter = nieuwe regel** in Claude Code. Programma's die het protocol niet aanzetten, krijgen de gewone (legacy) codering. Crasht een programma zonder het protocol uit te zetten, dan krijgt de shell daarna voor Ctrl/Alt-combinaties, Esc en Shift+Enter CSI-u-reeksen tot de pane opnieuw start.
 - **Emoji monochroom** (fallback-font zonder kleur-glyphs).
 - **Geen IME-ondersteuning** (Chinees/Japans invoeren). Dode toetsen (US-International) werken wél.
 - **Celbreedte afgeleid van JetBrains Mono** (0,6 em). Een andere font vereist meting van de advance — gepland bij font-instellingen.

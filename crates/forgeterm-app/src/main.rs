@@ -45,12 +45,25 @@ fn main() -> iced::Result {
         }
     }
 
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new(DEFAULT_LOG_FILTER)),
-        )
-        .init();
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(DEFAULT_LOG_FILTER));
+    // FORGETERM_LOG_FILE=<path>: log to a file (a release build on Windows has no
+    // console). Appends; nothing is logged about terminal content.
+    let log_file = std::env::var_os("FORGETERM_LOG_FILE").and_then(|p| {
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(p)
+            .ok()
+    });
+    match log_file {
+        Some(file) => tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_ansi(false)
+            .with_writer(std::sync::Mutex::new(file))
+            .init(),
+        None => tracing_subscriber::fmt().with_env_filter(filter).init(),
+    }
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
         "ForgeTerm starting — Created by Erik van de Blaak"

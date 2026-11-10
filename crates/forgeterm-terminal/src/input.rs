@@ -1,5 +1,6 @@
-//! Encoding of keyboard and mouse input into the byte sequences a PTY expects
-//! (xterm conventions; legacy keyboard protocol).
+//! Encoding of keyboard and mouse input into the byte sequences a PTY expects:
+//! xterm conventions (legacy), or the kitty keyboard protocol when the program
+//! enabled it (Claude Code does, which makes Shift+Enter distinguishable).
 
 /// Keyboard modifier state.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -109,6 +110,75 @@ pub fn encode_key(key: &Key, mods: Modifiers, app_cursor: bool) -> Option<Vec<u8
         }
     };
     Some(bytes)
+}
+
+/// Kitty keyboard protocol flags (`CSI > flags u`).
+pub const KITTY_DISAMBIGUATE: u8 = 1;
+pub const KITTY_ALL_AS_ESCAPES: u8 = 8;
+pub const KITTY_ASSOCIATED_TEXT: u8 = 16;
+
+/// Like [`encode_key`], but follows the kitty keyboard protocol flags the program
+/// enabled (`flags` from the terminal's mode; 0 = legacy). Implemented: 1
+/// (disambiguate), 8 (all keys as escape codes) and 16 (associated text). Flag 2
+/// (event types) is satisfied by sending presses only, flag 4 (alternate keys) by
+/// leaving the optional alternate fields out; both are allowed by the protocol.
+/// Text keys must carry the real Shift state in `mods`.
+pub fn encode_key_kitty(
+    key: &Key,
+    mods: Modifiers,
+    app_cursor: bool,
+    flags: u8,
+) -> Option<Vec<u8>> {
+    if flags & (KITTY_DISAMBIGUATE | KITTY_ALL_AS_ESCAPES) == 0 {
+        return encode_key(key, mods, app_cursor);
+    }
+    let all = flags & KITTY_ALL_AS_ESCAPES != 0;
+    let m = mods.param();
+    let csi_u = |code: u32, text: Option<&str>| -> Vec<u8> {
+        let mut s = format!("\x1b[{code}");
+        let with_text = text.filter(|_| flags & KITTY_ASSOCIATED_TEXT != 0);
+        if m > 1 || with_text.is_some() {
+            s.push_str(&format!(";{m}"));
+        }
+        if let Some(t) = with_text {
+            let cps: Vec<String> = t.chars().map(|c| (c as u32).to_string()).collect();
+            s.push_str(&format!(";{}", cps.join(":")));
+        }
+        s.push('u');
+        s.into_bytes()
+    };
+    let modified = mods.ctrl || mods.alt || mods.shift;
+    match key {
+        Key::Escape => Some(csi_u(27, None)),
+        Key::Enter if all || modified => Some(csi_u(13, None)),
+        Key::Tab if all || modified => Some(csi_u(9, None)),
+        Key::Backspace if all || modified => Some(csi_u(127, None)),
+        Key::Enter | Key::Tab | Key::Backspace => encode_key(key, mods, app_cursor),
+        Key::Text(text) => {
+            let mut chars = text.chars();
+            let single = match (chars.next(), chars.next()) {
+                (Some(c), None) => Some(c),
+                _ => None,
+            };
+            match single {
+                // Ctrl/Alt combinations, and every key when all keys are escapes:
+                // the key's base (lower-case) code point plus the modifiers.
+                Some(c) if all || mods.ctrl || mods.alt => {
+                    let base = c.to_lowercase().next().unwrap_or(c);
+                    let text = (!mods.ctrl).then_some(text.as_str());
+                    Some(csi_u(base as u32, text))
+                }
+                // Plain and Shift text: the text itself, as before.
+                _ if !(mods.ctrl || mods.alt) => {
+                    (!text.is_empty()).then(|| text.as_bytes().to_vec())
+                }
+                // Composed multi-character text with Ctrl/Alt: legacy.
+                _ => encode_key(key, mods, app_cursor),
+            }
+        }
+        // Cursor, editing and function keys are unambiguous in their legacy form.
+        _ => encode_key(key, mods, app_cursor),
+    }
 }
 
 /// Control code for Ctrl+<c>, if one exists.
@@ -323,6 +393,92 @@ mod tests {
         );
         assert_eq!(encode_paste("x\ty\r\nz\n", false), b"x\ty\rz".to_vec());
         assert!(!paste_needs_confirmation("curl evil|sh\x0f", false));
+    }
+
+    #[test]
+    fn kitty_disambiguate_level() {
+        let k = |key: Key, shift, ctrl, alt| {
+            encode_key_kitty(
+                &key,
+                Modifiers { shift, ctrl, alt },
+                false,
+                KITTY_DISAMBIGUATE,
+            )
+            .unwrap()
+        };
+        let t = |s: &str| Key::Text(s.into());
+        // The point of it all: Shift+Enter is not Enter.
+        assert_eq!(k(Key::Enter, true, false, false), b"\x1b[13;2u");
+        assert_eq!(k(Key::Enter, false, false, false), b"\r");
+        assert_eq!(k(Key::Enter, false, true, false), b"\x1b[13;5u");
+        assert_eq!(k(Key::Escape, false, false, false), b"\x1b[27u");
+        assert_eq!(k(Key::Tab, true, false, false), b"\x1b[9;2u");
+        assert_eq!(k(Key::Tab, false, false, false), b"\t");
+        assert_eq!(k(Key::Backspace, false, false, false), b"\x7f");
+        assert_eq!(k(Key::Backspace, false, true, false), b"\x1b[127;5u");
+        // Ctrl/Alt letters: base code point + modifiers.
+        assert_eq!(k(t("c"), false, true, false), b"\x1b[99;5u");
+        assert_eq!(k(t("a"), false, false, true), b"\x1b[97;3u");
+        assert_eq!(k(t("A"), true, true, false), b"\x1b[97;6u");
+        // Plain and shifted text stay text.
+        assert_eq!(k(t("a"), false, false, false), b"a");
+        assert_eq!(k(t("A"), true, false, false), b"A");
+        assert_eq!(k(t("é"), false, false, false), "é".as_bytes());
+        // Navigation keys keep their legacy form.
+        assert_eq!(k(Key::Up, false, false, false), b"\x1b[A");
+        assert_eq!(k(Key::Up, true, false, false), b"\x1b[1;2A");
+        // Without flags: exactly the legacy encoding.
+        assert_eq!(
+            encode_key_kitty(
+                &Key::Enter,
+                Modifiers {
+                    shift: true,
+                    ..NONE
+                },
+                false,
+                0
+            ),
+            encode_key(
+                &Key::Enter,
+                Modifiers {
+                    shift: true,
+                    ..NONE
+                },
+                false
+            )
+        );
+    }
+
+    #[test]
+    fn kitty_all_keys_and_associated_text() {
+        let flags = KITTY_DISAMBIGUATE | KITTY_ALL_AS_ESCAPES | KITTY_ASSOCIATED_TEXT;
+        let k = |key: Key, shift, ctrl| {
+            encode_key_kitty(
+                &key,
+                Modifiers {
+                    shift,
+                    ctrl,
+                    alt: false,
+                },
+                false,
+                flags,
+            )
+            .unwrap()
+        };
+        assert_eq!(k(Key::Text("a".into()), false, false), b"\x1b[97;1;97u");
+        assert_eq!(k(Key::Text("A".into()), true, false), b"\x1b[97;2;65u");
+        // Control combinations carry no text.
+        assert_eq!(k(Key::Text("c".into()), false, true), b"\x1b[99;5u");
+        assert_eq!(k(Key::Enter, false, false), b"\x1b[13u");
+        assert_eq!(k(Key::Backspace, false, false), b"\x1b[127u");
+        // Without flag 16: no text field.
+        let plain = encode_key_kitty(
+            &Key::Text("a".into()),
+            NONE,
+            false,
+            KITTY_DISAMBIGUATE | KITTY_ALL_AS_ESCAPES,
+        );
+        assert_eq!(plain.unwrap(), b"\x1b[97u");
     }
 
     #[test]

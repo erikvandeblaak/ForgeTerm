@@ -202,7 +202,15 @@ impl TerminalPane {
     pub fn refresh(&mut self, palette: &Palette) {
         if let Some(session) = &self.session {
             self.snapshot = session.snapshot(palette);
-            self.modes = session.modes();
+            let modes = session.modes();
+            if modes.keyboard != self.modes.keyboard {
+                tracing::info!(
+                    shell = %self.shell.name,
+                    flags = modes.keyboard,
+                    "program changed kitty keyboard flags"
+                );
+            }
+            self.modes = modes;
             self.cache.clear();
         }
         self.dirty = false;

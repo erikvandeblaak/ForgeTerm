@@ -192,6 +192,12 @@ Eén bron: `assets/branding/forgeterm-logo.svg`. Het venstericoon wordt bij het 
 
 `forgeterm-system::Sampler` houdt een sysinfo-`System` vast (CPU-gebruik is een verschil tussen twee metingen; de eerste meting heeft dus geen CPU-waarde en het paneel zegt "measuring…"). Per meting: totaal CPU (alle cores = 100 %), gebruikt/totaal RAM, en per shell-pid de hele procesboom (kinderen, kleinkinderen, …; breedte-eerst) met CPU (per-proces-waarden van sysinfo gedeeld door het aantal logische cores), resident geheugen, aantal processen en programmanamen. De app meet elke 2 s op een achtergrondthread, alleen als het paneel open is en er geen meting loopt; 90 metingen historie. Grafieken: één reeks per sparkline (geen legenda), 0–100 %, kleur `CHART_CYAN` (gevalideerd), hover = kruisdraad met waarde en leeftijd. GPU wordt niet gemeten en staat er zo.
 
+## 4o. Toetsenbord: kitty-protocol
+
+`term::Config::kitty_keyboard = true`: alacritty houdt de stapel modi bij die een programma met `CSI > flags u` aanzet en beantwoordt `CSI ? u`. `Modes::keyboard` geeft de actieve vlaggen door; `encode_key_kitty` codeert daarnaar (zonder vlaggen exact de legacy-codering). Vlag 1: Esc = `CSI 27u`, Enter/Tab/Backspace met modifier = `CSI 13|9|127;m u`, Ctrl/Alt+toets = `CSI <basiscodepunt>;m u`, tekst en Shift+tekst blijven tekst, cursor- en functietoetsen houden hun (al ondubbelzinnige) vorm. Vlag 8: ook tekst en Enter/Tab/Backspace als `CSI u`; vlag 16 voegt de tekst als codepunten toe. Gemeten: Claude Code 2.1.322 vraagt vlaggen 5 (1+4); ConPTY laat de `CSI u`-reeksen ongewijzigd door naar het programma (gecontroleerd met een byte-echo in Node).
+
+Diagnose: `FORGETERM_LOG_FILE=<pad>` schrijft het log naar een bestand (release-builds op Windows hebben geen console); ForgeTerm logt wanneer een programma de kitty-vlaggen wijzigt (nooit terminalinhoud).
+
 ## 4k. Veilig sluiten
 
 Quit (menu, venster-× via `exit_on_close_request: false` + `close_requests`), tab sluiten en pane sluiten gaan via `App::request_close`: van de betrokken shells (pid uit de PTY: ConPTY `child_watcher().pid()`, Unix `child().id()`) worden de kindprocessen opgezocht (`forgeterm-system`, achtergrondthread; `conhost`/`OpenConsole` genegeerd). Geen kinderen → direct sluiten; anders een bevestiging met de programmanamen per tab (Enter = sluiten, Esc/klik ernaast = annuleren). Een pane die zelf eindigt (exit 0) sluit zonder vraag.

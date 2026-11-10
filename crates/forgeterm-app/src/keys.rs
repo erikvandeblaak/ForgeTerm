@@ -99,10 +99,14 @@ pub fn translate(
             if m.ctrl || m.alt {
                 Key::Text(c.to_string())
             } else {
-                // Shift is already applied to `text`; don't encode it again.
+                // Shift is already applied to `text`; it is passed along only for
+                // the kitty protocol (the legacy encoding ignores it for text).
                 return Some((
                     Key::Text(produced.unwrap_or(c.as_str()).to_owned()),
-                    Modifiers::default(),
+                    Modifiers {
+                        shift: m.shift,
+                        ..Modifiers::default()
+                    },
                 ));
             }
         }
