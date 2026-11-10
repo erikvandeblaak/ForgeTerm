@@ -154,6 +154,9 @@ pub enum Message {
     TermFindClose,
     DismissNotice,
     MonitorSampled(Box<forgeterm_system::Sample>),
+    /// Test hook (FORGETERM_SCREENSHOT): capture the rendered frame.
+    DebugScreenshot,
+    DebugScreenshotTaken(iced::window::Screenshot),
 }
 
 const TERM_FIND_ID: &str = "forgeterm-terminal-find";
@@ -613,7 +616,15 @@ impl App {
         // current after commands typed in the terminal.
         let git = iced::time::every(Duration::from_secs(4)).map(|_| Message::GitTick);
         let close = iced::window::close_requests().map(|_| Message::WindowCloseRequested);
-        Subscription::batch([events, settings, git, close])
+        // Test hook for platforms where the window cannot be captured from outside
+        // (WSLg): with FORGETERM_SCREENSHOT=<file.png> the rendered frame is saved
+        // every 4 s. Off unless the variable is set.
+        let screenshot = if std::env::var_os("FORGETERM_SCREENSHOT").is_some() {
+            iced::time::every(Duration::from_secs(4)).map(|_| Message::DebugScreenshot)
+        } else {
+            Subscription::none()
+        };
+        Subscription::batch([events, settings, git, close, screenshot])
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -791,6 +802,16 @@ impl App {
             Message::TermFindClose => self.term_find = None,
             Message::DismissNotice => self.notice = None,
             Message::MonitorSampled(sample) => self.monitor.record(*sample),
+            Message::DebugScreenshot => {
+                return iced::window::latest()
+                    .and_then(iced::window::screenshot)
+                    .map(Message::DebugScreenshotTaken);
+            }
+            Message::DebugScreenshotTaken(shot) => {
+                if let Some(path) = std::env::var_os("FORGETERM_SCREENSHOT") {
+                    save_screenshot(&shot, Path::new(&path));
+                }
+            }
             Message::FocusPane(pane) => {
                 if let Some(tab) = self.workspace.active_tab_mut()
                     && tab.focus != pane
@@ -3551,6 +3572,19 @@ fn open_url(url: &str) -> Result<(), String> {
         .spawn()
         .map(drop)
         .map_err(|e| format!("could not open the link with {program}: {e}"))
+}
+
+/// Writes a rendered frame as PNG (test hook, see FORGETERM_SCREENSHOT).
+fn save_screenshot(shot: &iced::window::Screenshot, path: &Path) {
+    let size = resvg::tiny_skia::IntSize::from_wh(shot.size.width, shot.size.height);
+    let png = size
+        .and_then(|s| resvg::tiny_skia::Pixmap::from_vec(shot.rgba.to_vec(), s))
+        .and_then(|p| p.encode_png().ok());
+    match png.map(|bytes| std::fs::write(path, bytes)) {
+        Some(Ok(())) => tracing::info!("screenshot saved to {}", path.display()),
+        Some(Err(e)) => tracing::warn!("screenshot not saved: {e}"),
+        None => tracing::warn!("screenshot not saved: could not encode the frame"),
+    }
 }
 
 fn load_document(path: PathBuf) -> Task<Message> {
