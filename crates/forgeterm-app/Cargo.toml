@@ -34,3 +34,28 @@ workspace = true
 # Renders the .exe icon from the SVG logo (same version as iced uses).
 resvg = "0.45"
 embed-resource = "3"
+
+# Linux Mint / Ubuntu / Debian package: `scripts/package-linux.sh` (runs cargo-deb).
+# Paths are relative to this crate; `target/release/...` is cargo-deb's build output.
+[package.metadata.deb]
+name = "forgeterm"
+maintainer = "Erik van de Blaak"
+copyright = "Erik van de Blaak"
+extended-description = """\
+AI-native terminal for Windows and Linux (Erik van de Blaak Edition): GPU-rendered \
+terminal with tabs and split panes, file explorer, code viewer, git panel, prompt \
+studio and local AI-agent integration. ForgeTerm never sends prompts by itself."""
+section = "x11"
+priority = "optional"
+# $auto: libraries the binary links (dpkg-shlibdeps). The rest is loaded at run time
+# (winit: X11/Wayland/xkbcommon; wgpu: EGL, Vulkan when present).
+depends = "$auto, libxkbcommon0, libxkbcommon-x11-0, libx11-6, libxcursor1, libxi6, libxrandr2, libwayland-client0, libegl1"
+recommends = "git, libvulkan1, mesa-vulkan-drivers"
+assets = [
+    ["target/release/forgeterm", "usr/bin/", "755"],
+    ["../../packaging/linux/forgeterm.desktop", "usr/share/applications/", "644"],
+    ["../../assets/branding/forgeterm-logo.svg", "usr/share/icons/hicolor/scalable/apps/forgeterm.svg", "644"],
+    ["../../README.md", "usr/share/doc/forgeterm/", "644"],
+    ["../../assets/fonts/JetBrainsMono-OFL.txt", "usr/share/doc/forgeterm/", "644"],
+    ["../../dist/linux/THIRD-PARTY.txt", "usr/share/doc/forgeterm/", "644"],
+]

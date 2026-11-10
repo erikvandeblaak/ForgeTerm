@@ -26,6 +26,9 @@ use tracing_subscriber::EnvFilter;
 const DEFAULT_LOG_FILTER: &str =
     "info,wgpu_hal=error,wgpu_core=warn,iced_wgpu=warn,iced_winit=warn";
 
+/// Application id; must match `packaging/linux/forgeterm.desktop`.
+const APP_ID: &str = "forgeterm";
+
 fn main() -> iced::Result {
     // GPU defaults, each overridable by the user through the same variable:
     // - low-power adapter: a terminal should not wake a laptop's discrete GPU;
@@ -70,6 +73,12 @@ fn main() -> iced::Result {
     );
 
     iced::application(app::App::boot, app::App::update, app::App::view)
+        // Wayland app id = basename of the installed forgeterm.desktop, so the desktop
+        // shows the right icon and name. (X11 uses the binary name, also "forgeterm".)
+        .settings(iced::Settings {
+            id: Some(APP_ID.to_string()),
+            ..Default::default()
+        })
         .title(app::App::title)
         .subscription(app::App::subscription)
         .theme(|_: &app::App| Some(theme::forge_dark()))
