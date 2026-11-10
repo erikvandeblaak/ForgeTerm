@@ -242,6 +242,8 @@ pub struct App {
     term_find: Option<TermFind>,
     /// A one-line problem report (e.g. a link that could not be opened).
     notice: Option<String>,
+    /// The session file text last written, to save only on changes.
+    saved_session: Option<String>,
 }
 
 impl App {
@@ -286,10 +288,11 @@ impl App {
             pending_close: None,
             term_find: None,
             notice: None,
+            saved_session: None,
         };
         app.menus = menu::menus(app.shells.len());
         app.load_settings(true);
-        let terminal = app.new_tab(None, None);
+        let terminal = app.restore_or_new_tab();
         let root = app.explorer.root().to_path_buf();
         (
             app,
@@ -488,6 +491,8 @@ impl App {
 
     fn after_layout_change(&mut self) -> Task<Message> {
         if self.workspace.tabs.is_empty() {
+            // Last tab closed: the next start begins fresh, not with that tab.
+            self.save_session();
             return iced::exit();
         }
         self.refresh_visible();
@@ -868,6 +873,7 @@ impl App {
                 if self.settings_changed_on_disk() {
                     self.load_settings(false);
                 }
+                self.save_session();
                 // Files open in the viewer that changed on disk are reloaded.
                 let changed: Vec<PathBuf> = self
                     .viewer
@@ -1710,6 +1716,160 @@ impl App {
         Some(outcome)
     }
 
+    // ---- session restore ----------------------------------------------------------
+
+    fn session_path(&self) -> Option<PathBuf> {
+        self.settings_path
+            .as_deref()
+            .and_then(forgeterm_settings::session::path_for)
+    }
+
+    /// Reopens the last session's tabs, splits and viewer files when enabled and
+    /// available; otherwise one tab with the default shell.
+    fn restore_or_new_tab(&mut self) -> Task<Message> {
+        let saved = self
+            .session_path()
+            .filter(|_| self.settings.workspace.restore_session)
+            .map(|p| forgeterm_settings::session::load(&p))
+            .unwrap_or_default();
+        // No shell at all: new_tab shows the error screen.
+        if saved.tabs.is_empty() || self.shells.is_empty() {
+            return self.new_tab(None, None);
+        }
+        for layout in &saved.tabs {
+            let config = self.restore_layout(layout);
+            let panes = pane_grid::State::with_configuration(config);
+            let focus = panes.iter().next().map(|(p, _)| *p);
+            if let Some(focus) = focus {
+                self.workspace
+                    .tabs
+                    .push(crate::workspace::Tab { panes, focus });
+            }
+        }
+        if self.workspace.tabs.is_empty() {
+            return self.new_tab(None, None);
+        }
+        self.workspace.active = saved.active.min(self.workspace.tabs.len() - 1);
+        let files: Vec<PathBuf> = saved
+            .viewer_files
+            .into_iter()
+            .filter(|p| p.is_file())
+            .collect();
+        if !files.is_empty() {
+            self.viewer.visible = true;
+        }
+        Task::batch(files.into_iter().map(load_document))
+    }
+
+    fn restore_layout(
+        &mut self,
+        layout: &forgeterm_settings::session::Layout,
+    ) -> pane_grid::Configuration<TermId> {
+        use forgeterm_settings::session::Layout;
+        match layout {
+            Layout::Pane(spec) => {
+                // The saved shell if it is still installed, else the default one.
+                let shell = self
+                    .shells
+                    .iter()
+                    .find(|s| s.program.eq_ignore_ascii_case(&spec.shell))
+                    .cloned()
+                    .or_else(|| self.shell_at(None));
+                let cwd = spec.cwd.clone().filter(|d| d.is_dir());
+                let id = match shell {
+                    Some(shell) => self.spawn_terminal(shell, cwd),
+                    None => self.next_id,
+                };
+                pane_grid::Configuration::Pane(id)
+            }
+            Layout::Split {
+                side_by_side,
+                ratio,
+                a,
+                b,
+            } => pane_grid::Configuration::Split {
+                axis: if *side_by_side {
+                    Axis::Vertical
+                } else {
+                    Axis::Horizontal
+                },
+                ratio: *ratio,
+                a: Box::new(self.restore_layout(a)),
+                b: Box::new(self.restore_layout(b)),
+            },
+        }
+    }
+
+    /// The current layout as a session (agents are saved as the default shell in
+    /// their folder: an agent is never started automatically).
+    fn current_session(&self) -> forgeterm_settings::session::SavedSession {
+        use forgeterm_settings::session::{Layout, PaneSpec, SavedSession};
+        let default_program = self.shell_at(None).map(|s| s.program);
+        let pane_spec = |id: &TermId| -> Option<PaneSpec> {
+            let t = self.terminals.get(id)?;
+            let shell = if t.agent.is_some() {
+                default_program.clone()?
+            } else {
+                t.shell.program.clone()
+            };
+            Some(PaneSpec {
+                shell,
+                cwd: t.directory().map(Path::to_path_buf),
+            })
+        };
+        fn walk(
+            node: &pane_grid::Node,
+            panes: &pane_grid::State<TermId>,
+            spec: &dyn Fn(&TermId) -> Option<PaneSpec>,
+        ) -> Option<Layout> {
+            match node {
+                pane_grid::Node::Pane(p) => panes.get(*p).and_then(spec).map(Layout::Pane),
+                pane_grid::Node::Split {
+                    axis, ratio, a, b, ..
+                } => Some(Layout::Split {
+                    side_by_side: *axis == Axis::Vertical,
+                    ratio: *ratio,
+                    a: Box::new(walk(a, panes, spec)?),
+                    b: Box::new(walk(b, panes, spec)?),
+                }),
+            }
+        }
+        SavedSession {
+            tabs: self
+                .workspace
+                .tabs
+                .iter()
+                .filter_map(|t| walk(t.panes.layout(), &t.panes, &pane_spec))
+                .collect(),
+            active: self.workspace.active,
+            viewer_files: self
+                .viewer
+                .tabs
+                .iter()
+                .map(|t| t.doc.path.clone())
+                .collect(),
+        }
+    }
+
+    /// Writes session.toml when it changed (and restoring is enabled).
+    fn save_session(&mut self) {
+        if !self.settings.workspace.restore_session {
+            return;
+        }
+        let Some(path) = self.session_path() else {
+            return;
+        };
+        let session = self.current_session();
+        let text = forgeterm_settings::session::to_toml(&session);
+        if self.saved_session.as_deref() == Some(text.as_str()) {
+            return;
+        }
+        match forgeterm_settings::session::save(&path, &session) {
+            Ok(()) => self.saved_session = Some(text),
+            Err(e) => tracing::warn!("could not save {}: {e}", path.display()),
+        }
+    }
+
     // ---- closing ------------------------------------------------------------------
 
     /// Closes at once when nothing runs in the affected terminals; otherwise asks
@@ -1752,7 +1912,10 @@ impl App {
     fn perform_close(&mut self, target: CloseTarget) -> Task<Message> {
         match target {
             // Same as closing the window: sessions are dropped, shells are shut down.
-            CloseTarget::Quit => iced::exit(),
+            CloseTarget::Quit => {
+                self.save_session();
+                iced::exit()
+            }
             CloseTarget::Tab(ids) => {
                 let index = ids
                     .first()

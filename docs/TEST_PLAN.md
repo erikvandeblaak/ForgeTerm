@@ -22,7 +22,7 @@
 | `forgeterm-git` (12) | Porcelain v2: branch-headers, rename met origineel pad, spaties in paden, conflicten, untracked, onbekende records genegeerd, initial/detached; log-records; tegen echte git: discover vanuit submap, unborn branch, niet-ASCII + spatie, stage/unstage zonder en met HEAD, lege commit-message geweigerd, commit + log, diff unstaged/staged/untracked, fout bij onbekend pad; echt merge-conflict + rename; **repository-fsmonitor wordt niet uitgevoerd** (controle: gewone `git status` voert hem wél uit); branches parsen (ahead/behind, gone, origin/HEAD weg); tegen echte git: branch maken (lege/`-x`/`bad..name` geweigerd), lijst, wisselen, wissel geweigerd bij lokale wijziging, clone met remote branches + upstream, `--track`, history + `show`, ongeldige hash geweigerd, activiteit van vandaag; `daily_counts` (venster, buiten venster genegeerd) | ✅ |
 | `forgeterm-viewer` (6) | UTF-8/BOM/UTF-16 LE+BE/binair/lossy, tabs en besturingstekens zichtbaar, afkappen, CRLF + slot-newline, kopiëren en zoeken, binair/map/te groot geweigerd, Rust-kleuren (comment/keyword/string uit het Forge-thema, spans binnen de regel), syntax per bestandstype + shebang | ✅ |
 | `forgeterm-system` (3) | Echte processen: een shell met `ping`/`sleep` → programma gevonden (conhost genegeerd), wachtende shell → leeg, verdwenen pid → afwezig; `.exe` weg uit namen | ✅ |
-| `forgeterm-settings` (7) | Template = exact de defaults, leeg = defaults, alle waarden toegepast, 7 fouten → 7 meldingen met fallback, syntaxfout (één regel, `unreadable`), sectie geen tabel, `ensure_file` maakt één keer aan en overschrijft nooit | ✅ |
+| `forgeterm-settings` (11) | incl. sessie: heen-en-terug (tabs, geneste splits, ratio's, paden met spaties/quotes, viewer-bestanden), beschadigd bestand (ontbrekend deel, onbekend split-type, lege shell, rest-items, ratio buiten bereik, active te groot), limiet panes per tab, atomisch opslaan + laden | Template = exact de defaults, leeg = defaults, alle waarden toegepast, 7 fouten → 7 meldingen met fallback, syntaxfout (één regel, `unreadable`), sectie geen tabel, `ensure_file` maakt één keer aan en overschrijft nooit | ✅ |
 | `forgeterm-explorer` (6) | Sortering, verborgen, ontbrekende map = fout, lazy uitklappen/inklappen, verouderde resultaten genegeerd, fouten + selectie | ✅ |
 | `terminal_pane::tests` (3) | Tabtitels: exe-pad → shellnaam, `cmd.exe - ping …` → `ping …`, programmatitels blijven | ✅ |
 
@@ -234,6 +234,13 @@ Let op: Kladblok in Windows 11 opent het bestand als tabblad in een al geopend K
 | L1 | Unit: links vinden + leestekens/haakjes, geen file/ftp/javascript, niet aan een woord vastgeplakt, kolomposities, `is_openable` weigert spaties/quotes/ESC/te lang/`-host` | ✅ |
 | L2 | `https://example.com/forgeterm-test` in de uitvoer, Ctrl ingedrukt + muis erover → onderstreept; Ctrl los → weg | ✅ |
 | L3 | Ctrl+klik opent de browser | ⬜ bewust niet in de GUI uitgevoerd (zou de browser van de gebruiker openen en een externe site bezoeken); pad = `is_openable` (unit-getest) + `explorer.exe <url>` |
+
+### Sessie herstellen (2026-11-10, Windows 11, FORGETERM_SETTINGS naar de testmap)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| R1 | Split rechts + `cd ..` rechts, reload.py in de viewer, tweede tab, Alt+F4 → `session.toml` bevat precies die indeling (ratio 0.5, beide mappen, actieve tab 1, het bestand) | ✅ |
+| R2 | Opnieuw starten vanuit een andere map → tab 2 actief in scratchpad, viewer met reload.py; Alt+1 → tab 1 met de split, links viewtest, rechts scratchpad | ✅ |
 
 ### Veilig sluiten (2026-11-10, Windows 11)
 

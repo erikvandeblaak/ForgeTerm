@@ -11,6 +11,8 @@ use std::path::{Path, PathBuf};
 
 use toml::{Table, Value};
 
+pub mod session;
+
 pub const FILE_NAME: &str = "settings.toml";
 
 pub const MIN_FONT_SIZE: f32 = 8.0;
@@ -36,10 +38,17 @@ pub struct Explorer {
     pub show_hidden: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Workspace {
+    /// Reopen the tabs, splits and viewer files of the last session at startup.
+    pub restore_session: bool,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     pub terminal: Terminal,
     pub explorer: Explorer,
+    pub workspace: Workspace,
 }
 
 impl Default for Settings {
@@ -56,6 +65,9 @@ impl Default for Settings {
                 visible: false,
                 follow_terminal: true,
                 show_hidden: false,
+            },
+            workspace: Workspace {
+                restore_session: true,
             },
         }
     }
@@ -104,6 +116,12 @@ follow_terminal = true
 
 # Show dot-files and files marked hidden.
 show_hidden = false
+
+[workspace]
+# Reopen the last session's tabs, splits (with their folders) and viewer files at
+# startup. Stored in session.toml next to this file: folders and shell names only,
+# never terminal output or commands. Agents come back as plain shells.
+restore_session = true
 "#;
 
 /// Where the settings file lives: `%APPDATA%\ForgeTerm` on Windows,
@@ -182,7 +200,12 @@ pub fn parse(text: &str) -> Loaded {
             ("explorer", Value::Table(t)) => {
                 parse_explorer(t, &mut settings.explorer, &mut problems)
             }
-            ("terminal" | "explorer", _) => problems.push(format!("[{key}] must be a section")),
+            ("workspace", Value::Table(t)) => {
+                parse_workspace(t, &mut settings.workspace, &mut problems)
+            }
+            ("terminal" | "explorer" | "workspace", _) => {
+                problems.push(format!("[{key}] must be a section"))
+            }
             _ => problems.push(format!("unknown setting '{key}' (ignored)")),
         }
     }
@@ -255,6 +278,20 @@ fn parse_explorer(t: &Table, out: &mut Explorer, problems: &mut Vec<String>) {
         };
         if let Some(b) = boolean(&name, value, problems) {
             *target = b;
+        }
+    }
+}
+
+fn parse_workspace(t: &Table, out: &mut Workspace, problems: &mut Vec<String>) {
+    for (key, value) in t {
+        let name = format!("workspace.{key}");
+        match key.as_str() {
+            "restore_session" => {
+                if let Some(b) = boolean(&name, value, problems) {
+                    out.restore_session = b;
+                }
+            }
+            _ => problems.push(format!("unknown setting '{name}' (ignored)")),
         }
     }
 }
@@ -343,9 +380,12 @@ mod tests {
             visible = true
             follow_terminal = false
             show_hidden = true
+            [workspace]
+            restore_session = false
             "#,
         );
         assert!(s.problems.is_empty(), "{:?}", s.problems);
+        assert!(!s.settings.workspace.restore_session);
         let t = &s.settings.terminal;
         assert_eq!(t.font_size, 16.5);
         assert_eq!(t.scrollback, 0);

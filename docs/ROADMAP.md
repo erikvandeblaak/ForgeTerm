@@ -29,7 +29,7 @@ Legenda: ✅ klaar en getest · 🟡 deels · ⬜ open. "Getest" betekent: daadw
 | Werkmap volgen: nieuwe tab/split/herstart in de map van de shell, verkenner volgt, map in statusbalk | ✅ Windows (2026-11-10): pwsh, Windows PowerShell, cmd, Git Bash |
 | Drag-and-drop bestanden → terminal (shell-specifieke escaping) | ✅ Windows: vanuit Windows Verkenner; quoting getest in pwsh, Windows PowerShell, cmd, Git Bash. Slepen vanuit het eigen explorer-paneel ⬜ (nu dubbelklik / *Insert path*) |
 | Instellingen (`settings.toml`, live herladen, foutmeldingen) | ✅ Windows (2026-11-10) — zie TEST_PLAN T1–T8 |
-| Workspace-opslag (tabs/splits bewaren, SQLite) | ⬜ |
+| Workspace-opslag (tabs, splits met verhouding, map per pane, actieve tab, viewer-bestanden in `session.toml`) | ✅ Windows (2026-11-10) — geen SQLite nodig |
 
 ## Fase 3 — Premium UI
 
