@@ -20,6 +20,8 @@ forgeterm-prompts.workspace = true
 forgeterm-git.workspace = true
 forgeterm-viewer.workspace = true
 forgeterm-system.workspace = true
+# Same version iced already uses (no extra build): renders the window icon.
+resvg = "0.45"
 iced.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
@@ -27,3 +29,8 @@ tracing-subscriber.workspace = true
 
 [lints]
 workspace = true
+
+[build-dependencies]
+# Renders the .exe icon from the SVG logo (same version as iced uses).
+resvg = "0.45"
+embed-resource = "3"

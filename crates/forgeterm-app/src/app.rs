@@ -28,6 +28,7 @@ use crate::ai_view::{self, AgentState};
 use crate::commands::{CommandId, Dir, Keymap, STATIC_COMMANDS};
 use crate::git_view::{self, DiffView, GitState, HistoryView, Repo, Snapshot};
 use crate::menu::{self, Menu, MenuState};
+use crate::monitor_view::{self, Monitor};
 use crate::palette::{self as command_palette, CommandPalette, Entry};
 use crate::prompt_studio::PromptStudio;
 use crate::terminal_pane::{Outcome, SessionOptions, Status, TermId, TermMsg, TerminalPane};
@@ -149,6 +150,7 @@ pub enum Message {
     TermFindStep(bool),
     TermFindClose,
     DismissNotice,
+    MonitorSampled(Box<forgeterm_system::Sample>),
 }
 
 const TERM_FIND_ID: &str = "forgeterm-terminal-find";
@@ -244,6 +246,7 @@ pub struct App {
     notice: Option<String>,
     /// The session file text last written, to save only on changes.
     saved_session: Option<String>,
+    monitor: Monitor,
 }
 
 impl App {
@@ -289,6 +292,7 @@ impl App {
             term_find: None,
             notice: None,
             saved_session: None,
+            monitor: Monitor::default(),
         };
         app.menus = menu::menus(app.shells.len());
         app.load_settings(true);
@@ -770,6 +774,7 @@ impl App {
             }
             Message::TermFindClose => self.term_find = None,
             Message::DismissNotice => self.notice = None,
+            Message::MonitorSampled(sample) => self.monitor.record(*sample),
             Message::FocusPane(pane) => {
                 if let Some(tab) = self.workspace.active_tab_mut()
                     && tab.focus != pane
@@ -874,6 +879,7 @@ impl App {
                     self.load_settings(false);
                 }
                 self.save_session();
+                let sample = self.sample_monitor();
                 // Files open in the viewer that changed on disk are reloaded.
                 let changed: Vec<PathBuf> = self
                     .viewer
@@ -889,9 +895,7 @@ impl App {
                         t.doc.path.clone()
                     })
                     .collect();
-                if !changed.is_empty() {
-                    return Task::batch(changed.into_iter().map(load_document));
-                }
+                return Task::batch(changed.into_iter().map(load_document).chain(sample));
             }
             Message::DismissSettingsProblems => self.settings_problems.clear(),
             Message::AgentsDetected(found) => {
@@ -1490,6 +1494,7 @@ impl App {
                 if self.explorer_visible {
                     self.ai_visible = false;
                     self.git_visible = false;
+                    self.monitor.visible = false;
                 }
             }
             CommandId::ToggleAiPanel => {
@@ -1497,6 +1502,7 @@ impl App {
                 if self.ai_visible {
                     self.explorer_visible = false;
                     self.git_visible = false;
+                    self.monitor.visible = false;
                 }
             }
             CommandId::AiRefresh => {
@@ -1508,6 +1514,15 @@ impl App {
                 return detect_agents();
             }
             CommandId::StartAgent(kind, split) => return self.start_agent(kind, split),
+            CommandId::ToggleMonitor => {
+                self.monitor.visible = !self.monitor.visible;
+                if self.monitor.visible {
+                    self.explorer_visible = false;
+                    self.ai_visible = false;
+                    self.git_visible = false;
+                    return self.sample_monitor().unwrap_or_else(Task::none);
+                }
+            }
             CommandId::ToggleViewer => {
                 self.viewer.visible = !self.viewer.visible;
                 if !self.viewer.visible {
@@ -1529,6 +1544,7 @@ impl App {
                 if self.git_visible {
                     self.explorer_visible = false;
                     self.ai_visible = false;
+                    self.monitor.visible = false;
                     return self.refresh_git(true);
                 }
             }
@@ -1646,7 +1662,7 @@ impl App {
             CommandId::SelectTab(i) => i < self.workspace.tabs.len() && i != self.workspace.active,
             CommandId::OpenPromptsFolder => self.prompts_dir().is_some(),
             CommandId::GitShowHistory => self.git.root().is_some(),
-            CommandId::ToggleViewer => true,
+            CommandId::ToggleViewer | CommandId::ToggleMonitor => true,
             CommandId::ViewSelectedFile => self.explorer.selected().is_some_and(|e| !e.is_dir),
             CommandId::CommandPalette
             | CommandId::OpenPromptStudio
@@ -1714,6 +1730,42 @@ impl App {
         let outcome = t.session()?.search(query, older);
         t.refresh(&self.palette);
         Some(outcome)
+    }
+
+    // ---- monitor --------------------------------------------------------------------
+
+    /// (label, shell pid) of every running terminal, in tab order.
+    fn monitor_rows(&self) -> Vec<(String, u32)> {
+        let mut rows = Vec::new();
+        for (i, tab) in self.workspace.tabs.iter().enumerate() {
+            for id in tab.terminals() {
+                if let Some(t) = self.terminals.get(&id)
+                    && let Some(pid) = t.session().and_then(|s| s.pid())
+                {
+                    rows.push((format!("{} (tab {})", t.display_title(), i + 1), pid));
+                }
+            }
+        }
+        rows
+    }
+
+    /// Starts a measurement when the monitor is open and none is running.
+    fn sample_monitor(&mut self) -> Option<Task<Message>> {
+        if !self.monitor.visible || self.monitor.busy {
+            return None;
+        }
+        self.monitor.busy = true;
+        let pids: Vec<u32> = self.monitor_rows().into_iter().map(|(_, p)| p).collect();
+        let sampler = self.monitor.sampler.clone();
+        Some(background(
+            move || {
+                let mut s = sampler
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                Box::new(s.sample(&pids))
+            },
+            Message::MonitorSampled,
+        ))
     }
 
     // ---- session restore ----------------------------------------------------------
@@ -2443,6 +2495,8 @@ impl App {
             row![ai_view::view(&self.agents, self.ai_context.as_ref()), body].into()
         } else if self.git_visible {
             row![git_view::view(&self.git), body].into()
+        } else if self.monitor.visible {
+            row![monitor_view::view(&self.monitor, self.monitor_rows()), body].into()
         } else {
             body
         };

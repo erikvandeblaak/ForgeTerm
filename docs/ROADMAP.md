@@ -37,7 +37,7 @@ Design system ✅ (tokens), thema's ⬜ (alleen Forge Dark), Theme Editor ⬜, a
 
 ## Fase 4 — Analytics
 
-`forgeterm-analytics` (sysinfo, ringbuffers) ⬜ · `forgeterm-charts` (eigen canvas-chartlaag) ⬜ · `forge-monitor` CLI ⬜ · GPU via NVML/ADLX/sysfs met eerlijke "niet beschikbaar"-melding ⬜.
+Monitor-paneel (Ctrl+Shift+M): CPU en geheugen van het systeem met 3 minuten historie (sparklines met hover), per terminal CPU/geheugen/processen van de hele procesboom van de shell — gemeten via sysinfo (`forgeterm-system::Sampler`), alleen zolang het paneel open is ✅ · GPU: toont eerlijk "not measured" ⬜ (NVML/ADLX/sysfs) · `forge-monitor` CLI ⬜.
 
 ## Fase 5 — AI Workspace
 
@@ -51,7 +51,7 @@ Git Control Center: statusbalk (branch, ahead/behind, wijzigingen), paneel met d
 
 ## Fase 7 — Release
 
-Linux Mint-validatie ⬜ · installers (MSI/winget, .deb/AppImage) ⬜ · benchmarks ⬜ · security review ⬜ · documentatie ⬜.
+App-icoon: venster (gerenderd uit het SVG-logo) en `forgeterm.exe` (ICO via build.rs + Windows SDK rc) ✅ Windows · Linux Mint-validatie ⬜ · installers (MSI/winget, .deb/AppImage) ⬜ · benchmarks ⬜ · security review ⬜ · documentatie ⬜.
 
 ## Bekende beperkingen (eerlijk)
 

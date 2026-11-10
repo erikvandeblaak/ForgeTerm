@@ -21,7 +21,7 @@
 | `forgeterm-prompts` (8) | Front matter (BOM, CRLF, quotes, zonder afsluiting = body), variabelen in volgorde zonder dubbelingen (ongeldige `{{a b}}` / `{{}}` genegeerd, `{{{x}}}`), waarden letterlijk (geen herexpansie), leeg = ontbrekend, nooit een afsluitende newline, ingebouwde sjablonen geldig, eigen map: override, `.MD`, geen submappen/`.txt`, niet-UTF-8 gemeld, ontbrekende map = geen probleem | ✅ |
 | `forgeterm-git` (12) | Porcelain v2: branch-headers, rename met origineel pad, spaties in paden, conflicten, untracked, onbekende records genegeerd, initial/detached; log-records; tegen echte git: discover vanuit submap, unborn branch, niet-ASCII + spatie, stage/unstage zonder en met HEAD, lege commit-message geweigerd, commit + log, diff unstaged/staged/untracked, fout bij onbekend pad; echt merge-conflict + rename; **repository-fsmonitor wordt niet uitgevoerd** (controle: gewone `git status` voert hem wél uit); branches parsen (ahead/behind, gone, origin/HEAD weg); tegen echte git: branch maken (lege/`-x`/`bad..name` geweigerd), lijst, wisselen, wissel geweigerd bij lokale wijziging, clone met remote branches + upstream, `--track`, history + `show`, ongeldige hash geweigerd, activiteit van vandaag; `daily_counts` (venster, buiten venster genegeerd) | ✅ |
 | `forgeterm-viewer` (6) | UTF-8/BOM/UTF-16 LE+BE/binair/lossy, tabs en besturingstekens zichtbaar, afkappen, CRLF + slot-newline, kopiëren en zoeken, binair/map/te groot geweigerd, Rust-kleuren (comment/keyword/string uit het Forge-thema, spans binnen de regel), syntax per bestandstype + shebang | ✅ |
-| `forgeterm-system` (3) | Echte processen: een shell met `ping`/`sleep` → programma gevonden (conhost genegeerd), wachtende shell → leeg, verdwenen pid → afwezig; `.exe` weg uit namen | ✅ |
+| `forgeterm-system` (4) | Echte processen: een shell met `ping`/`sleep` → programma gevonden (conhost genegeerd), wachtende shell → leeg, verdwenen pid → afwezig; `.exe` weg uit namen; sampler: eerste meting zonder CPU, tweede met CPU 0–100 %, procesboom (shell + kind, geheugen > 0, programmanaam), RAM gebruikt ≤ totaal | ✅ |
 | `forgeterm-settings` (11) | Template = exact de defaults, leeg = defaults, alle waarden toegepast, 7 fouten → 7 meldingen met fallback, syntaxfout (één regel, `unreadable`), sectie geen tabel, `ensure_file` maakt één keer aan en overschrijft nooit; sessie: heen-en-terug (tabs, geneste splits, ratio's, paden met spaties/quotes, viewer-bestanden), beschadigd bestand (ontbrekend deel, onbekend split-type, lege shell, rest-items, ratio buiten bereik, active te groot), limiet panes per tab, atomisch opslaan + laden | ✅ |
 | `forgeterm-explorer` (6) | Sortering, verborgen, ontbrekende map = fout, lazy uitklappen/inklappen, verouderde resultaten genegeerd, fouten + selectie | ✅ |
 | `terminal_pane::tests` (3) | Tabtitels: exe-pad → shellnaam, `cmd.exe - ping …` → `ping …`, programmatitels blijven | ✅ |
@@ -234,6 +234,17 @@ Let op: Kladblok in Windows 11 opent het bestand als tabblad in een al geopend K
 | L1 | Unit: links vinden + leestekens/haakjes, geen file/ftp/javascript, niet aan een woord vastgeplakt, kolomposities, `is_openable` weigert spaties/quotes/ESC/te lang/`-host` | ✅ |
 | L2 | `https://example.com/forgeterm-test` in de uitvoer, Ctrl ingedrukt + muis erover → onderstreept; Ctrl los → weg | ✅ |
 | L3 | Ctrl+klik opent de browser | ⬜ bewust niet in de GUI uitgevoerd (zou de browser van de gebruiker openen en een externe site bezoeken); pad = `is_openable` (unit-getest) + `explorer.exe <url>` |
+
+### Monitor en icoon (2026-11-10, Windows 11)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| M1 | `ping` in de tab, Ctrl+Shift+M → per terminal "2 processes · PING, 94 MB"; Windows zelf (WMI): pwsh + PING.EXE, 94 MB working set | ✅ identiek |
+| M2 | Systeemgeheugen 11.5 / 15.7 GB (73 %); Windows: 11.5 / 15.7 GB | ✅ identiek |
+| M3 | GPU staat er als "not measured" (niet verzonnen) | ✅ |
+| M4 | Hover over de geheugen-sparkline → kruisdraad + "74 % · 16 s ago" (eerst niet: canvas tekende niet opnieuw bij muisbeweging; opgelost) | ✅ |
+| M5 | Na `ping`: "1 process · waiting at the prompt"; ForgeTerm hard beëindigd → geen achtergebleven ping | ✅ |
+| I1 | Venstericoon (titelbalk) = logo; `forgeterm.exe` bevat het icoon (ExtractAssociatedIcon toont het F-logo) | ✅ |
 
 ### Sessie herstellen (2026-11-10, Windows 11, FORGETERM_SETTINGS naar de testmap)
 

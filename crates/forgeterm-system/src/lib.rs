@@ -1,6 +1,10 @@
 //! What runs inside ForgeTerm's terminals, from the operating system's process
 //! table (sysinfo). Read-only: nothing is ever signalled or killed from here.
 
+mod usage;
+
+pub use usage::{Sample, Sampler, TreeUsage};
+
 use std::collections::HashMap;
 
 use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};

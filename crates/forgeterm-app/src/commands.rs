@@ -48,6 +48,7 @@ pub enum CommandId {
     ToggleExplorer,
     ToggleViewer,
     ViewSelectedFile,
+    ToggleMonitor,
     ExplorerToggleHidden,
     ExplorerToggleFollow,
     ExplorerRefresh,
@@ -101,6 +102,7 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::ToggleExplorer,
     CommandId::ToggleViewer,
     CommandId::ViewSelectedFile,
+    CommandId::ToggleMonitor,
     CommandId::ExplorerToggleHidden,
     CommandId::ExplorerToggleFollow,
     CommandId::ExplorerRefresh,
@@ -126,7 +128,7 @@ impl CommandId {
     pub fn category(self) -> &'static str {
         use CommandId::*;
         match self {
-            CommandPalette | ZoomIn | ZoomOut | ZoomReset => "View",
+            CommandPalette | ZoomIn | ZoomOut | ZoomReset | ToggleMonitor => "View",
             NewTab | NewTabWithShell(_) | CloseTab | NextTab | PreviousTab | SelectTab(_) => "Tab",
             SplitRight | SplitDown | ClosePane | TogglePaneZoom | FocusPane(_) => "Pane",
             RestartShell | ClearScrollback | ScrollToTop | ScrollToBottom | ScrollPageUp
@@ -202,6 +204,7 @@ impl CommandId {
             ToggleGitPanel => "Toggle Git Panel",
             ToggleViewer => "Toggle Code Viewer",
             ViewSelectedFile => "View Selected File",
+            ToggleMonitor => "Toggle Monitor (CPU / Memory)",
             GitRefresh => "Refresh Git Status",
             GitShowHistory => "Show History and Activity",
             ReloadSettings => "Reload Settings",
@@ -307,6 +310,7 @@ impl Default for Keymap {
             (b(CS, Char('g')), ToggleGitPanel),
             (b(CS, Char('o')), ToggleViewer),
             (b(CS, Char('f')), FindInTerminal),
+            (b(CS, Char('m')), ToggleMonitor),
             (b(C, Tab), NextTab),
             (b(CS, Tab), PreviousTab),
             (b(AS, Char('=')), SplitRight),

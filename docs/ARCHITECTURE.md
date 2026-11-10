@@ -184,6 +184,14 @@ Alleen gedocumenteerde interfaces (Claude Code-documentatie op code.claude.com, 
 
 `forgeterm-settings::session` (GUI-vrij, unit-getest): `session.toml` met per tab de lay-out als platte lijst in prefix-volgorde (`split = right|down` + `ratio`, of een pane met `shell` en `cwd`), plus actieve tab en viewer-bestanden. Tolerant lezen (kapotte tabs vallen weg, ratio 0.1–0.9, max 32 tabs / 16 panes per tab / 32 bestanden), atomisch schrijven (tijdelijk bestand + rename). De app schrijft alleen bij wijziging (elke 2 s vergeleken), bij Quit en als de laatste tab sluit (dan leeg). Bij het starten: lay-out via `pane_grid::State::with_configuration`; een shell die niet meer bestaat wordt de standaardshell, een map die niet meer bestaat de startmap; agent-panes worden opgeslagen als de standaardshell in hun map (nooit automatisch een agent starten). Panes van een niet-zichtbare tab starten hun shell pas bij het eerste tonen (start-op-echte-grootte).
 
+## 4n. Icoon
+
+Eén bron: `assets/branding/forgeterm-logo.svg`. Het venstericoon wordt bij het starten gerenderd (resvg, dezelfde versie als iced al gebruikt, 256 px, niet-gepremultiplied RGBA). Voor `forgeterm.exe` rendert `crates/forgeterm-app/build.rs` 16/24/32/48/256 px als PNG in een ICO-container en sluit die in met de resource-compiler van de Windows SDK (`embed-resource`); op andere platforms doet het build-script niets.
+
+## 4m. Monitor
+
+`forgeterm-system::Sampler` houdt een sysinfo-`System` vast (CPU-gebruik is een verschil tussen twee metingen; de eerste meting heeft dus geen CPU-waarde en het paneel zegt "measuring…"). Per meting: totaal CPU (alle cores = 100 %), gebruikt/totaal RAM, en per shell-pid de hele procesboom (kinderen, kleinkinderen, …; breedte-eerst) met CPU (per-proces-waarden van sysinfo gedeeld door het aantal logische cores), resident geheugen, aantal processen en programmanamen. De app meet elke 2 s op een achtergrondthread, alleen als het paneel open is en er geen meting loopt; 90 metingen historie. Grafieken: één reeks per sparkline (geen legenda), 0–100 %, kleur `CHART_CYAN` (gevalideerd), hover = kruisdraad met waarde en leeftijd. GPU wordt niet gemeten en staat er zo.
+
 ## 4k. Veilig sluiten
 
 Quit (menu, venster-× via `exit_on_close_request: false` + `close_requests`), tab sluiten en pane sluiten gaan via `App::request_close`: van de betrokken shells (pid uit de PTY: ConPTY `child_watcher().pid()`, Unix `child().id()`) worden de kindprocessen opgezocht (`forgeterm-system`, achtergrondthread; `conhost`/`OpenConsole` genegeerd). Geen kinderen → direct sluiten; anders een bevestiging met de programmanamen per tab (Enter = sluiten, Esc/klik ernaast = annuleren). Een pane die zelf eindigt (exit 0) sluit zonder vraag.

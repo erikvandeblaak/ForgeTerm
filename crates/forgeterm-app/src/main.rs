@@ -8,8 +8,10 @@ mod explorer_view;
 mod fuzzy;
 mod git_view;
 mod glyphs;
+mod icon;
 mod keys;
 mod menu;
+mod monitor_view;
 mod palette;
 mod prompt_studio;
 mod terminal_pane;
@@ -66,6 +68,7 @@ fn main() -> iced::Result {
             min_size: Some(iced::Size::new(480.0, 300.0)),
             // The window's × asks first when programs still run (App::request_close).
             exit_on_close_request: false,
+            icon: icon::window_icon(),
             ..Default::default()
         })
         .antialiasing(false)
