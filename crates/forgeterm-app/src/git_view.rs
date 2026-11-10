@@ -4,10 +4,12 @@
 
 use std::path::PathBuf;
 
-use forgeterm_git::{Change, Commit, Diff, DiffKind, Entry, Status};
+use forgeterm_git::{
+    Activity, BranchRef, Change, Commit, Diff, DiffKind, Entry, HistoryEntry, Status,
+};
 use iced::widget::{
     button, column, container, mouse_area, opaque, row, scrollable, space, text, text_editor,
-    tooltip,
+    text_input, tooltip,
 };
 use iced::{Border, Color, Element, Length, Shadow, Vector};
 
@@ -41,6 +43,19 @@ pub struct Snapshot {
     pub repo: Repo,
     /// Only fetched while the panel is visible.
     pub log: Option<Result<Vec<Commit>, String>>,
+    /// Only fetched while the panel is visible.
+    pub branches: Option<Result<Vec<BranchRef>, String>>,
+}
+
+/// The history overlay: commit list, activity, one commit's details.
+#[derive(Debug, Default)]
+pub struct HistoryView {
+    /// `None` while loading.
+    pub entries: Option<Result<Vec<HistoryEntry>, String>>,
+    pub activity: Option<Result<Activity, String>>,
+    pub selected: Option<String>,
+    /// Details of `selected`; `None` while loading.
+    pub detail: Option<Result<Diff, String>>,
 }
 
 #[derive(Debug)]
@@ -67,6 +82,12 @@ pub struct GitState {
     pub last_action: Option<Result<String, String>>,
     pub commit_message: text_editor::Content,
     pub diff: Option<DiffView>,
+    pub branches: Option<Result<Vec<BranchRef>, String>>,
+    /// Branch the user clicked "Switch" for; switching waits for confirmation.
+    pub pending_switch: Option<String>,
+    pub show_remotes: bool,
+    pub new_branch: String,
+    pub history: Option<HistoryView>,
 }
 
 impl GitState {
@@ -92,14 +113,20 @@ impl GitState {
         // An action message belongs to the repository it was done in.
         if self.root() != new_root {
             self.last_action = None;
+            self.pending_switch = None;
+            self.branches = None;
         }
         self.dir = Some(snapshot.dir);
         self.repo = Some(snapshot.repo);
         if snapshot.log.is_some() {
             self.log = snapshot.log;
         }
+        if snapshot.branches.is_some() {
+            self.branches = snapshot.branches;
+        }
         if self.root().is_none() {
             self.log = None;
+            self.branches = None;
         }
     }
 
@@ -201,7 +228,13 @@ pub fn view(git: &GitState) -> Element<'_, Message> {
                 body = body.push(muted("Working tree clean."));
             }
             body = body.push(commit_box(git, status));
+            body = body.push(branches_block(git));
             body = body.push(log_block(git.log.as_ref()));
+            body = body.push(small_button(
+                "History & activity…",
+                Some(Message::Command(CommandId::GitShowHistory)),
+                "All recent commits, their changes, and commits per day",
+            ));
         }
     }
 
@@ -477,6 +510,481 @@ fn log_block(log: Option<&Result<Vec<Commit>, String>>) -> Element<'_, Message> 
     list.into()
 }
 
+/// Rows shown per branch list.
+const MAX_BRANCHES: usize = 40;
+
+fn branches_block(git: &GitState) -> Element<'_, Message> {
+    let mut list = column![text("BRANCHES").size(11).color(theme::TEXT_MUTED)].spacing(3);
+    let branches = match &git.branches {
+        None => return list.push(muted("Reading…")).into(),
+        Some(Err(e)) => {
+            return list
+                .push(text(e.as_str()).size(11).color(theme::CORAL))
+                .into();
+        }
+        Some(Ok(b)) => b,
+    };
+    let busy = git.action_running;
+    if let Some(target) = &git.pending_switch {
+        list = list.push(
+            container(
+                column![
+                    text(format!("Switch to {target}?")).size(12).color(theme::TEXT),
+                    muted("git switch keeps your uncommitted changes, or refuses if they would be overwritten."),
+                    row![
+                        space::horizontal(),
+                        small_button("Cancel", Some(Message::GitSwitchCancel), "Stay on this branch"),
+                        small_button(
+                            "Switch",
+                            (!busy).then_some(Message::GitSwitchConfirm),
+                            "git switch"
+                        ),
+                    ]
+                    .spacing(6),
+                ]
+                .spacing(4),
+            )
+            .padding(6)
+            .style(|_| container::Style {
+                background: Some(theme::ELEVATED.into()),
+                border: Border {
+                    color: theme::AMBER,
+                    width: 1.0,
+                    radius: 6.0.into(),
+                },
+                ..Default::default()
+            }),
+        );
+    }
+    let local: Vec<&BranchRef> = branches.iter().filter(|b| !b.remote).collect();
+    for b in local.iter().take(MAX_BRANCHES) {
+        let mut info = b.name.clone();
+        if b.ahead > 0 {
+            info.push_str(&format!(" ↑{}", b.ahead));
+        }
+        if b.behind > 0 {
+            info.push_str(&format!(" ↓{}", b.behind));
+        }
+        if b.upstream_gone {
+            info.push_str(" (upstream gone)");
+        }
+        let name = text(info)
+            .size(12)
+            .color(if b.current { theme::CYAN } else { theme::TEXT })
+            .wrapping(text::Wrapping::None);
+        let mut r = row![container(name).width(Length::Fill).clip(true)]
+            .spacing(4)
+            .align_y(iced::Alignment::Center);
+        if b.current {
+            r = r.push(text("current").size(10).color(theme::TEXT_MUTED));
+        } else {
+            r = r.push(small_button(
+                "Switch",
+                (!busy).then(|| Message::GitSwitchAsk(b.name.clone())),
+                "Switch to this branch (asks first)",
+            ));
+        }
+        list = list.push(r);
+    }
+    if local.len() > MAX_BRANCHES {
+        list = list.push(muted_owned(format!(
+            "… {} more",
+            local.len() - MAX_BRANCHES
+        )));
+    }
+
+    // New branch from HEAD.
+    let name_ok = !git.new_branch.trim().is_empty() && !busy;
+    let input = text_input("new-branch-name", &git.new_branch)
+        .on_input(Message::GitNewBranchName)
+        .on_submit_maybe(name_ok.then_some(Message::GitCreateBranch))
+        .size(12)
+        .padding([4, 6])
+        .style(|_, status| text_input::Style {
+            background: theme::OBSIDIAN.into(),
+            border: Border {
+                color: if matches!(status, text_input::Status::Focused { .. }) {
+                    theme::CYAN
+                } else {
+                    theme::BORDER
+                },
+                width: 1.0,
+                radius: 4.0.into(),
+            },
+            icon: theme::TEXT_MUTED,
+            placeholder: theme::TEXT_MUTED,
+            value: theme::TEXT,
+            selection: theme::SELECTION,
+        });
+    list = list.push(
+        row![
+            input,
+            small_button(
+                "Create",
+                name_ok.then_some(Message::GitCreateBranch),
+                "git switch -c <name> (from the current commit)"
+            )
+        ]
+        .spacing(4)
+        .align_y(iced::Alignment::Center),
+    );
+
+    // Remote branches, collapsed by default.
+    let remote: Vec<&BranchRef> = branches.iter().filter(|b| b.remote).collect();
+    if !remote.is_empty() {
+        let label = format!(
+            "{} Remote branches ({})",
+            if git.show_remotes { "▾" } else { "▸" },
+            remote.len()
+        );
+        list = list.push(
+            mouse_area(text(label).size(11).color(theme::TEXT_MUTED))
+                .on_press(Message::GitToggleRemotes),
+        );
+        if git.show_remotes {
+            for b in remote.iter().take(MAX_BRANCHES) {
+                // `origin/x` is already checked out as `x`: nothing to track.
+                let local_name = b.name.split_once('/').map_or(b.name.as_str(), |(_, n)| n);
+                let tracked = local.iter().any(|l| l.name == local_name);
+                let mut r = row![
+                    container(
+                        text(b.name.as_str())
+                            .size(12)
+                            .color(theme::TEXT)
+                            .wrapping(text::Wrapping::None)
+                    )
+                    .width(Length::Fill)
+                    .clip(true)
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center);
+                if !tracked {
+                    r = r.push(small_button(
+                        "Track",
+                        (!busy).then(|| Message::GitTrack(b.name.clone())),
+                        "git switch --track (creates a local branch and switches to it)",
+                    ));
+                }
+                list = list.push(r);
+            }
+            if remote.len() > MAX_BRANCHES {
+                list = list.push(muted_owned(format!(
+                    "… {} more",
+                    remote.len() - MAX_BRANCHES
+                )));
+            }
+        }
+    }
+    list.into()
+}
+
+/// Height of the activity chart's plot area.
+const CHART_HEIGHT: f32 = 72.0;
+
+/// Commits per day as bars (one series, so no legend: the title names it).
+fn activity_chart(activity: &Activity) -> Element<'_, Message> {
+    let max = activity.days.iter().map(|(_, n)| *n).max().unwrap_or(0);
+    let title = format!(
+        "Commits per day · last {} days · {} total",
+        activity.days.len(),
+        activity.total
+    );
+    let mut bars = row![]
+        .spacing(2)
+        .align_y(iced::Alignment::End)
+        .height(CHART_HEIGHT);
+    for (day, count) in &activity.days {
+        let height = if *count == 0 || max == 0 {
+            0.0
+        } else {
+            // At least 3 px so a single commit stays visible next to a busy day.
+            (CHART_HEIGHT * *count as f32 / max as f32).max(3.0)
+        };
+        let bar = container(space::vertical().height(height))
+            .width(Length::Fill)
+            .height(height)
+            .style(|_| container::Style {
+                background: Some(theme::CHART_CYAN.into()),
+                border: Border {
+                    radius: iced::border::Radius {
+                        top_left: 4.0,
+                        top_right: 4.0,
+                        bottom_right: 0.0,
+                        bottom_left: 0.0,
+                    },
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+        let label = format!(
+            "{}: {count} commit{}",
+            day.format("%a %-d %b %Y"),
+            if *count == 1 { "" } else { "s" }
+        );
+        // The hit target is the whole column, not just the (maybe tiny) bar.
+        let column_area = container(bar)
+            .width(Length::Fill)
+            .height(CHART_HEIGHT)
+            .align_y(iced::alignment::Vertical::Bottom);
+        bars = bars.push(
+            container(tooltip(
+                column_area,
+                container(text(label).size(11).color(theme::TEXT))
+                    .padding(5)
+                    .style(|_| container::Style {
+                        background: Some(theme::ELEVATED.into()),
+                        border: Border {
+                            color: theme::BORDER,
+                            width: 1.0,
+                            radius: 4.0.into(),
+                        },
+                        ..Default::default()
+                    }),
+                tooltip::Position::Top,
+            ))
+            .width(Length::Fill),
+        );
+    }
+    let baseline = container(space::vertical().height(1))
+        .width(Length::Fill)
+        .height(1)
+        .style(|_| container::Style {
+            background: Some(theme::BORDER.into()),
+            ..Default::default()
+        });
+    let first = activity
+        .days
+        .first()
+        .map(|(d, _)| d.format("%-d %b").to_string());
+    let axis = row![
+        text(first.unwrap_or_default())
+            .size(10)
+            .color(theme::TEXT_MUTED),
+        space::horizontal(),
+        text("today").size(10).color(theme::TEXT_MUTED),
+    ];
+    column![
+        row![
+            text(title).size(12).color(theme::TEXT),
+            space::horizontal(),
+            text(if max > 0 {
+                format!("max {max}/day")
+            } else {
+                String::new()
+            })
+            .size(10)
+            .color(theme::TEXT_MUTED),
+        ],
+        bars,
+        baseline,
+        axis,
+    ]
+    .spacing(4)
+    .into()
+}
+
+/// The history overlay (Esc closes).
+pub fn view_history<'a>(h: &'a HistoryView, branch: String) -> Element<'a, Message> {
+    let header = row![
+        text(format!("History · {branch}"))
+            .size(14)
+            .color(theme::TEXT),
+        space::horizontal(),
+        small_button("Close (Esc)", Some(Message::GitHistoryClose), "Close"),
+    ]
+    .align_y(iced::Alignment::Center);
+
+    let chart: Element<'_, Message> = match &h.activity {
+        None => muted("Counting commits…"),
+        Some(Err(e)) => text(e.as_str()).size(11).color(theme::CORAL).into(),
+        Some(Ok(a)) => activity_chart(a),
+    };
+
+    let list: Element<'_, Message> = match &h.entries {
+        None => muted("Reading history…"),
+        Some(Err(e)) => text(e.as_str()).size(12).color(theme::CORAL).into(),
+        Some(Ok(entries)) if entries.is_empty() => muted("No commits yet."),
+        Some(Ok(entries)) => {
+            let mut col = column![].spacing(2);
+            for e in entries {
+                let selected = h.selected.as_deref() == Some(e.hash.as_str());
+                let mut top = row![
+                    text(e.short.as_str())
+                        .size(11)
+                        .font(TERMINAL_FONT)
+                        .color(theme::CYAN),
+                    text(e.subject.as_str())
+                        .size(12)
+                        .color(theme::TEXT)
+                        .wrapping(text::Wrapping::None),
+                ]
+                .spacing(6);
+                if !e.refs.is_empty() {
+                    top = top.push(
+                        text(compact_refs(&e.refs))
+                            .size(10)
+                            .color(theme::AMBER)
+                            .wrapping(text::Wrapping::None),
+                    );
+                }
+                let entry = column![
+                    container(top).clip(true),
+                    text(format!("{} · {}", e.author, e.when))
+                        .size(10)
+                        .color(theme::TEXT_MUTED),
+                ]
+                .spacing(1);
+                col = col.push(
+                    mouse_area(container(entry).padding([5, 8]).width(Length::Fill).style(
+                        move |_| container::Style {
+                            background: selected.then(|| theme::ELEVATED.into()),
+                            border: Border {
+                                color: if selected {
+                                    theme::CYAN
+                                } else {
+                                    Color::TRANSPARENT
+                                },
+                                width: if selected { 1.0 } else { 0.0 },
+                                radius: 5.0.into(),
+                            },
+                            ..Default::default()
+                        },
+                    ))
+                    .on_press(Message::GitSelectCommit(e.hash.clone())),
+                );
+            }
+            scrollable(col).height(Length::Fill).into()
+        }
+    };
+
+    let detail: Element<'_, Message> = match (&h.selected, &h.detail) {
+        (None, _) => muted("Select a commit to see its changes."),
+        (Some(_), None) => muted("Loading…"),
+        (Some(_), Some(Err(e))) => text(e.as_str()).size(12).color(theme::CORAL).into(),
+        (Some(_), Some(Ok(d))) => diff_lines(d),
+    };
+
+    let panel = |content: Element<'a, Message>, width: Length| {
+        container(content)
+            .padding(8)
+            .width(width)
+            .height(Length::Fill)
+            .style(|_| container::Style {
+                background: Some(theme::OBSIDIAN.into()),
+                border: Border {
+                    color: theme::BORDER,
+                    width: 1.0,
+                    radius: 6.0.into(),
+                },
+                ..Default::default()
+            })
+    };
+    let card = container(
+        column![
+            header,
+            container(chart)
+                .padding(10)
+                .width(Length::Fill)
+                .style(|_| container::Style {
+                    background: Some(theme::GRAPHITE.into()),
+                    border: Border {
+                        color: theme::BORDER,
+                        width: 1.0,
+                        radius: 6.0.into(),
+                    },
+                    ..Default::default()
+                }),
+            row![
+                panel(list, Length::FillPortion(2)),
+                panel(detail, Length::FillPortion(3))
+            ]
+            .spacing(10)
+            .height(Length::Fill),
+        ]
+        .spacing(10),
+    );
+    overlay(card, Message::GitHistoryClose)
+}
+
+/// `HEAD -> main, origin/main, tag: v1, x, y` → `HEAD -> main, origin/main, tag: v1 +2`
+/// (a busy commit would otherwise fill several lines).
+fn compact_refs(refs: &str) -> String {
+    const SHOWN: usize = 3;
+    let parts: Vec<&str> = refs.split(", ").filter(|p| !p.is_empty()).collect();
+    let mut s = parts
+        .iter()
+        .take(SHOWN)
+        .copied()
+        .collect::<Vec<_>>()
+        .join(", ");
+    if parts.len() > SHOWN {
+        s.push_str(&format!(" +{}", parts.len() - SHOWN));
+    }
+    s
+}
+
+/// Card + dimmed backdrop shared by the overlays; clicks outside close.
+fn overlay<'a>(card: container::Container<'a, Message>, close: Message) -> Element<'a, Message> {
+    let card = card
+        .padding(14)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .max_width(1100.0)
+        .style(|_| container::Style {
+            background: Some(theme::SURFACE.into()),
+            border: Border {
+                color: theme::BORDER,
+                width: 1.0,
+                radius: 10.0.into(),
+            },
+            shadow: Shadow {
+                color: Color::from_rgba(0.0, 0.0, 0.0, 0.55),
+                offset: Vector::new(0.0, 12.0),
+                blur_radius: 32.0,
+            },
+            ..Default::default()
+        });
+    let backdrop = container(opaque(card))
+        .center(Length::Fill)
+        .padding(28)
+        .style(|_| container::Style {
+            background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.35).into()),
+            ..Default::default()
+        });
+    opaque(mouse_area(backdrop).on_press(close))
+}
+
+/// Colored diff / `git show` lines in a scrollable area.
+fn diff_lines(d: &Diff) -> Element<'_, Message> {
+    if d.lines.is_empty() {
+        return muted("No differences (binary, or only mode changes).");
+    }
+    let mut lines = column![].spacing(0);
+    for line in &d.lines {
+        lines = lines.push(
+            text(line.as_str())
+                .font(TERMINAL_FONT)
+                .size(12)
+                .color(diff_color(line))
+                .wrapping(text::Wrapping::None),
+        );
+    }
+    if d.truncated {
+        lines = lines.push(muted_owned(format!(
+            "… cut off after {} lines",
+            forgeterm_git::MAX_DIFF_LINES
+        )));
+    }
+    scrollable(lines)
+        .direction(scrollable::Direction::Both {
+            vertical: scrollable::Scrollbar::default(),
+            horizontal: scrollable::Scrollbar::default(),
+        })
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
+}
+
 /// The diff overlay (Esc closes).
 pub fn view_diff(diff: &DiffView) -> Element<'_, Message> {
     let kind = match diff.kind {
@@ -666,6 +1174,7 @@ mod tests {
                 status: forgeterm_git::parse_status(raw.as_bytes()),
             },
             log: None,
+            branches: None,
         });
         g
     }
@@ -684,6 +1193,16 @@ mod tests {
     }
 
     #[test]
+    fn long_ref_lists_are_shortened() {
+        assert_eq!(compact_refs("HEAD -> main"), "HEAD -> main");
+        assert_eq!(
+            compact_refs("HEAD -> a, origin/a, tag: v1, b, c"),
+            "HEAD -> a, origin/a, tag: v1 +2"
+        );
+        assert_eq!(compact_refs(""), "");
+    }
+
+    #[test]
     fn action_message_is_cleared_when_the_repository_changes() {
         let mut g = state("# branch.oid abc\0# branch.head main\0");
         g.last_action = Some(Ok("Committed abc".into()));
@@ -692,6 +1211,7 @@ mod tests {
             dir: PathBuf::from("/r/sub"),
             repo: g.repo.clone().unwrap(),
             log: None,
+            branches: None,
         });
         assert!(g.last_action.is_some());
         // Other repository: gone.
@@ -702,6 +1222,7 @@ mod tests {
                 status: Status::default(),
             },
             log: None,
+            branches: None,
         });
         assert!(g.last_action.is_none());
     }

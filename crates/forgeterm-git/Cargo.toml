@@ -8,6 +8,8 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+# Local calendar day of a commit (activity chart); only the clock feature.
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [lints]
 workspace = true

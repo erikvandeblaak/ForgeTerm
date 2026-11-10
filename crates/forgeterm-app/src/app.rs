@@ -26,7 +26,7 @@ use iced::{
 
 use crate::ai_view::{self, AgentState};
 use crate::commands::{CommandId, Dir, Keymap, STATIC_COMMANDS};
-use crate::git_view::{self, DiffView, GitState, Repo, Snapshot};
+use crate::git_view::{self, DiffView, GitState, HistoryView, Repo, Snapshot};
 use crate::menu::{self, Menu, MenuState};
 use crate::palette::{self as command_palette, CommandPalette, Entry};
 use crate::prompt_studio::PromptStudio;
@@ -122,6 +122,26 @@ pub enum Message {
         Result<forgeterm_git::Diff, String>,
     ),
     GitDiffClose,
+    GitHistoryLoaded(Box<HistoryData>),
+    GitSelectCommit(String),
+    GitCommitLoaded(String, Result<forgeterm_git::Diff, String>),
+    GitHistoryClose,
+    /// "Switch" clicked: ask for confirmation first.
+    GitSwitchAsk(String),
+    GitSwitchCancel,
+    GitSwitchConfirm,
+    GitTrack(String),
+    GitNewBranchName(String),
+    GitCreateBranch,
+    GitToggleRemotes,
+}
+
+/// History overlay data for one repository root.
+#[derive(Debug, Clone)]
+pub struct HistoryData {
+    root: PathBuf,
+    entries: Result<Vec<forgeterm_git::HistoryEntry>, String>,
+    activity: Result<forgeterm_git::Activity, String>,
 }
 
 /// Entry of the "new tab with shell…" dropdown.
@@ -855,6 +875,53 @@ impl App {
                 }
             }
             Message::GitDiffClose => self.git.diff = None,
+            Message::GitHistoryLoaded(data) => {
+                if self.git.root() == Some(&data.root)
+                    && let Some(h) = &mut self.git.history
+                {
+                    h.entries = Some(data.entries);
+                    h.activity = Some(data.activity);
+                }
+            }
+            Message::GitSelectCommit(hash) => {
+                let (Some(root), Some(h)) = (self.git.root().cloned(), &mut self.git.history)
+                else {
+                    return Task::none();
+                };
+                h.selected = Some(hash.clone());
+                h.detail = None;
+                return background(
+                    {
+                        let hash = hash.clone();
+                        move || forgeterm_git::show_commit(&root, &hash)
+                    },
+                    move |result| Message::GitCommitLoaded(hash.clone(), result),
+                );
+            }
+            Message::GitCommitLoaded(hash, result) => {
+                if let Some(h) = &mut self.git.history
+                    && h.selected.as_deref() == Some(hash.as_str())
+                {
+                    h.detail = Some(result);
+                }
+            }
+            Message::GitHistoryClose => self.git.history = None,
+            Message::GitSwitchAsk(name) => self.git.pending_switch = Some(name),
+            Message::GitSwitchCancel => self.git.pending_switch = None,
+            Message::GitSwitchConfirm => {
+                if let Some(name) = self.git.pending_switch.take() {
+                    return self.git_action(GitAction::Switch(name));
+                }
+            }
+            Message::GitTrack(name) => return self.git_action(GitAction::Track(name)),
+            Message::GitNewBranchName(name) => self.git.new_branch = name,
+            Message::GitCreateBranch => {
+                let name = self.git.new_branch.trim().to_owned();
+                if !name.is_empty() {
+                    return self.git_action(GitAction::Create(name));
+                }
+            }
+            Message::GitToggleRemotes => self.git.show_remotes = !self.git.show_remotes,
             Message::FileDropped(path) => {
                 self.drop_hover = false;
                 self.insert_paths(&[path]);
@@ -944,6 +1011,12 @@ impl App {
         if self.git.diff.is_some() {
             if matches!(key, keyboard::Key::Named(Named::Escape)) {
                 self.git.diff = None;
+            }
+            return Task::none();
+        }
+        if self.git.history.is_some() {
+            if matches!(key, keyboard::Key::Named(Named::Escape)) {
+                self.git.history = None;
             }
             return Task::none();
         }
@@ -1258,6 +1331,23 @@ impl App {
                 }
             }
             CommandId::GitRefresh => return self.refresh_git(true),
+            CommandId::GitShowHistory => {
+                if let Some(root) = self.git.root().cloned() {
+                    self.git.history = Some(HistoryView::default());
+                    let key = root.clone();
+                    return background(
+                        move || HistoryData {
+                            entries: forgeterm_git::history(&root, 300),
+                            activity: forgeterm_git::activity(&root, 30),
+                            root,
+                        },
+                        move |data| {
+                            debug_assert_eq!(data.root, key);
+                            Message::GitHistoryLoaded(Box::new(data))
+                        },
+                    );
+                }
+            }
             CommandId::OpenPromptStudio => {
                 if self.prompt_studio.take().is_none() {
                     return self.open_prompt_studio();
@@ -1352,6 +1442,7 @@ impl App {
             CommandId::NewTabWithShell(i) => i < self.shells.len(),
             CommandId::SelectTab(i) => i < self.workspace.tabs.len() && i != self.workspace.active,
             CommandId::OpenPromptsFolder => self.prompts_dir().is_some(),
+            CommandId::GitShowHistory => self.git.root().is_some(),
             CommandId::CommandPalette
             | CommandId::OpenPromptStudio
             | CommandId::ToggleGitPanel
@@ -1453,6 +1544,9 @@ impl App {
         let has_commits = self.git.status().is_some_and(|s| s.branch.has_commits());
         self.git.action_running = true;
         self.git.last_action_was_commit = matches!(action, GitAction::Commit(_));
+        if matches!(action, GitAction::Create(_)) {
+            self.git.new_branch.clear();
+        }
         background(
             move || match action {
                 GitAction::Stage(paths) => forgeterm_git::stage(&root, &paths)
@@ -1462,6 +1556,13 @@ impl App {
                 GitAction::Commit(message) => {
                     forgeterm_git::commit(&root, &message).map(|s| format!("Committed {s}"))
                 }
+                GitAction::Switch(name) => {
+                    forgeterm_git::switch(&root, &name).map(|()| format!("Switched to {name}"))
+                }
+                GitAction::Track(remote) => forgeterm_git::track(&root, &remote)
+                    .map(|()| format!("Created and switched to a branch tracking {remote}")),
+                GitAction::Create(name) => forgeterm_git::create_branch(&root, &name)
+                    .map(|()| format!("Created and switched to {name}")),
             },
             Message::GitActionDone,
         )
@@ -1705,6 +1806,13 @@ impl App {
         }
         if let Some(p) = &self.command_palette {
             layers = layers.push(p.view());
+        }
+        if let Some(h) = &self.git.history {
+            let branch = self
+                .git
+                .status()
+                .map_or_else(String::new, |s| s.branch.label());
+            layers = layers.push(git_view::view_history(h, branch));
         }
         if let Some(diff) = &self.git.diff {
             layers = layers.push(git_view::view_diff(diff));
@@ -2323,6 +2431,9 @@ enum GitAction {
     Stage(Vec<String>),
     Unstage(Vec<String>),
     Commit(String),
+    Switch(String),
+    Track(String),
+    Create(String),
 }
 
 fn describe(paths: &[String]) -> String {
@@ -2346,11 +2457,19 @@ fn git_snapshot(dir: PathBuf, known_root: Option<PathBuf>, with_log: bool) -> Sn
             Err(e) => Repo::Error(e),
         },
     };
-    let log = match (&repo, with_log) {
-        (Repo::Found { root, .. }, true) => Some(forgeterm_git::log(root, 15)),
-        _ => None,
+    let (log, branches) = match (&repo, with_log) {
+        (Repo::Found { root, .. }, true) => (
+            Some(forgeterm_git::log(root, 15)),
+            Some(forgeterm_git::branches(root)),
+        ),
+        _ => (None, None),
     };
-    Snapshot { dir, repo, log }
+    Snapshot {
+        dir,
+        repo,
+        log,
+        branches,
+    }
 }
 
 fn load_prompts(dir: Option<PathBuf>) -> Task<Message> {

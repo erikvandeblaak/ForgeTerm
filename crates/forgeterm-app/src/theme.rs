@@ -26,6 +26,9 @@ pub const TEXT_MUTED: Color = hex(0x8B98AD);
 pub const DISABLED: Color = hex(0x5F6B80);
 pub const BORDER: Color = hex(0x253247);
 pub const SELECTION: Color = hex(0x2B4466);
+/// Chart bars on dark surfaces: the cyan step that passes the dataviz checks
+/// (lightness band, chroma, >= 3:1 against GRAPHITE/OBSIDIAN); CYAN itself is too light.
+pub const CHART_CYAN: Color = hex(0x26A6B6);
 
 pub fn forge_dark() -> iced::Theme {
     iced::Theme::custom(

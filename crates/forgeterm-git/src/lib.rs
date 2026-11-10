@@ -12,9 +12,16 @@
 //! Only `stage`, `unstage` and `commit` change anything, and only when the user
 //! asks; a commit runs the repository's hooks exactly like `git commit` would.
 
+mod history;
+mod refs;
 mod run;
 mod status;
 
+pub use history::activity;
+pub use history::{Activity, HistoryEntry, daily_counts, history, parse_history, show_commit};
+pub use refs::{
+    BranchRef, branches, create_branch, parse_branches, switch, track, validate_branch_name,
+};
 pub use run::{Output, git};
 pub use status::{Branch, Change, Entry, Status, parse_status};
 
@@ -324,6 +331,111 @@ mod tests {
 
         // Errors are reported, not swallowed.
         assert!(stage(root, &["does-not-exist.txt".into()]).is_err());
+    }
+
+    #[test]
+    fn branches_history_and_activity_against_real_git() {
+        let Some(repo) = Repo::new("branches") else {
+            return;
+        };
+        let root = &repo.0;
+        let run =
+            |dir: &Path, args: &[&str]| git(dir, args, READ_TIMEOUT).unwrap().check().unwrap();
+        repo.write(
+            "a.txt", "a
+",
+        );
+        run(root, &["add", "-A"]);
+        run(root, &["commit", "-q", "-m", "first"]);
+        repo.write(
+            "a.txt", "b
+",
+        );
+        run(root, &["commit", "-q", "-am", "second"]);
+
+        // Create (invalid names refused before git switch runs), list, switch back.
+        assert!(create_branch(root, "").is_err());
+        assert!(create_branch(root, "-x").is_err());
+        assert!(create_branch(root, "bad..name").is_err());
+        create_branch(root, "feature/x").unwrap();
+        let list = branches(root).unwrap();
+        let current: Vec<&str> = list
+            .iter()
+            .filter(|b| b.current)
+            .map(|b| b.name.as_str())
+            .collect();
+        assert_eq!(current, ["feature/x"]);
+        assert!(list.iter().any(|b| b.name == "main" && !b.remote));
+        switch(root, "main").unwrap();
+        assert!(
+            branches(root)
+                .unwrap()
+                .iter()
+                .any(|b| b.name == "main" && b.current)
+        );
+        assert!(switch(root, "does-not-exist").is_err());
+        assert!(switch(root, "--orphan").is_err());
+
+        // git refuses a switch that would overwrite local changes; we report it.
+        run(root, &["switch", "-q", "feature/x"]);
+        repo.write(
+            "a.txt",
+            "on feature
+",
+        );
+        run(root, &["commit", "-q", "-am", "feature change"]);
+        repo.write(
+            "a.txt",
+            "uncommitted
+",
+        );
+        let refused = switch(root, "main").unwrap_err();
+        assert!(!refused.is_empty());
+        run(root, &["checkout", "-q", "--", "a.txt"]);
+        switch(root, "main").unwrap();
+
+        // A clone has remote branches; tracking one creates the local branch.
+        let clone = root.with_extension("clone");
+        let _ = fs::remove_dir_all(&clone);
+        let src = root.to_string_lossy().into_owned();
+        let dst = clone.to_string_lossy().into_owned();
+        run(root, &["clone", "-q", &src, &dst]);
+        let remote = branches(&clone).unwrap();
+        assert!(
+            remote
+                .iter()
+                .any(|b| b.remote && b.name == "origin/feature/x")
+        );
+        assert!(!remote.iter().any(|b| b.name.ends_with("/HEAD")));
+        let main = remote.iter().find(|b| b.name == "main").unwrap();
+        assert_eq!(main.upstream.as_deref(), Some("origin/main"));
+        assert_eq!((main.ahead, main.behind), (0, 0));
+        track(&clone, "origin/feature/x").unwrap();
+        assert!(
+            branches(&clone)
+                .unwrap()
+                .iter()
+                .any(|b| b.name == "feature/x" && b.current)
+        );
+        let _ = fs::remove_dir_all(&clone);
+
+        // History and one commit's details.
+        let h = history(root, 10).unwrap();
+        assert_eq!(
+            h.iter().map(|e| e.subject.as_str()).collect::<Vec<_>>(),
+            ["second", "first"]
+        );
+        assert!(h[0].refs.contains("main"));
+        let shown = show_commit(root, &h[0].hash).unwrap();
+        assert!(shown.lines.iter().any(|l| l == "+b"));
+        assert!(shown.lines.iter().any(|l| l.contains("a.txt")));
+        assert!(show_commit(root, "HEAD; rm").is_err());
+
+        // Both commits were made just now: today's bucket holds them.
+        let a = activity(root, 30).unwrap();
+        assert_eq!(a.days.len(), 30);
+        assert_eq!(a.total, 2);
+        assert_eq!(a.days.last().unwrap().1, 2);
     }
 
     #[test]

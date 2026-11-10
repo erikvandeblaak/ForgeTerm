@@ -63,6 +63,7 @@ pub enum CommandId {
     OpenPromptsFolder,
     ToggleGitPanel,
     GitRefresh,
+    GitShowHistory,
     About,
     Quit,
 }
@@ -110,6 +111,7 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::OpenPromptsFolder,
     CommandId::ToggleGitPanel,
     CommandId::GitRefresh,
+    CommandId::GitShowHistory,
     CommandId::About,
     CommandId::Quit,
 ];
@@ -137,7 +139,7 @@ impl CommandId {
             ToggleAiPanel | AiRefresh | StartAgent(..) | OpenPromptStudio | OpenPromptsFolder => {
                 "AI"
             }
-            ToggleGitPanel | GitRefresh => "Git",
+            ToggleGitPanel | GitRefresh | GitShowHistory => "Git",
             About => "Help",
             Quit => "App",
         }
@@ -191,6 +193,7 @@ impl CommandId {
             OpenPromptsFolder => "Open Prompts Folder",
             ToggleGitPanel => "Toggle Git Panel",
             GitRefresh => "Refresh Git Status",
+            GitShowHistory => "Show History and Activity",
             ReloadSettings => "Reload Settings",
             About => "About ForgeTerm",
             Quit => "Quit ForgeTerm",

@@ -50,7 +50,7 @@ Eigen sjablonen: `.md`-bestanden in de map `prompts` naast `settings.toml` (AI �
 
 ## Git
 
-De statusbalk toont branch, ahead/behind en het aantal gewijzigde bestanden van de map van de gefocuste terminal (elke 4 s en bij elke mapwissel bijgewerkt). Het Git-paneel toont conflicten, staged, changes en untracked bestanden; klik op een bestand voor de diff (Esc sluit), **+** / **−** staget of unstaget, en *Commit* voert `git commit -m` uit met de hooks van de repository. Meer (push, pull, branches, discard) gaat bewust via de terminal.
+De statusbalk toont branch, ahead/behind en het aantal gewijzigde bestanden van de map van de gefocuste terminal (elke 4 s en bij elke mapwissel bijgewerkt). Het Git-paneel toont conflicten, staged, changes en untracked bestanden; klik op een bestand voor de diff (Esc sluit), **+** / **−** staget of unstaget, en *Commit* voert `git commit -m` uit met de hooks van de repository. **Branches**: wisselen (vraagt eerst bevestiging; git weigert als lokale wijzigingen overschreven zouden worden en die melding wordt getoond), nieuwe branch vanaf de huidige commit, remote branch volgen (*Track*). **History & activity** (knop in het paneel, Git-menu of palette): commits per dag over 30 dagen (uit `git log`, lokale kalenderdag), de laatste 300 commits en per commit header, bestandsoverzicht en diff. Push, pull, discard en verwijderen van branches gaan bewust via de terminal.
 
 Veilig in onbekende repositories: lezen voert nooit door de repository geconfigureerde programma's uit (`core.fsmonitor` uit, diffs met `--no-ext-diff --no-textconv`), achtergrond-status neemt geen `index.lock` (`--no-optional-locks`), git vraagt nooit om invoer. Vereist `git` op PATH.
 

@@ -19,7 +19,7 @@
 | `tests/cwd_tracking.rs` | Elke geïnstalleerde shell in echte ConPTY met integratie: startmap gemeld, `cd` naar `it's a dir` gemeld. Geslaagd: PowerShell 7, Windows PowerShell, cmd, Git Bash (eerste poging faalde voor Git Bash: `/tmp/…` → opgelost met `pwd -W`) | ✅ |
 | `forgeterm-agents` (7) | PATH-zoeken (Windows: `.exe` vóór `.cmd`, `.ps1` overgeslagen; ontbrekend = None), `.cmd` → `cmd.exe /d /c`, `--version` van een echt script (lege regel overgeslagen), falend script = fout, hangend script → timeout en beëindigd; front matter; projectscan vanuit submap (git-root, rules, skills, commands in submappen, subagents, settings, MCP); zonder git = startmap | ✅ |
 | `forgeterm-prompts` (8) | Front matter (BOM, CRLF, quotes, zonder afsluiting = body), variabelen in volgorde zonder dubbelingen (ongeldige `{{a b}}` / `{{}}` genegeerd, `{{{x}}}`), waarden letterlijk (geen herexpansie), leeg = ontbrekend, nooit een afsluitende newline, ingebouwde sjablonen geldig, eigen map: override, `.MD`, geen submappen/`.txt`, niet-UTF-8 gemeld, ontbrekende map = geen probleem | ✅ |
-| `forgeterm-git` (7) | Porcelain v2: branch-headers, rename met origineel pad, spaties in paden, conflicten, untracked, onbekende records genegeerd, initial/detached; log-records; tegen echte git: discover vanuit submap, unborn branch, niet-ASCII + spatie, stage/unstage zonder en met HEAD, lege commit-message geweigerd, commit + log, diff unstaged/staged/untracked, fout bij onbekend pad; echt merge-conflict + rename; **repository-fsmonitor wordt niet uitgevoerd** (controle: gewone `git status` voert hem wél uit) | ✅ |
+| `forgeterm-git` (12) | Porcelain v2: branch-headers, rename met origineel pad, spaties in paden, conflicten, untracked, onbekende records genegeerd, initial/detached; log-records; tegen echte git: discover vanuit submap, unborn branch, niet-ASCII + spatie, stage/unstage zonder en met HEAD, lege commit-message geweigerd, commit + log, diff unstaged/staged/untracked, fout bij onbekend pad; echt merge-conflict + rename; **repository-fsmonitor wordt niet uitgevoerd** (controle: gewone `git status` voert hem wél uit); branches parsen (ahead/behind, gone, origin/HEAD weg); tegen echte git: branch maken (lege/`-x`/`bad..name` geweigerd), lijst, wisselen, wissel geweigerd bij lokale wijziging, clone met remote branches + upstream, `--track`, history + `show`, ongeldige hash geweigerd, activiteit van vandaag; `daily_counts` (venster, buiten venster genegeerd) | ✅ |
 | `forgeterm-settings` (7) | Template = exact de defaults, leeg = defaults, alle waarden toegepast, 7 fouten → 7 meldingen met fallback, syntaxfout (één regel, `unreadable`), sectie geen tabel, `ensure_file` maakt één keer aan en overschrijft nooit | ✅ |
 | `forgeterm-explorer` (6) | Sortering, verborgen, ontbrekende map = fout, lazy uitklappen/inklappen, verouderde resultaten genegeerd, fouten + selectie | ✅ |
 | `terminal_pane::tests` (3) | Tabtitels: exe-pad → shellnaam, `cmd.exe - ping …` → `ping …`, programmatitels blijven | ✅ |
@@ -198,6 +198,12 @@ Let op: Kladblok in Windows 11 opent het bestand als tabblad in een al geopend K
 | G6 | `git add new.txt` in de terminal → paneel binnen 4 s bijgewerkt | ✅ |
 | G7 | `cd ..` uit de repo → "Not a Git repository", statusbalk zonder git; terug in een repo → nieuwe status, oude actiemelding weg | ✅ |
 | G8 | Scrollbalk naast de knoppen, één tooltip per element | ✅ |
+| G9 | Branches in testclone: `main ↑1` current, Switch → bevestiging, git blijft op main tot Switch; Switch → `local-topic` (git bevestigt) | ✅ |
+| G10 | Nieuwe branch `feature/new-ui` via veld + Enter → git staat erop, veld leeg | ✅ |
+| G11 | Remote branches uitklappen: alleen `origin/remote-only` heeft Track; Track → lokale branch met upstream `origin/remote-only` | ✅ |
+| G12 | Lokale wijziging in `log.txt`, wissel naar main → git weigert, melding van git in het paneel, wijziging blijft | ✅ |
+| G13 | History & activity: 9 commits, staven op −20 (2), −14, −9 (3), −5, −2, −1 klopt met de testdata; tooltip "Sun 1 Nov 2026: 3 commits"; commit aanklikken → header, stat en diff | ✅ |
+| G14 | Lange ref-lijst ingekort tot 3 + "+N" | unit-getest; visueel nog niet bekeken |
 
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)
 
