@@ -648,11 +648,16 @@ name = "forgeterm-app"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "forgeterm-explorer",
  "forgeterm-terminal",
  "iced",
  "tracing",
  "tracing-subscriber",
 ]
+
+[[package]]
+name = "forgeterm-explorer"
+version = "0.1.0"
 
 [[package]]
 name = "forgeterm-terminal"

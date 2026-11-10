@@ -3,6 +3,7 @@
 
 mod app;
 mod commands;
+mod explorer_view;
 mod fuzzy;
 mod glyphs;
 mod keys;

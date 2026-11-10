@@ -37,9 +37,12 @@ ForgeTerm/
 │   │   ├── src/input.rs          # key/mouse/paste → bytes (xterm-conventies), unit-getest
 │   │   ├── src/palette.rs        # kleurresolutie (16/256/truecolor + OSC-overrides)
 │   │   ├── src/snapshot.rs       # Snapshot: render-klare kopie van de viewport
-│   │   ├── src/shell.rs          # shelldetectie (pwsh, powershell, cmd, Git Bash, WSL / $SHELL, bash, zsh, fish)
+│   │   ├── src/shell.rs          # shelldetectie + ShellKind (pwsh, powershell, cmd, Git Bash, WSL / $SHELL, bash, zsh, fish)
+│   │   ├── src/quote.rs          # paden quoten per shell (+ /c/… en /mnt/c/… conversie), unit-getest
 │   │   ├── tests/pty_roundtrip.rs# end-to-end test met echte shell
+│   │   ├── tests/quote_real_shells.rs # gequote paden met lastige namen door elke geïnstalleerde shell laten lezen
 │   │   └── examples/probe.rs     # diagnose: dump gestylede cellen van een programma
+│   ├── forgeterm-explorer/       # bestandsboom-model, GUI-vrij, unit-getest
 │   └── forgeterm-app/            # GUI (binary `forgeterm`)
 │       ├── src/app.rs            # state, messages, update, layout, sneltoetsen
 │       ├── src/workspace.rs      # tabs + split-layout (pane_grid-state), unit-getest
@@ -47,6 +50,7 @@ ForgeTerm/
 │       ├── src/fuzzy.rs          # fuzzy matcher, unit-getest
 │       ├── src/palette.rs        # Command Palette (logica getest + overlay-view)
 │       ├── src/menu.rs           # menubalk: structuur uit de registry, navigatie (getest), dropdown
+│       ├── src/explorer_view.rs  # zijpaneel van de bestandsverkenner
 │       ├── src/terminal_pane.rs  # één terminal: sessie, snapshot, levenscyclus, titel
 │       ├── src/terminal_view.rs  # canvas-renderer + muisafhandeling
 │       ├── src/glyphs.rs         # pixel-exacte box-drawing/blok-tekens
@@ -56,7 +60,7 @@ ForgeTerm/
 └── docs/
 ```
 
-Geplande crates (zie ROADMAP): `forgeterm-platform`, `-explorer`, `-prompts`, `-agents`, `-git`, `-analytics`, `-charts`, `-monitor-cli`, `-settings`, `-storage`. Ze worden pas aangemaakt wanneer er echte code in komt — geen lege crates.
+Geplande crates (zie ROADMAP): `forgeterm-platform`, `-prompts`, `-agents`, `-git`, `-analytics`, `-charts`, `-monitor-cli`, `-settings`, `-storage`. Ze worden pas aangemaakt wanneer er echte code in komt — geen lege crates.
 
 ## 4. Dataflow terminal
 
@@ -100,6 +104,13 @@ Belangrijke details:
 - `palette.rs`: filter/rangschik/recent/zichtbaar-venster-logica (getest) + de overlay-view (`stack` + `opaque`, klik buiten = sluiten).
 - **Menubalk** (`menu.rs`): menu's bevatten alleen `CommandId`s (een test eist dat elk command in een menu staat). Labels, sneltoetsen en de aan/uit-status worden bij het tekenen uit de registry, keymap en `is_applicable` gehaald; niet-toepasbare items zijn grijs en niet klikbaar. Titels hebben een vaste breedte, zodat de dropdown zonder tekstmeting exact onder zijn titel staat (`pin` in een `stack`). Een onzichtbare backdrop onder de topbalk sluit het menu bij klikken erbuiten zonder dat de klik doorgaat; de topbalk blijft klikbaar, dus hover over een andere titel wisselt van menu. Geen Alt+letter-mnemonics: Alt+F/B/… zijn readline-sneltoetsen van de shell.
 - **Toetsroutering:** de globale toetsenlistener geeft per toets mee of een widget hem al heeft afgehandeld (`captured`). Afgevangen toetsen gaan nooit naar de terminal; Esc sluit de palette altijd; toetsen die binnenkomen vóórdat het invoerveld focus heeft, worden aan de zoekterm toegevoegd in plaats van verloren te gaan.
+
+## 4d. Bestandsverkenner en paden invoegen
+
+- `forgeterm-explorer::Tree` houdt root, uitgeklapte mappen, listings (Loading / Ready / Failed), verborgen-filter en selectie bij. Mappen worden pas gelezen bij uitklappen; `list_dir` draait in een eigen thread (`load_dir` in app.rs), zodat trage of netwerkschijven de UI nooit blokkeren. Resultaten voor mappen die inmiddels zijn ingeklapt of na een root-wissel binnenkomen, worden genegeerd (getest).
+- Sortering: mappen eerst, daarna hoofdletterongevoelig. Verborgen = punt-bestanden en (Windows) het hidden-attribuut. Maximaal 2000 items per map; de rest wordt als aantal gemeld, niet stil weggelaten. Leesfouten verschijnen als regel in de boom.
+- **Pad invoegen** (dubbelklik, *Insert path*, of OS-drag-and-drop via iced `window::Event::FileDropped`) gaat via `quote_path(shell.kind, …)` en daarna dezelfde weg als plakken (`App::insert_text`): nooit een Enter, meerregelig zonder bracketed paste vraagt bevestiging. Per shell: PowerShell `'…'` met verdubbelde (ook typografische) enkele quotes, cmd `"…"`, POSIX `'…'\''…'`, fish `\'`/`\\`, Git Bash `/c/…`, WSL `/mnt/c/…`.
+- `ShellKind` wordt afgeleid uit het programmapad (System32\bash.exe = WSL, …\Git\…\bash.exe = Git Bash).
 
 ## 5. Rendering
 

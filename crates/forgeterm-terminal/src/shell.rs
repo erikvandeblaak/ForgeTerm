@@ -1,19 +1,60 @@
 use std::env;
 use std::path::{Path, PathBuf};
 
+/// Shell family; decides how text such as file paths must be quoted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShellKind {
+    /// PowerShell 7 and Windows PowerShell.
+    PowerShell,
+    /// Windows Command Prompt.
+    Cmd,
+    /// bash, zsh, sh and other POSIX shells on a POSIX system.
+    Posix,
+    Fish,
+    /// Git for Windows' bash: POSIX quoting, `/c/...` paths.
+    GitBash,
+    /// WSL: POSIX quoting, `/mnt/c/...` paths.
+    Wsl,
+}
+
+impl ShellKind {
+    /// Infers the shell family from the program path.
+    pub fn from_program(program: &str) -> Self {
+        let normalized = program.replace('\\', "/").to_ascii_lowercase();
+        let stem = normalized
+            .rsplit('/')
+            .next()
+            .unwrap_or_default()
+            .trim_end_matches(".exe");
+        match stem {
+            "pwsh" | "powershell" => Self::PowerShell,
+            "cmd" => Self::Cmd,
+            "fish" => Self::Fish,
+            "wsl" => Self::Wsl,
+            // System32\bash.exe is the WSL launcher, not Git Bash.
+            "bash" if normalized.contains("/windows/system32/") => Self::Wsl,
+            "bash" | "sh" if normalized.contains("/git/") => Self::GitBash,
+            _ => Self::Posix,
+        }
+    }
+}
+
 /// A shell program that can be launched in a session.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShellSpec {
     pub name: String,
     pub program: String,
     pub args: Vec<String>,
+    pub kind: ShellKind,
 }
 
 impl ShellSpec {
     pub fn new(name: impl Into<String>, program: impl Into<String>, args: Vec<String>) -> Self {
+        let program = program.into();
         Self {
             name: name.into(),
-            program: program.into(),
+            kind: ShellKind::from_program(&program),
+            program,
             args,
         }
     }
@@ -98,4 +139,31 @@ pub fn detect_shells() -> Vec<ShellSpec> {
 /// The shell ForgeTerm opens by default.
 pub fn default_shell() -> Option<ShellSpec> {
     detect_shells().into_iter().next()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shell_kind_from_program() {
+        use ShellKind::*;
+        let cases = [
+            (r"C:\Program Files\PowerShell\7\pwsh.exe", PowerShell),
+            (
+                r"C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe",
+                PowerShell,
+            ),
+            (r"C:\WINDOWS\system32\cmd.exe", Cmd),
+            (r"C:\Program Files\Git\bin\bash.exe", GitBash),
+            (r"C:\Windows\System32\bash.exe", Wsl),
+            (r"C:\WINDOWS\system32\wsl.exe", Wsl),
+            ("/bin/bash", Posix),
+            ("/usr/bin/zsh", Posix),
+            ("/usr/bin/fish", Fish),
+        ];
+        for (program, kind) in cases {
+            assert_eq!(ShellKind::from_program(program), kind, "{program}");
+        }
+    }
 }

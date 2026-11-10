@@ -7,6 +7,7 @@
 
 mod input;
 mod palette;
+mod quote;
 mod session;
 mod shell;
 mod snapshot;
@@ -15,6 +16,7 @@ pub use input::{
     Key, Modifiers, MouseButton, encode_key, encode_mouse, encode_paste, paste_needs_confirmation,
 };
 pub use palette::{Palette, Rgb};
+pub use quote::{quote_path, quote_paths};
 pub use session::{GridSize, Modes, Session, SessionConfig, SessionEvent};
-pub use shell::{ShellSpec, default_shell, detect_shells};
+pub use shell::{ShellKind, ShellSpec, default_shell, detect_shells};
 pub use snapshot::{CellFlags, CellView, CursorShape, CursorView, Snapshot};

@@ -42,6 +42,14 @@ pub enum CommandId {
     ZoomIn,
     ZoomOut,
     ZoomReset,
+    ToggleExplorer,
+    ExplorerToggleHidden,
+    ExplorerRefresh,
+    ExplorerParent,
+    ExplorerOpenSelected,
+    InsertSelectedPath,
+    CopySelectedPath,
+    NewTabInSelectedFolder,
     About,
     Quit,
 }
@@ -72,6 +80,14 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::ZoomIn,
     CommandId::ZoomOut,
     CommandId::ZoomReset,
+    CommandId::ToggleExplorer,
+    CommandId::ExplorerToggleHidden,
+    CommandId::ExplorerRefresh,
+    CommandId::ExplorerParent,
+    CommandId::ExplorerOpenSelected,
+    CommandId::InsertSelectedPath,
+    CommandId::CopySelectedPath,
+    CommandId::NewTabInSelectedFolder,
     CommandId::About,
     CommandId::Quit,
 ];
@@ -86,6 +102,14 @@ impl CommandId {
             RestartShell | ClearScrollback | ScrollToTop | ScrollToBottom | ScrollPageUp
             | ScrollPageDown => "Terminal",
             Copy | Paste => "Edit",
+            ToggleExplorer
+            | ExplorerToggleHidden
+            | ExplorerRefresh
+            | ExplorerParent
+            | ExplorerOpenSelected
+            | InsertSelectedPath
+            | CopySelectedPath
+            | NewTabInSelectedFolder => "Explorer",
             About => "Help",
             Quit => "App",
         }
@@ -122,6 +146,14 @@ impl CommandId {
             ZoomIn => "Increase Font Size",
             ZoomOut => "Decrease Font Size",
             ZoomReset => "Reset Font Size",
+            ToggleExplorer => "Toggle Explorer",
+            ExplorerToggleHidden => "Show Hidden Files",
+            ExplorerRefresh => "Refresh",
+            ExplorerParent => "Go to Parent Folder",
+            ExplorerOpenSelected => "Open Selected Folder as Root",
+            InsertSelectedPath => "Insert Selected Path into Terminal",
+            CopySelectedPath => "Copy Selected Path",
+            NewTabInSelectedFolder => "New Tab in Selected Folder",
             About => "About ForgeTerm",
             Quit => "Quit ForgeTerm",
         }
@@ -210,6 +242,7 @@ impl Default for Keymap {
             (b(CS, Char('p')), CommandPalette),
             (b(CS, Char('t')), NewTab),
             (b(CS, Char('w')), ClosePane),
+            (b(CS, Char('e')), ToggleExplorer),
             (b(C, Tab), NextTab),
             (b(CS, Tab), PreviousTab),
             (b(AS, Char('=')), SplitRight),

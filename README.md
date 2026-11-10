@@ -29,6 +29,8 @@ Vereist: Rust (stable) en op Windows de Visual Studio C++ Build Tools + Windows 
 | Pane maximaliseren / terug | Ctrl+Shift+Enter |
 | Shell herstarten, scrollback wissen, naar begin/eind scrollen | via de Command Palette of het menu Terminal |
 | Menubalk (File, Edit, View, Terminal, Help) | klik op een titel; daarna ←→ ↑↓ Enter Esc |
+| Bestandsverkenner tonen/verbergen | **Ctrl+Shift+E** |
+| Pad in de terminal zetten (gequote voor de shell, níet uitgevoerd) | dubbelklik op bestand, knop *Insert path*, of sleep een bestand uit Windows Verkenner op het venster |
 | Kopiëren | Ctrl+Shift+C, of Ctrl+C als er een selectie is |
 | Plakken | Ctrl+Shift+V, Shift+Insert, rechtermuisklik |
 | Scrollback | Muiswiel, Shift+PageUp / Shift+PageDown |

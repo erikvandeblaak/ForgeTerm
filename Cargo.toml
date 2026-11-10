@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/forgeterm-terminal", "crates/forgeterm-app"]
+members = ["crates/forgeterm-terminal", "crates/forgeterm-explorer", "crates/forgeterm-app"]
 default-members = ["crates/forgeterm-app"]
 
 [workspace.package]
@@ -13,6 +13,7 @@ rust-version = "1.88"
 
 [workspace.dependencies]
 forgeterm-terminal = { path = "crates/forgeterm-terminal" }
+forgeterm-explorer = { path = "crates/forgeterm-explorer" }
 
 alacritty_terminal = "0.26"
 iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "canvas", "svg", "tokio", "fira-sans"] }

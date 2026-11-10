@@ -13,6 +13,9 @@
 | `palette::tests` (5) | Recent eerst, filteren/rangschikken, wrap, venster volgt selectie, vroege toetsaanslagen | ✅ |
 | `tests/pty_roundtrip.rs::scrollback_scroll_and_clear` | 80 regels in echte shell → geschiedenis, naar boven/onder, wissen behoudt scherm | ✅ |
 | `menu::tests` (6) | Elk command staat in een menu, shells per detectie, geen losse/dubbele scheidingslijnen, dropdownpositie volgt titelbreedtes, ↑↓ slaat scheidingslijnen en uitgeschakelde items over (wrap), uitgeschakeld item wordt nooit uitgevoerd | ✅ |
+| `quote::tests` (9) + `shell::tests` (1) | Pad-quoting per shell (spaties, `'`, typografische quotes, `$(…)`, `~`, backslash, lege string), Git Bash- en WSL-conversie, `\\?\`-prefix, ShellKind-detectie | ✅ |
+| `tests/quote_real_shells.rs` | 6 bestanden met lastige namen; elke geïnstalleerde shell leest ze via het gequote pad: PowerShell 7, Windows PowerShell, cmd, Git Bash (WSL overgeslagen). Mutatiecheck: zonder typografische-quote-regel faalt pwsh | ✅ |
+| `forgeterm-explorer` (6) | Sortering, verborgen, ontbrekende map = fout, lazy uitklappen/inklappen, verouderde resultaten genegeerd, fouten + selectie | ✅ |
 | `terminal_pane::tests` (3) | Tabtitels: exe-pad → shellnaam, `cmd.exe - ping …` → `ping …`, programmatitels blijven | ✅ |
 
 Kwaliteitspoort voor iedere wijziging:
@@ -98,6 +101,25 @@ Gevonden en opgelost: (1) de Enter die de palette bevestigde kwam óók in de ni
 Gevonden en opgelost: lange items ("New Tab with Windows PowerShell") liepen buiten de dropdown → breedte 340 px.
 
 Testvalkuil: de GUI-scripts klikken op schermcoördinaten. Ligt een ander venster bovenop, dan gaat de klik dáárheen. De helpers controleren nu eerst dat ForgeTerm het voorgrondvenster is en dat het doelpunt op ForgeTerm ligt, en breken anders af. Test niet terwijl de gebruiker de pc actief gebruikt.
+
+### Bestandsverkenner en drag-and-drop (2026-11-10, Windows 11)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| E1 | Ctrl+Shift+E toont paneel; terminal krimpt mee (140 → 108 kolommen) | ✅ |
+| E2 | Chevron klapt `crates` uit; dubbelklik klapt `docs` uit | ✅ |
+| E3 | Dubbelklik `Cargo.toml` in pwsh → pad achter de prompt, niet uitgevoerd | ✅ |
+| E4 | `docs` → *Open tab here* → nieuwe tab met prompt in `…\docs` | ✅ |
+| E5 | Git Bash-tab, *Insert path* → `/c/Erik/work/ForgeTerm/Cargo.toml` | ✅ |
+| E6 | `.*` toont `.git`, `.vscode`, `.gitignore` gedimd; tooltip zichtbaar | ✅ |
+| E7 | OLE-drag van `drop it's here.txt` op het venster: hint "Drop to insert the path · Quoted for Git Bash" tijdens slepen | ✅ |
+| E8 | Drop in Git Bash na `cat ` → `'/c/…/drop it'\''s here.txt'`, Enter → `DROP-OK-4711` | ✅ |
+| E9 | Drop in pwsh na `Get-Content ` → `'C:\…\drop it''s here.txt'`, Enter → `DROP-OK-4711` | ✅ |
+| E10 | Alt+F4 met 2 tabs: alle 5 childprocessen weg | ✅ |
+
+Gevonden en opgelost: "Erik van de Blaak Edition" brak over twee regels bij een volle tabbalk; chevrons te klein.
+
+Testvalkuil: de OLE-drag-simulatie (`dragdrop.ps1`: eigen bronvenster, knop indrukken, cursor naar ForgeTerm, loslaten) mislukt soms door timing (`effect: None`); dan opnieuw proberen en pas Enter geven nadat het ingevoegde pad op een screenshot is gezien.
 
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)
 

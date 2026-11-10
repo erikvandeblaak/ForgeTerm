@@ -25,8 +25,8 @@ Legenda: ✅ klaar en getest · 🟡 deels · ⬜ open. "Getest" betekent: daadw
 | Centrale command registry (acties + sneltoetsen op één plek) | ✅ |
 | Command Palette (Ctrl+Shift+P, fuzzy, recent, alleen toepasbare acties) | ✅ Windows (2026-11-10) |
 | Menubalk (leest uit de registry; File/Edit/View/Terminal/Help, About-venster) | ✅ Windows (2026-11-10) |
-| File Explorer | ⬜ |
-| Drag-and-drop bestanden → terminal (shell-specifieke escaping) | ⬜ |
+| File Explorer (zijpaneel, lazy boom, verborgen bestanden, refresh, map omhoog / als root, nieuwe tab in map) | ✅ Windows (2026-11-10) |
+| Drag-and-drop bestanden → terminal (shell-specifieke escaping) | ✅ Windows: vanuit Windows Verkenner; quoting getest in pwsh, Windows PowerShell, cmd, Git Bash. Slepen vanuit het eigen explorer-paneel ⬜ (nu dubbelklik / *Insert path*) |
 | Instellingen (TOML) + workspace-opslag (SQLite) | ⬜ |
 
 ## Fase 3 — Premium UI
@@ -59,6 +59,9 @@ Linux Mint-validatie ⬜ · installers (MSI/winget, .deb/AppImage) ⬜ · benchm
 - **Muismodifiers** (Shift/Ctrl bij muisrapportage) worden nog niet meegestuurd.
 - **Geen cursor-knipperen**, geen URL-detectie, geen zoekfunctie in output.
 - **Nieuwe tabs/splits starten in de map van ForgeTerm**, niet in de huidige map van de gefocuste shell (vereist OSC 7-cwd-tracking).
+- **Explorer:** geen toetsenbordnavigatie in de boom, geen automatische verversing bij wijzigingen (knop Refresh), geen bestandsbewerkingen (bewust: alleen lezen), root start in de map van ForgeTerm (geen mapkiezer). Paneelbreedte vast (270 px).
+- **cmd en `%VAR%`:** in interactieve cmd wordt `%NAAM%` ook binnen quotes uitgebreid als die variabele bestaat; dat is in cmd niet te escapen.
+- **WSL-quoting** (`/mnt/c/…`) is unit-getest maar niet in een echte WSL-shell uitgevoerd.
 - **Afsluiten vraagt geen bevestiging** (menu Quit en venster-×), ook niet als er nog processen lopen.
 - **Geen Alt-mnemonics in de menubalk** (Alt+F enz. horen bij de shell); menu's openen met de muis of via de Command Palette.
 - **Tab-sneltoets Alt+1…9** i.p.v. Ctrl+Alt+N: Ctrl+Alt is AltGr op Windows en typt tekens op veel layouts.

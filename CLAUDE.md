@@ -32,7 +32,8 @@ Start de app vanuit een omgeving **zonder** `NO_COLOR` (Claude Code zet die; Pow
 
 ## Structuur
 
-- `crates/forgeterm-terminal` — Session (PTY + emulator), input-encoding, palet, snapshots, shelldetectie
+- `crates/forgeterm-terminal` — Session (PTY + emulator), input-encoding, palet, snapshots, shelldetectie, pad-quoting per shell
+- `crates/forgeterm-explorer` — bestandsboom (lezen, sorteren, verborgen, lazy uitklappen); wijzigt nooit het bestandssysteem
 - `crates/forgeterm-app` — iced-applicatie, canvas-renderer, thema-tokens
 - `assets/` — fonts (OFL), branding
 - `docs/` — ARCHITECTURE, ROADMAP, DESIGN_SYSTEM, TEST_PLAN

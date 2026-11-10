@@ -38,7 +38,17 @@ pub fn menus(shell_count: usize) -> Vec<Menu> {
 
     let mut file = vec![C(NewTab)];
     file.extend((0..shell_count).map(|i| C(NewTabWithShell(i))));
-    file.extend([Sep, C(ClosePane), C(CloseTab), Sep, C(Quit)]);
+    file.extend([
+        Sep,
+        C(InsertSelectedPath),
+        C(CopySelectedPath),
+        C(NewTabInSelectedFolder),
+        Sep,
+        C(ClosePane),
+        C(CloseTab),
+        Sep,
+        C(Quit),
+    ]);
 
     vec![
         Menu {
@@ -53,6 +63,12 @@ pub fn menus(shell_count: usize) -> Vec<Menu> {
             title: "View",
             items: vec![
                 C(CommandPalette),
+                Sep,
+                C(ToggleExplorer),
+                C(ExplorerToggleHidden),
+                C(ExplorerRefresh),
+                C(ExplorerParent),
+                C(ExplorerOpenSelected),
                 Sep,
                 C(ZoomIn),
                 C(ZoomOut),

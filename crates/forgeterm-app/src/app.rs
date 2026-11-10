@@ -2,9 +2,12 @@
 
 use std::collections::HashMap;
 use std::fmt;
+use std::path::{Path, PathBuf};
 
+use forgeterm_explorer::{Listing, Tree, list_dir};
 use forgeterm_terminal::{
     Palette, SessionEvent, ShellSpec, detect_shells, encode_key, paste_needs_confirmation,
+    quote_path,
 };
 use iced::keyboard::{self, key::Named};
 use iced::widget::canvas::Canvas;
@@ -14,6 +17,7 @@ use iced::widget::{
 };
 use iced::{
     Border, Color, Element, Event, Length, Shadow, Subscription, Task, Vector, clipboard, event,
+    window,
 };
 
 use crate::commands::{CommandId, Dir, Keymap, STATIC_COMMANDS};
@@ -22,7 +26,7 @@ use crate::palette::{self as command_palette, CommandPalette, Entry};
 use crate::terminal_pane::{Outcome, Status, TermId, TermMsg, TerminalPane};
 use crate::terminal_view::{Metrics, TerminalCanvas};
 use crate::workspace::Workspace;
-use crate::{keys, theme};
+use crate::{explorer_view, keys, theme};
 
 const LOGO: &[u8] = include_bytes!("../../../assets/branding/forgeterm-logo.svg");
 const DEFAULT_FONT_SIZE: f32 = 14.0;
@@ -69,6 +73,16 @@ pub enum Message {
     MenuRun(usize),
     MenuClose,
     AboutClose,
+    ExplorerListed(PathBuf, Result<Listing, String>),
+    ExplorerSelect(PathBuf),
+    /// Chevron click: expand / collapse a folder.
+    ExplorerToggle(PathBuf),
+    /// Double click: folders expand / collapse, files are inserted as a path.
+    ExplorerActivate(PathBuf, bool),
+    /// Files dragged over the window from the OS (shows a drop hint).
+    FileHovered,
+    FilesHoveredLeft,
+    FileDropped(PathBuf),
 }
 
 /// Entry of the "new tab with shell…" dropdown.
@@ -102,6 +116,10 @@ pub struct App {
     menus: Vec<Menu>,
     menu: Option<MenuState>,
     about_open: bool,
+    explorer: Tree,
+    explorer_visible: bool,
+    /// Files from the OS are being dragged over the window.
+    drop_hover: bool,
 }
 
 impl App {
@@ -121,18 +139,27 @@ impl App {
             menus: Vec::new(),
             menu: None,
             about_open: false,
+            explorer: Tree::new(start_dir()),
+            explorer_visible: false,
+            drop_hover: false,
         };
         app.menus = menu::menus(app.shells.len());
-        let task = app.new_tab(None);
-        (app, task)
+        let terminal = app.new_tab(None, None);
+        let root = app.explorer.root().to_path_buf();
+        (app, Task::batch([terminal, load_dir(root)]))
     }
 
     // ---- terminal lifecycle -------------------------------------------------------
 
-    fn spawn_terminal(&mut self, shell: ShellSpec) -> (TermId, Task<Message>) {
+    /// Starts a terminal in `cwd` (default: the directory ForgeTerm started in).
+    fn spawn_terminal(
+        &mut self,
+        shell: ShellSpec,
+        cwd: Option<PathBuf>,
+    ) -> (TermId, Task<Message>) {
         let id = self.next_id;
         self.next_id += 1;
-        let cwd = std::env::current_dir().ok();
+        let cwd = cwd.or_else(|| std::env::current_dir().ok());
         let (pane, task) = TerminalPane::new(id, shell, cwd, self.metrics, &self.palette);
         self.terminals.insert(id, pane);
         (id, task)
@@ -145,12 +172,12 @@ impl App {
         }
     }
 
-    fn new_tab(&mut self, shell_index: Option<usize>) -> Task<Message> {
+    fn new_tab(&mut self, shell_index: Option<usize>, cwd: Option<PathBuf>) -> Task<Message> {
         let Some(shell) = self.shell_at(shell_index) else {
             self.error = Some("No supported shell was found on this system.".into());
             return Task::none();
         };
-        let (id, task) = self.spawn_terminal(shell);
+        let (id, task) = self.spawn_terminal(shell, cwd);
         self.workspace.push_tab(id);
         task
     }
@@ -167,7 +194,7 @@ impl App {
             return Task::none();
         };
         self.restore_zoom();
-        let (id, task) = self.spawn_terminal(shell);
+        let (id, task) = self.spawn_terminal(shell, None);
         let split = self
             .workspace
             .active_tab_mut()
@@ -274,6 +301,9 @@ impl App {
                 // A widget (e.g. the palette's text input) already handled this key.
                 captured: status == event::Status::Captured,
             }),
+            Event::Window(window::Event::FileHovered(_)) => Some(Message::FileHovered),
+            Event::Window(window::Event::FilesHoveredLeft) => Some(Message::FilesHoveredLeft),
+            Event::Window(window::Event::FileDropped(path)) => Some(Message::FileDropped(path)),
             _ => None,
         })
     }
@@ -329,16 +359,7 @@ impl App {
                 }
             }
             Message::Paste => return clipboard::read().map(Message::ClipboardText),
-            Message::ClipboardText(Some(text)) => {
-                let Some(t) = self.focused() else {
-                    return Task::none();
-                };
-                if paste_needs_confirmation(&text, t.modes.bracketed_paste) {
-                    self.pending_paste = Some((t.id, text));
-                } else if let Some(s) = t.session() {
-                    s.paste(&text);
-                }
-            }
+            Message::ClipboardText(Some(text)) => self.insert_text(text),
             Message::ClipboardText(None) => {}
             Message::ConfirmPaste => {
                 if let Some((id, text)) = self.pending_paste.take()
@@ -405,6 +426,28 @@ impl App {
             }
             Message::MenuClose => self.menu = None,
             Message::AboutClose => self.about_open = false,
+            Message::ExplorerListed(path, result) => self.explorer.set_listing(path, result),
+            Message::ExplorerSelect(path) => self.explorer.select(Some(path)),
+            Message::ExplorerToggle(path) => {
+                self.explorer.select(Some(path.clone()));
+                return self
+                    .explorer
+                    .toggle(&path)
+                    .map_or_else(Task::none, load_dir);
+            }
+            Message::ExplorerActivate(path, true) => {
+                return self
+                    .explorer
+                    .toggle(&path)
+                    .map_or_else(Task::none, load_dir);
+            }
+            Message::ExplorerActivate(path, false) => self.insert_paths(&[path]),
+            Message::FileHovered => self.drop_hover = true,
+            Message::FilesHoveredLeft => self.drop_hover = false,
+            Message::FileDropped(path) => {
+                self.drop_hover = false;
+                self.insert_paths(&[path]);
+            }
         }
         Task::none()
     }
@@ -642,10 +685,10 @@ impl App {
                 self.command_palette = Some(CommandPalette::new(entries, &self.recent_commands));
                 return iced::widget::operation::focus(command_palette::INPUT_ID);
             }
-            CommandId::NewTab => return self.new_tab(None),
+            CommandId::NewTab => return self.new_tab(None, None),
             CommandId::NewTabWithShell(i) => {
                 if i < self.shells.len() {
-                    return self.new_tab(Some(i));
+                    return self.new_tab(Some(i), None);
                 }
             }
             CommandId::CloseTab => return self.close_tab(self.workspace.active),
@@ -726,6 +769,53 @@ impl App {
             CommandId::ZoomIn => self.set_font_size(self.metrics.font_size + 1.0),
             CommandId::ZoomOut => self.set_font_size(self.metrics.font_size - 1.0),
             CommandId::ZoomReset => self.set_font_size(DEFAULT_FONT_SIZE),
+            CommandId::ToggleExplorer => self.explorer_visible = !self.explorer_visible,
+            CommandId::ExplorerToggleHidden => {
+                let show = !self.explorer.show_hidden();
+                self.explorer.set_show_hidden(show);
+            }
+            CommandId::ExplorerRefresh => {
+                return Task::batch(self.explorer.refresh().into_iter().map(load_dir));
+            }
+            CommandId::ExplorerParent => {
+                if let Some(parent) = self.explorer.parent() {
+                    return load_dir(self.explorer.set_root(parent));
+                }
+            }
+            CommandId::ExplorerOpenSelected => {
+                if let Some(dir) = self
+                    .explorer
+                    .selected()
+                    .filter(|e| e.is_dir)
+                    .map(|e| e.path.clone())
+                {
+                    return load_dir(self.explorer.set_root(dir));
+                }
+            }
+            CommandId::InsertSelectedPath => {
+                if let Some(path) = self.explorer.selected().map(|e| e.path.clone()) {
+                    self.insert_paths(&[path]);
+                }
+            }
+            CommandId::CopySelectedPath => {
+                if let Some(e) = self.explorer.selected() {
+                    return clipboard::write(e.path.to_string_lossy().into_owned());
+                }
+            }
+            CommandId::NewTabInSelectedFolder => {
+                let dir = self.explorer.selected().map(|e| {
+                    if e.is_dir {
+                        e.path.clone()
+                    } else {
+                        e.path
+                            .parent()
+                            .map_or_else(|| e.path.clone(), Path::to_path_buf)
+                    }
+                });
+                if let Some(dir) = dir {
+                    return self.new_tab(None, Some(dir));
+                }
+            }
             CommandId::About => self.about_open = true,
             // Same as closing the window: sessions are dropped, shells are shut down.
             CommandId::Quit => return iced::exit(),
@@ -762,8 +852,48 @@ impl App {
             | CommandId::ZoomOut
             | CommandId::ZoomReset
             | CommandId::About
-            | CommandId::Quit => true,
+            | CommandId::Quit
+            | CommandId::ToggleExplorer => true,
+            CommandId::ExplorerToggleHidden | CommandId::ExplorerRefresh => self.explorer_visible,
+            CommandId::ExplorerParent => self.explorer_visible && self.explorer.parent().is_some(),
+            CommandId::ExplorerOpenSelected => {
+                self.explorer_visible && self.explorer.selected().is_some_and(|e| e.is_dir)
+            }
+            CommandId::CopySelectedPath | CommandId::NewTabInSelectedFolder => {
+                self.explorer_visible && self.explorer.selected().is_some()
+            }
+            CommandId::InsertSelectedPath => {
+                self.explorer_visible
+                    && self.explorer.selected().is_some()
+                    && focused.is_some_and(TerminalPane::is_running)
+            }
         }
+    }
+
+    /// Inserts text at the focused terminal's prompt like a paste: never followed by
+    /// Enter, and multi-line text without bracketed paste asks for confirmation.
+    fn insert_text(&mut self, text: String) {
+        let Some(t) = self.focused() else {
+            return;
+        };
+        if paste_needs_confirmation(&text, t.modes.bracketed_paste) {
+            self.pending_paste = Some((t.id, text));
+        } else if let Some(s) = t.session() {
+            s.paste(&text);
+        }
+    }
+
+    /// Inserts paths quoted for the focused terminal's shell, followed by a space.
+    fn insert_paths(&mut self, paths: &[PathBuf]) {
+        let Some(kind) = self.focused().map(|t| t.shell.kind) else {
+            return;
+        };
+        let mut text = String::new();
+        for p in paths {
+            text.push_str(&quote_path(kind, &p.to_string_lossy()));
+            text.push(' ');
+        }
+        self.insert_text(text);
     }
 
     /// Display title of a command; parameterised commands use live data.
@@ -860,6 +990,11 @@ impl App {
             (None, Some(tab)) => self.view_panes(tab),
             (None, None) => space::vertical().into(),
         };
+        let body: Element<'_, Message> = if self.explorer_visible {
+            row![explorer_view::view(&self.explorer), body].into()
+        } else {
+            body
+        };
         let base: Element<'_, Message> = layout.push(body).push(self.view_status_bar()).into();
         let mut layers = stack![base];
         if let Some(state) = &self.menu {
@@ -871,6 +1006,12 @@ impl App {
         }
         if self.about_open {
             layers = layers.push(view_about());
+        }
+        if self.drop_hover {
+            let shell = self
+                .focused()
+                .map_or("the terminal", |t| t.shell.name.as_str());
+            layers = layers.push(drop_hint(shell));
         }
         layers.into()
     }
@@ -962,7 +1103,8 @@ impl App {
                 space::horizontal(),
                 text("Erik van de Blaak Edition")
                     .size(12)
-                    .color(theme::TEXT_MUTED),
+                    .color(theme::TEXT_MUTED)
+                    .wrapping(text::Wrapping::None),
             ]
             .spacing(8)
             .align_y(iced::Alignment::Center),
@@ -1198,6 +1340,39 @@ fn paste_banner(text_to_paste: &str) -> Element<'_, Message> {
     .into()
 }
 
+/// Shown while files from the OS are dragged over the window.
+fn drop_hint(shell: &str) -> Element<'_, Message> {
+    let card = container(
+        column![
+            text("Drop to insert the path").size(16).color(theme::TEXT),
+            text(format!(
+                "Quoted for {shell} · inserted at the prompt, not executed"
+            ))
+            .size(12)
+            .color(theme::TEXT_MUTED),
+        ]
+        .spacing(4)
+        .align_x(iced::Alignment::Center),
+    )
+    .padding([16, 24])
+    .style(|_| container::Style {
+        background: Some(theme::SURFACE.into()),
+        border: Border {
+            color: theme::CYAN,
+            width: 2.0,
+            radius: 10.0.into(),
+        },
+        ..Default::default()
+    });
+    container(card)
+        .center(Length::Fill)
+        .style(|_| container::Style {
+            background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.3).into()),
+            ..Default::default()
+        })
+        .into()
+}
+
 /// Help → About: version, creator and the open-source components ForgeTerm is built on.
 fn view_about<'a>() -> Element<'a, Message> {
     let muted = |s: &'static str| text(s).size(12).color(theme::TEXT_MUTED);
@@ -1257,6 +1432,28 @@ fn view_about<'a>() -> Element<'a, Message> {
             ..Default::default()
         });
     opaque(mouse_area(backdrop).on_press(Message::AboutClose))
+}
+
+/// The folder the explorer starts in: where new terminals start.
+fn start_dir() -> PathBuf {
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
+/// Lists a directory on a background thread (slow or network drives must never
+/// block the UI) and reports the result.
+fn load_dir(path: PathBuf) -> Task<Message> {
+    let target = path.clone();
+    Task::perform(
+        async move {
+            let (tx, rx) = iced::futures::channel::oneshot::channel();
+            std::thread::spawn(move || {
+                let _ = tx.send(list_dir(&target));
+            });
+            rx.await
+                .unwrap_or_else(|_| Err("listing was interrupted".to_owned()))
+        },
+        move |result| Message::ExplorerListed(path.clone(), result),
+    )
 }
 
 fn bar_style() -> container::Style {
