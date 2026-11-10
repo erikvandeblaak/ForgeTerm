@@ -26,7 +26,9 @@ use tracing_subscriber::EnvFilter;
 const DEFAULT_LOG_FILTER: &str =
     "info,wgpu_hal=error,wgpu_core=warn,iced_wgpu=warn,iced_winit=warn";
 
-/// Application id; must match `packaging/linux/forgeterm.desktop`.
+/// Linux application id (Wayland app id, X11 WM_CLASS): the basename of the installed
+/// `packaging/linux/forgeterm.desktop`, so the desktop shows ForgeTerm's name and icon.
+#[cfg(target_os = "linux")]
 const APP_ID: &str = "forgeterm";
 
 fn main() -> iced::Result {
@@ -73,12 +75,6 @@ fn main() -> iced::Result {
     );
 
     iced::application(app::App::boot, app::App::update, app::App::view)
-        // Wayland app id = basename of the installed forgeterm.desktop, so the desktop
-        // shows the right icon and name. (X11 uses the binary name, also "forgeterm".)
-        .settings(iced::Settings {
-            id: Some(APP_ID.to_string()),
-            ..Default::default()
-        })
         .title(app::App::title)
         .subscription(app::App::subscription)
         .theme(|_: &app::App| Some(theme::forge_dark()))
@@ -91,6 +87,11 @@ fn main() -> iced::Result {
             // The window's × asks first when programs still run (App::request_close).
             exit_on_close_request: false,
             icon: icon::window_icon(),
+            #[cfg(target_os = "linux")]
+            platform_specific: iced::window::settings::PlatformSpecific {
+                application_id: APP_ID.to_string(),
+                ..Default::default()
+            },
             ..Default::default()
         })
         .antialiasing(false)
