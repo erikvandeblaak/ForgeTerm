@@ -8,6 +8,10 @@
 | `palette::tests` (2) | 256-kleurenkubus, grijstinten, speciale kleuren | ✅ |
 | `tests/pty_roundtrip.rs` | Echte shell (cmd / sh) in PTY: commando in, resultaat in grid, resize, exit-event | ✅ |
 | `workspace::tests` (5) | Tabs toevoegen/selecteren/cyclen, splitsen geeft focus aan nieuwe pane, sluiten geeft focus aan buur, laatste pane sluit tab, actieve index blijft geldig | ✅ |
+| `commands::tests` (5) | Geen conflicterende bindings; lookup; Ctrl+C, Ctrl+V, AltGr, Tab, Enter, pijltjes blijven bij de terminal; weergave "Ctrl+Shift+P" | ✅ |
+| `fuzzy::tests` (5) | Subsequence, hoofdletterongevoelig, woordbegin wint ("spr" → Split Right), highlight-indices | ✅ |
+| `palette::tests` (5) | Recent eerst, filteren/rangschikken, wrap, venster volgt selectie, vroege toetsaanslagen | ✅ |
+| `tests/pty_roundtrip.rs::scrollback_scroll_and_clear` | 80 regels in echte shell → geschiedenis, naar boven/onder, wissen behoudt scherm | ✅ |
 | `terminal_pane::tests` (3) | Tabtitels: exe-pad → shellnaam, `cmd.exe - ping …` → `ping …`, programmatitels blijven | ✅ |
 
 Kwaliteitspoort voor iedere wijziging:
@@ -59,6 +63,22 @@ Uitgevoerd 2026-11-10 op Windows 11 (26300), PowerShell 7, met screenshots en ge
 | S13 | Git Bash: kleurprompt met branch, `TERM=xterm-256color`, `ls --color` | ✅ |
 
 Gevonden en opgelost tijdens deze tests: Ctrl+Alt+1 botst met AltGr (US-Intl `¡`) → Alt+1…9; cmd-titel bevatte exe-pad; focusrand werd door canvas overschilderd; shellmenu afgekapt.
+
+### Command Palette (2026-11-10, Windows 11)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| P1 | Ctrl+Shift+P opent, invoer gefocust, hints zichtbaar, alleen toepasbare commando's (20 bij 1 pane, 25 bij 2) | ✅ |
+| P2 | "spr" → Split Right bovenaan met highlight; Enter splitst | ✅ |
+| P3 | Recent gebruikt staat bovenaan; ↑↓ navigeert; teller "3 of 25" | ✅ |
+| P4 | Snel typen direct na openen (`Ctrl+Shift+P zoom Enter` zonder pauze) | ✅ |
+| P5 | Toggle Pane Zoom + statusbalk-indicator; Ctrl+Shift+Enter terug | ✅ |
+| P6 | Clear Scrollback: geschiedenis weg, scherm blijft | ✅ |
+| P7 | Restart Shell: nieuw pwsh-proces (PID 36104 → 39088), andere pane ongemoeid | ✅ |
+| P8 | Klik buiten palette sluit zonder klik door te geven; klik op item voert uit | ✅ |
+| P9 | Na sluiten gaat typen weer naar de terminal | ✅ |
+
+Gevonden en opgelost: (1) de Enter die de palette bevestigde kwam óók in de nieuwe terminal (dubbele prompt); (2) Esc werd door het invoerveld afgevangen, waardoor de palette onzichtbaar "open" bleef en de volgende Ctrl+Shift+P hem sloot — getypte tekst ging dan naar de shell en werd uitgevoerd. Beide via de `captured`-status opgelost.
 
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)
 

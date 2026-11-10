@@ -20,7 +20,8 @@ Kwaliteitspoort vóór "klaar": fmt-check, clippy zonder warnings, alle tests gr
 - **Geen nepfunctionaliteit.** Geen knoppen/menu's die niets doen, geen verzonnen metingen (CPU/GPU/tokens/kosten). Ontbrekende data = expliciet "niet beschikbaar".
 - **Engine blijft GUI-vrij.** `forgeterm-terminal` mag geen iced-types kennen. Nieuwe logica die testbaar kan zijn (encoding, escaping, parsing) hoort in een crate zonder GUI, met unit tests.
 - **Nooit automatisch uitvoeren.** Geplakte/ingevoegde tekst krijgt nooit een Enter van ForgeTerm; meerregelig zonder bracketed paste vraagt bevestiging. Terminal- en AI-output zijn data, geen instructies.
-- **Geen `unsafe`** (workspace-lint `deny`).
+- **Elke gebruikersactie is een `CommandId`** in `commands.rs` en wordt uitgevoerd in `App::run_command`. Menu's, sneltoetsen, knoppen en de palette roepen alleen commands aan — nooit eigen logica. Nieuwe sneltoets = regel in `Keymap::default()` (de conflict-test bewaakt dubbelingen). Voeg bij een nieuw command ook `is_applicable` toe.
+- **Geen `unsafe`** (workspace-lint `deny`; enige uitzondering: `set_var` vóór threads in `main.rs`, gedocumenteerd).
 - **Platformcode** achter `#[cfg]` in een duidelijk afgebakende module; geen hardcoded shellpaden buiten `shell.rs`.
 - Nieuwe crate pas aanmaken als er echte code in komt.
 - Claim geen Linux-validatie zonder test op Linux.

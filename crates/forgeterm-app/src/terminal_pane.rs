@@ -150,6 +150,14 @@ impl TerminalPane {
         }
     }
 
+    /// Ends the current shell (if any) and starts a fresh one in the same pane.
+    pub fn restart(&mut self, metrics: Metrics, palette: &Palette) -> Task<Message> {
+        // Dropping the session shuts its PTY down; its late events carry the old
+        // generation and are ignored.
+        self.session = None;
+        self.start(metrics, palette)
+    }
+
     /// Takes a fresh snapshot (call only when the terminal is visible).
     pub fn refresh(&mut self, palette: &Palette) {
         if let Some(session) = &self.session {

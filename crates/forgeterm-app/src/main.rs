@@ -2,8 +2,11 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod app;
+mod commands;
+mod fuzzy;
 mod glyphs;
 mod keys;
+mod palette;
 mod terminal_pane;
 mod terminal_view;
 mod theme;

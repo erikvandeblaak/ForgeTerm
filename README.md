@@ -17,6 +17,7 @@ Vereist: Rust (stable) en op Windows de Visual Studio C++ Build Tools + Windows 
 
 | Actie | Toets |
 |---|---|
+| **Command Palette** (alle acties, fuzzy zoeken) | **Ctrl+Shift+P** |
 | Nieuwe tab (standaardshell) | Ctrl+Shift+T, of **+** in de tabbalk |
 | Nieuwe tab met shell N (zie menu *New tab with…*) | Ctrl+Shift+1 … 9 |
 | Naar tab N | Alt+1 … 9 |
@@ -25,6 +26,8 @@ Vereist: Rust (stable) en op Windows de Visual Studio C++ Build Tools + Windows 
 | Focus naar pane links/rechts/boven/onder | Alt+pijltjes, of klik in de pane |
 | Pane (of tab) sluiten | Ctrl+Shift+W, of **×** op de tab |
 | Pane-grootte | Sleep de scheidingslijn |
+| Pane maximaliseren / terug | Ctrl+Shift+Enter |
+| Shell herstarten, scrollback wissen, naar begin/eind scrollen | via de Command Palette |
 | Kopiëren | Ctrl+Shift+C, of Ctrl+C als er een selectie is |
 | Plakken | Ctrl+Shift+V, Shift+Insert, rechtermuisklik |
 | Scrollback | Muiswiel, Shift+PageUp / Shift+PageDown |

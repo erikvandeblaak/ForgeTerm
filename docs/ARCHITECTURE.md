@@ -43,6 +43,9 @@ ForgeTerm/
 │   └── forgeterm-app/            # GUI (binary `forgeterm`)
 │       ├── src/app.rs            # state, messages, update, layout, sneltoetsen
 │       ├── src/workspace.rs      # tabs + split-layout (pane_grid-state), unit-getest
+│       ├── src/commands.rs       # centrale command registry + keymap, unit-getest
+│       ├── src/fuzzy.rs          # fuzzy matcher, unit-getest
+│       ├── src/palette.rs        # Command Palette (logica getest + overlay-view)
 │       ├── src/terminal_pane.rs  # één terminal: sessie, snapshot, levenscyclus, titel
 │       ├── src/terminal_view.rs  # canvas-renderer + muisafhandeling
 │       ├── src/glyphs.rs         # pixel-exacte box-drawing/blok-tekens
@@ -86,6 +89,15 @@ Belangrijke details:
 - **Onzichtbare terminals renderen niet.** Een `Wakeup` voor een terminal buiten de actieve tab zet alleen `dirty`; bij tabwissel worden dirty terminals ververst. Output gaat nooit verloren (die staat in de emulator), alleen het kopiëren naar een snapshot wordt uitgesteld.
 - **Afsluiten:** exitcode 0 sluit de pane (en tab, en app als het de laatste was); een andere exitcode laat de pane met melding staan (Enter = herstart).
 - Focus bepaalt de cursorstijl (blok vs. hol), dus bij iedere focuswissel worden de caches van de actieve tab gewist.
+
+## 4c. Commands, sneltoetsen en Command Palette
+
+- `commands.rs` is de **centrale registry** (spec §9): elke actie is een `CommandId` met categorie, titel en key bindings (`Keymap`). Geen iced-types; unit-getest (o.a. "geen conflicterende bindings" en "Ctrl+C / AltGr / gewone toetsen worden nooit afgevangen").
+- `App::run_command` is de **enige** plek waar acties worden uitgevoerd. Sneltoetsen, palette, knoppen (en straks de menubalk) sturen allemaal een `CommandId`.
+- `App::is_applicable` bepaalt wat nu zin heeft; de palette toont alleen die commando's, zodat er nooit een optie verschijnt die niets doet.
+- `fuzzy.rs`: subsequence-matcher met bonussen voor woordbegin en aaneengesloten tekens; levert indices voor highlighting.
+- `palette.rs`: filter/rangschik/recent/zichtbaar-venster-logica (getest) + de overlay-view (`stack` + `opaque`, klik buiten = sluiten).
+- **Toetsroutering:** de globale toetsenlistener geeft per toets mee of een widget hem al heeft afgehandeld (`captured`). Afgevangen toetsen gaan nooit naar de terminal; Esc sluit de palette altijd; toetsen die binnenkomen vóórdat het invoerveld focus heeft, worden aan de zoekterm toegevoegd in plaats van verloren te gaan.
 
 ## 5. Rendering
 

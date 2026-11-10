@@ -3,6 +3,35 @@
 use forgeterm_terminal::{Key, Modifiers};
 use iced::keyboard::{self, key::Named};
 
+use crate::commands::{KeyBinding, KeyCode};
+
+/// The registry key for a press, if the key can be bound at all.
+/// `key` is iced's key *without* modifiers applied (Shift+= arrives as "=").
+pub fn binding(key: &keyboard::Key, mods: keyboard::Modifiers) -> Option<KeyBinding> {
+    let code = match key {
+        keyboard::Key::Character(c) => KeyCode::Char(c.chars().next()?.to_lowercase().next()?),
+        keyboard::Key::Named(named) => match named {
+            Named::Tab => KeyCode::Tab,
+            Named::Enter => KeyCode::Enter,
+            Named::Insert => KeyCode::Insert,
+            Named::PageUp => KeyCode::PageUp,
+            Named::PageDown => KeyCode::PageDown,
+            Named::ArrowLeft => KeyCode::Left,
+            Named::ArrowRight => KeyCode::Right,
+            Named::ArrowUp => KeyCode::Up,
+            Named::ArrowDown => KeyCode::Down,
+            _ => return None,
+        },
+        keyboard::Key::Unidentified => return None,
+    };
+    Some(KeyBinding {
+        ctrl: mods.control(),
+        shift: mods.shift(),
+        alt: mods.alt(),
+        key: code,
+    })
+}
+
 pub fn modifiers(m: keyboard::Modifiers) -> Modifiers {
     Modifiers {
         shift: m.shift(),

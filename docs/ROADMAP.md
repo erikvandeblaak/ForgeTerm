@@ -21,7 +21,10 @@ Legenda: ✅ klaar en getest · 🟡 deels · ⬜ open. "Getest" betekent: daadw
 | Splits (naast/onder elkaar, resize, focus) | ✅ Windows (2026-11-10) |
 | Shellkeuze per tab (pwsh, Windows PowerShell, cmd, Git Bash, WSL) | ✅ — WSL wordt gedetecteerd maar is nog niet in ForgeTerm getest |
 | Panes verslepen naar andere positie | ⬜ (vereist pane-titelbalk) |
-| Maximaliseren van één pane (zoom) | ⬜ |
+| Maximaliseren van één pane (zoom) | ✅ Ctrl+Shift+Enter |
+| Centrale command registry (acties + sneltoetsen op één plek) | ✅ |
+| Command Palette (Ctrl+Shift+P, fuzzy, recent, alleen toepasbare acties) | ✅ Windows (2026-11-10) |
+| Menubalk (leest uit de registry) | ⬜ volgende stap |
 | File Explorer | ⬜ |
 | Drag-and-drop bestanden → terminal (shell-specifieke escaping) | ⬜ |
 | Menubalk + centrale command registry | ⬜ |
@@ -29,7 +32,7 @@ Legenda: ✅ klaar en getest · 🟡 deels · ⬜ open. "Getest" betekent: daadw
 
 ## Fase 3 — Premium UI
 
-Design system ✅ (tokens), thema's ⬜ (alleen Forge Dark), Theme Editor ⬜, animaties ⬜, Command Palette ⬜, splashscreen ⬜ (met reduced-motion en uitschakelbaar), logo ✅ (eerste versie, `assets/branding`).
+Design system ✅ (tokens), thema's ⬜ (alleen Forge Dark), Theme Editor ⬜, animaties ⬜, Command Palette ✅, splashscreen ⬜ (met reduced-motion en uitschakelbaar), logo ✅ (eerste versie, `assets/branding`).
 
 ## Fase 4 — Analytics
 

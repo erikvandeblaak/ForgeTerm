@@ -307,6 +307,22 @@ impl Session {
         self.term.lock().scroll_display(Scroll::Delta(lines));
     }
 
+    pub fn scroll_to_top(&self) {
+        self.term.lock().scroll_display(Scroll::Top);
+    }
+
+    pub fn scroll_to_bottom(&self) {
+        self.term.lock().scroll_display(Scroll::Bottom);
+    }
+
+    /// Drops all scrollback history (the visible screen is kept). Clears the
+    /// selection too, since it may point into the removed lines.
+    pub fn clear_scrollback(&self) {
+        let mut term = self.term.lock();
+        term.selection = None;
+        term.grid_mut().clear_history();
+    }
+
     pub fn modes(&self) -> Modes {
         let term = self.term.lock();
         let m = *term.mode();

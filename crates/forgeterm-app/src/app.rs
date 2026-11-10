@@ -9,9 +9,11 @@ use forgeterm_terminal::{
 use iced::keyboard::{self, key::Named};
 use iced::widget::canvas::Canvas;
 use iced::widget::pane_grid::{self, Axis, Direction, PaneGrid};
-use iced::widget::{button, column, container, pick_list, row, space, svg, text};
+use iced::widget::{button, column, container, pick_list, row, space, stack, svg, text};
 use iced::{Border, Color, Element, Event, Length, Subscription, Task, clipboard, event};
 
+use crate::commands::{CommandId, Dir, Keymap, STATIC_COMMANDS};
+use crate::palette::{self as command_palette, CommandPalette, Entry};
 use crate::terminal_pane::{Outcome, Status, TermId, TermMsg, TerminalPane};
 use crate::terminal_view::{Metrics, TerminalCanvas};
 use crate::workspace::Workspace;
@@ -34,20 +36,25 @@ pub enum Message {
         key: keyboard::Key,
         text: Option<String>,
         modifiers: keyboard::Modifiers,
+        captured: bool,
     },
-    /// New tab; `None` = default shell, `Some(i)` = `detect_shells()[i]`.
-    NewTab(Option<usize>),
     ShellPicked(ShellChoice),
+    /// Tab-bar clicks (not recorded as "recent commands").
     SelectTab(usize),
     CloseTab(usize),
-    Split(Axis),
-    ClosePane,
     FocusPane(pane_grid::Pane),
     PaneResized(pane_grid::ResizeEvent),
     Paste,
     ClipboardText(Option<String>),
     ConfirmPaste,
     CancelPaste,
+    /// Run a registered command (palette, menus, buttons all go through here).
+    Command(CommandId),
+    PaletteQuery(String),
+    /// Run the selected (`None`) or the given result row.
+    PaletteRun(Option<usize>),
+    PaletteHover(usize),
+    PaletteClose,
 }
 
 /// Entry of the "new tab with shell…" dropdown.
@@ -74,6 +81,10 @@ pub struct App {
     pending_paste: Option<(TermId, String)>,
     /// Fatal problem shown instead of a terminal (e.g. no shell installed).
     error: Option<String>,
+    keymap: Keymap,
+    command_palette: Option<CommandPalette>,
+    /// Most recently run commands, newest first (palette ordering).
+    recent_commands: Vec<CommandId>,
 }
 
 impl App {
@@ -87,6 +98,9 @@ impl App {
             metrics: Metrics::new(DEFAULT_FONT_SIZE),
             pending_paste: None,
             error: None,
+            keymap: Keymap::default(),
+            command_palette: None,
+            recent_commands: Vec::new(),
         };
         let task = app.new_tab(None);
         (app, task)
@@ -131,6 +145,7 @@ impl App {
         let Some(shell) = shell else {
             return Task::none();
         };
+        self.restore_zoom();
         let (id, task) = self.spawn_terminal(shell);
         let split = self
             .workspace
@@ -148,6 +163,9 @@ impl App {
     /// Closes a terminal's pane (and its tab if it was the last pane).
     /// Exits the app when nothing is left.
     fn close_terminal(&mut self, id: TermId) -> Task<Message> {
+        if let Some((tab_index, _)) = self.workspace.locate(id) {
+            self.workspace.tabs[tab_index].panes.restore();
+        }
         self.workspace.remove_terminal(id);
         self.terminals.remove(&id);
         if self.pending_paste.as_ref().is_some_and(|(t, _)| *t == id) {
@@ -185,6 +203,12 @@ impl App {
         }
     }
 
+    fn restore_zoom(&mut self) {
+        if let Some(tab) = self.workspace.active_tab_mut() {
+            tab.panes.restore();
+        }
+    }
+
     fn focused(&self) -> Option<&TerminalPane> {
         self.workspace
             .focused()
@@ -214,7 +238,9 @@ impl App {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        event::listen_with(|event, _status, _window| match event {
+        event::listen_with(|event, status, _window| match event {
+            // Keys a widget already handled (e.g. Enter submitting the palette's text
+            // input) must not also reach the terminal.
             Event::Keyboard(keyboard::Event::KeyPressed {
                 key,
                 text,
@@ -224,6 +250,8 @@ impl App {
                 key,
                 text: text.map(|t| t.to_string()),
                 modifiers,
+                // A widget (e.g. the palette's text input) already handled this key.
+                captured: status == event::Status::Captured,
             }),
             _ => None,
         })
@@ -251,21 +279,17 @@ impl App {
                 key,
                 text,
                 modifiers,
-            } => return self.on_key(key, text, modifiers),
-            Message::NewTab(index) => return self.new_tab(index),
-            Message::ShellPicked(choice) => return self.new_tab(Some(choice.index)),
+                captured,
+            } => return self.on_key(key, text, modifiers, captured),
+            Message::ShellPicked(choice) => {
+                return self.run_command(CommandId::NewTabWithShell(choice.index));
+            }
             Message::SelectTab(index) => {
                 if self.workspace.select(index) {
                     self.refresh_visible();
                 }
             }
             Message::CloseTab(index) => return self.close_tab(index),
-            Message::Split(axis) => return self.split(axis),
-            Message::ClosePane => {
-                if let Some(id) = self.workspace.focused() {
-                    return self.close_terminal(id);
-                }
-            }
             Message::FocusPane(pane) => {
                 if let Some(tab) = self.workspace.active_tab_mut()
                     && tab.focus != pane
@@ -299,6 +323,29 @@ impl App {
                 }
             }
             Message::CancelPaste => self.pending_paste = None,
+            Message::Command(id) => return self.run_command(id),
+            Message::PaletteQuery(query) => {
+                if let Some(p) = &mut self.command_palette {
+                    p.set_query(query);
+                }
+            }
+            Message::PaletteHover(index) => {
+                if let Some(p) = &mut self.command_palette {
+                    let delta = index as i32 - p.selected_index() as i32;
+                    p.move_selection(delta);
+                }
+            }
+            Message::PaletteRun(index) => {
+                let id = self.command_palette.as_ref().and_then(|p| match index {
+                    Some(i) => p.command_at(i),
+                    None => p.selected(),
+                });
+                self.command_palette = None;
+                if let Some(id) = id {
+                    return self.run_command(id);
+                }
+            }
+            Message::PaletteClose => self.command_palette = None,
         }
         Task::none()
     }
@@ -354,6 +401,7 @@ impl App {
         key: keyboard::Key,
         text: Option<String>,
         mods: keyboard::Modifiers,
+        captured: bool,
     ) -> Task<Message> {
         // While a paste confirmation is open, the keyboard answers it and nothing else.
         if self.pending_paste.is_some() {
@@ -362,6 +410,15 @@ impl App {
                 keyboard::Key::Named(Named::Escape) => self.update(Message::CancelPaste),
                 _ => Task::none(),
             };
+        }
+
+        // The palette owns the keyboard while open.
+        if self.command_palette.is_some() {
+            return self.palette_key(&key, text.as_deref(), mods, captured);
+        }
+        // Keys handled by a widget never reach the terminal.
+        if captured {
+            return Task::none();
         }
 
         if let Some(task) = self.app_shortcut(&key, mods) {
@@ -392,110 +449,251 @@ impl App {
         Task::none()
     }
 
+    fn palette_key(
+        &mut self,
+        key: &keyboard::Key,
+        text: Option<&str>,
+        mods: keyboard::Modifiers,
+        captured: bool,
+    ) -> Task<Message> {
+        let toggle = keys::binding(key, mods)
+            .and_then(|b| self.keymap.lookup(b))
+            .is_some_and(|id| id == CommandId::CommandPalette);
+        // Escape always closes, even though the text input also reacts to it.
+        if matches!(key, keyboard::Key::Named(Named::Escape)) || toggle {
+            self.command_palette = None;
+            return Task::none();
+        }
+        // The focused text input handles typing, editing and Enter itself.
+        if captured {
+            return Task::none();
+        }
+        let Some(p) = &mut self.command_palette else {
+            return Task::none();
+        };
+        match key {
+            keyboard::Key::Named(Named::ArrowDown) => p.move_selection(1),
+            keyboard::Key::Named(Named::ArrowUp) => p.move_selection(-1),
+            keyboard::Key::Named(Named::PageDown) => p.move_selection(8),
+            keyboard::Key::Named(Named::PageUp) => p.move_selection(-8),
+            keyboard::Key::Named(Named::Tab) if !mods.control() => {
+                p.move_selection(if mods.shift() { -1 } else { 1 });
+            }
+            // Keys that arrive before the input has focus (typing right after
+            // Ctrl+Shift+P) are not lost: Enter runs, text extends the query.
+            keyboard::Key::Named(Named::Enter) => {
+                return self.update(Message::PaletteRun(None));
+            }
+            _ => {
+                if !mods.control()
+                    && !mods.alt()
+                    && let Some(t) = text.filter(|t| !t.chars().any(char::is_control))
+                {
+                    p.push_query(t);
+                }
+            }
+        }
+        Task::none()
+    }
+
     /// Application-level shortcuts. Returns `None` when the key belongs to the terminal.
     fn app_shortcut(
         &mut self,
         key: &keyboard::Key,
         mods: keyboard::Modifiers,
     ) -> Option<Task<Message>> {
-        let (ctrl, shift, alt) = (mods.control(), mods.shift(), mods.alt());
-        let ch = match key {
-            keyboard::Key::Character(c) => c.to_lowercase(),
-            _ => String::new(),
-        };
-        let digit = ch.parse::<usize>().ok().filter(|d| (1..=9).contains(d));
-        let named = |n: Named| matches!(key, keyboard::Key::Named(k) if *k == n);
-
-        // Tabs and panes.
-        if ctrl && shift && !alt {
-            match ch.as_str() {
-                "t" => return Some(self.update(Message::NewTab(None))),
-                "w" => return Some(self.update(Message::ClosePane)),
-                "c" => return Some(self.copy_selection()),
-                "v" => return Some(Task::done(Message::Paste)),
-                _ => {}
-            }
-            if let Some(d) = digit {
-                return Some(self.update(Message::NewTab(Some(d - 1))));
-            }
-        }
-        if ctrl && !alt && named(Named::Tab) {
-            self.workspace.cycle(!shift);
-            self.refresh_visible();
-            return Some(Task::none());
-        }
-        // Alt+N selects tab N (GNOME Terminal convention). Not Ctrl+Alt+N: on Windows
-        // that is AltGr, which types characters on many layouts (US-Intl: Ctrl+Alt+1 = ¡).
-        if alt
-            && !ctrl
-            && !shift
-            && let Some(d) = digit
+        // Ctrl+C with an active selection copies instead of sending SIGINT. Conditional,
+        // so it lives here rather than in the keymap.
+        if mods.control()
+            && !mods.shift()
+            && !mods.alt()
+            && matches!(key, keyboard::Key::Character(c) if c.eq_ignore_ascii_case("c"))
+            && self
+                .focused()
+                .and_then(TerminalPane::session)
+                .is_some_and(|s| s.selection_text().is_some())
         {
-            return Some(self.update(Message::SelectTab(d - 1)));
+            return Some(self.copy_selection());
         }
-        if alt && shift && !ctrl {
-            match ch.as_str() {
-                "=" | "+" => return Some(self.update(Message::Split(Axis::Vertical))),
-                "-" | "_" => return Some(self.update(Message::Split(Axis::Horizontal))),
-                _ => {}
+
+        let id = self.keymap.lookup(keys::binding(key, mods)?)?;
+        // Pane focus keys only make sense with several panes; otherwise Alt+Arrow
+        // belongs to the program in the terminal.
+        if matches!(id, CommandId::FocusPane(_)) && !self.has_splits() {
+            return None;
+        }
+        Some(self.run_command(id))
+    }
+
+    fn has_splits(&self) -> bool {
+        self.workspace
+            .active_tab()
+            .is_some_and(|tab| tab.panes.len() > 1)
+    }
+
+    /// The single place where commands are executed.
+    pub fn run_command(&mut self, id: CommandId) -> Task<Message> {
+        if id != CommandId::CommandPalette {
+            self.recent_commands.retain(|c| *c != id);
+            self.recent_commands.insert(0, id);
+            self.recent_commands.truncate(command_palette::RECENT_LIMIT);
+        }
+        match id {
+            CommandId::CommandPalette => {
+                if self.command_palette.take().is_some() {
+                    return Task::none();
+                }
+                let entries = self.palette_entries();
+                self.command_palette = Some(CommandPalette::new(entries, &self.recent_commands));
+                return iced::widget::operation::focus(command_palette::INPUT_ID);
             }
-        }
-        if alt && !shift && !ctrl {
-            let direction = match key {
-                keyboard::Key::Named(Named::ArrowLeft) => Some(Direction::Left),
-                keyboard::Key::Named(Named::ArrowRight) => Some(Direction::Right),
-                keyboard::Key::Named(Named::ArrowUp) => Some(Direction::Up),
-                keyboard::Key::Named(Named::ArrowDown) => Some(Direction::Down),
-                _ => None,
-            };
-            if let Some(direction) = direction
-                && let Some(tab) = self.workspace.active_tab_mut()
-                && tab.panes.len() > 1
-            {
-                if tab.focus_adjacent(direction) {
+            CommandId::NewTab => return self.new_tab(None),
+            CommandId::NewTabWithShell(i) => {
+                if i < self.shells.len() {
+                    return self.new_tab(Some(i));
+                }
+            }
+            CommandId::CloseTab => return self.close_tab(self.workspace.active),
+            CommandId::ClosePane => {
+                if let Some(id) = self.workspace.focused() {
+                    return self.close_terminal(id);
+                }
+            }
+            CommandId::NextTab | CommandId::PreviousTab => {
+                self.workspace.cycle(id == CommandId::NextTab);
+                self.refresh_visible();
+            }
+            CommandId::SelectTab(i) => {
+                if self.workspace.select(i) {
                     self.refresh_visible();
                 }
-                return Some(Task::none());
             }
-        }
-
-        // Clipboard, zoom, scrollback.
-        if shift && !ctrl && named(Named::Insert) {
-            return Some(Task::done(Message::Paste));
-        }
-        if ctrl && !alt && !shift {
-            match ch.as_str() {
-                "=" | "+" => {
-                    self.set_font_size(self.metrics.font_size + 1.0);
-                    return Some(Task::none());
-                }
-                "-" => {
-                    self.set_font_size(self.metrics.font_size - 1.0);
-                    return Some(Task::none());
-                }
-                "0" => {
-                    self.set_font_size(DEFAULT_FONT_SIZE);
-                    return Some(Task::none());
-                }
-                // Ctrl+C with an active selection copies instead of sending SIGINT.
-                "c" if self
-                    .focused()
-                    .and_then(TerminalPane::session)
-                    .is_some_and(|s| s.selection_text().is_some()) =>
+            CommandId::SplitRight => return self.split(Axis::Vertical),
+            CommandId::SplitDown => return self.split(Axis::Horizontal),
+            CommandId::TogglePaneZoom => {
+                if let Some(tab) = self.workspace.active_tab_mut()
+                    && tab.panes.len() > 1
                 {
-                    return Some(self.copy_selection());
+                    if tab.panes.maximized().is_some() {
+                        tab.panes.restore();
+                    } else {
+                        tab.panes.maximize(tab.focus);
+                    }
+                    self.refresh_visible();
                 }
-                _ => {}
             }
+            CommandId::FocusPane(dir) => {
+                let direction = match dir {
+                    Dir::Left => Direction::Left,
+                    Dir::Right => Direction::Right,
+                    Dir::Up => Direction::Up,
+                    Dir::Down => Direction::Down,
+                };
+                self.restore_zoom();
+                if let Some(tab) = self.workspace.active_tab_mut()
+                    && tab.focus_adjacent(direction)
+                {
+                    self.refresh_visible();
+                }
+            }
+            CommandId::RestartShell => {
+                let (metrics, palette) = (self.metrics, &self.palette);
+                if let Some(focused) = self.workspace.focused()
+                    && let Some(t) = self.terminals.get_mut(&focused)
+                {
+                    return t.restart(metrics, palette);
+                }
+            }
+            CommandId::ClearScrollback
+            | CommandId::ScrollToTop
+            | CommandId::ScrollToBottom
+            | CommandId::ScrollPageUp
+            | CommandId::ScrollPageDown => {
+                let palette = &self.palette;
+                if let Some(focused) = self.workspace.focused()
+                    && let Some(t) = self.terminals.get_mut(&focused)
+                {
+                    if let Some(s) = t.session() {
+                        let page = i32::from(t.grid.1.saturating_sub(1).max(1));
+                        match id {
+                            CommandId::ClearScrollback => s.clear_scrollback(),
+                            CommandId::ScrollToTop => s.scroll_to_top(),
+                            CommandId::ScrollToBottom => s.scroll_to_bottom(),
+                            CommandId::ScrollPageUp => s.scroll(page),
+                            _ => s.scroll(-page),
+                        }
+                    }
+                    t.refresh(palette);
+                }
+            }
+            CommandId::Copy => return self.copy_selection(),
+            CommandId::Paste => return Task::done(Message::Paste),
+            CommandId::ZoomIn => self.set_font_size(self.metrics.font_size + 1.0),
+            CommandId::ZoomOut => self.set_font_size(self.metrics.font_size - 1.0),
+            CommandId::ZoomReset => self.set_font_size(DEFAULT_FONT_SIZE),
         }
-        if shift && !ctrl && !alt && (named(Named::PageUp) || named(Named::PageDown)) {
-            let id = self.workspace.focused()?;
-            let rows = self.terminals.get(&id)?.grid.1;
-            let page = i32::from(rows.saturating_sub(1).max(1));
-            let lines = if named(Named::PageUp) { page } else { -page };
-            return Some(self.on_term_msg(id, TermMsg::Scroll(lines)));
+        Task::none()
+    }
+
+    /// Whether a command can do something right now. The palette only lists
+    /// applicable commands, so nothing it shows is a no-op.
+    fn is_applicable(&self, id: CommandId) -> bool {
+        let focused = self.focused();
+        match id {
+            CommandId::FocusPane(_) | CommandId::TogglePaneZoom => self.has_splits(),
+            CommandId::NextTab | CommandId::PreviousTab => self.workspace.tabs.len() > 1,
+            CommandId::Copy => focused
+                .and_then(TerminalPane::session)
+                .is_some_and(|s| s.selection_text().is_some()),
+            CommandId::Paste
+            | CommandId::ClearScrollback
+            | CommandId::ScrollToTop
+            | CommandId::ScrollToBottom
+            | CommandId::ScrollPageUp
+            | CommandId::ScrollPageDown => focused.is_some_and(TerminalPane::is_running),
+            CommandId::RestartShell
+            | CommandId::ClosePane
+            | CommandId::CloseTab
+            | CommandId::SplitRight
+            | CommandId::SplitDown => focused.is_some(),
+            CommandId::NewTabWithShell(i) => i < self.shells.len(),
+            CommandId::SelectTab(i) => i < self.workspace.tabs.len() && i != self.workspace.active,
+            CommandId::CommandPalette
+            | CommandId::NewTab
+            | CommandId::ZoomIn
+            | CommandId::ZoomOut
+            | CommandId::ZoomReset => true,
         }
-        None
+    }
+
+    fn palette_entries(&self) -> Vec<Entry> {
+        let entry = |id: CommandId, title: String| Entry {
+            id,
+            label: format!("{}: {}", id.category(), title),
+            hint: self.keymap.binding_for(id).map(|b| b.to_string()),
+        };
+        let mut entries: Vec<Entry> = STATIC_COMMANDS
+            .iter()
+            .map(|&id| entry(id, id.static_title().to_owned()))
+            .collect();
+        for (i, shell) in self.shells.iter().enumerate() {
+            entries.push(entry(
+                CommandId::NewTabWithShell(i),
+                format!("New Tab with {}", shell.name),
+            ));
+        }
+        for (i, tab) in self.workspace.tabs.iter().enumerate() {
+            let title = tab
+                .focused()
+                .and_then(|id| self.terminals.get(&id))
+                .map_or_else(|| "—".to_owned(), TerminalPane::display_title);
+            entries.push(entry(
+                CommandId::SelectTab(i),
+                format!("Go to Tab {}: {}", i + 1, title),
+            ));
+        }
+        entries.retain(|e| self.is_applicable(e.id));
+        entries
     }
 
     fn copy_selection(&mut self) -> Task<Message> {
@@ -534,7 +732,11 @@ impl App {
             (None, Some(tab)) => self.view_panes(tab),
             (None, None) => space::vertical().into(),
         };
-        layout.push(body).push(self.view_status_bar()).into()
+        let base: Element<'_, Message> = layout.push(body).push(self.view_status_bar()).into();
+        match &self.command_palette {
+            Some(p) => stack![base, p.view()].into(),
+            None => base,
+        }
     }
 
     fn view_top_bar(&self) -> Element<'_, Message> {
@@ -594,7 +796,7 @@ impl App {
             })
             .collect();
         let new_tab = button(text("+").size(15).color(theme::TEXT))
-            .on_press(Message::NewTab(None))
+            .on_press(Message::Command(CommandId::NewTab))
             .padding([2, 9])
             .style(|_, status| ghost_button(status, theme::CYAN));
         let shell_menu = pick_list(choices, None::<ShellChoice>, Message::ShellPicked)
@@ -715,11 +917,16 @@ impl App {
             });
         let layout = self.workspace.active_tab().map_or_else(String::new, |tab| {
             format!(
-                "Tab {}/{} · {} pane{}",
+                "Tab {}/{} · {} pane{}{}",
                 self.workspace.active + 1,
                 self.workspace.tabs.len(),
                 tab.panes.len(),
-                if tab.panes.len() == 1 { "" } else { "s" }
+                if tab.panes.len() == 1 { "" } else { "s" },
+                if tab.panes.maximized().is_some() {
+                    " · zoomed (Ctrl+Shift+Enter)"
+                } else {
+                    ""
+                }
             )
         });
 
