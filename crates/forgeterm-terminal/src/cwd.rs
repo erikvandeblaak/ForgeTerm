@@ -205,15 +205,20 @@ mod tests {
 
     #[test]
     fn network_and_device_paths_are_refused() {
-        // Would make the is_dir check contact a remote host.
-        for evil in [
+        // Would make the is_dir check contact a remote host (Windows), or are not
+        // absolute paths at all.
+        let mut refused = vec![
             &b"\x1b]9;9;\\\\attacker.example\\share\x07"[..],
-            b"\x1b]9;9;//attacker.example/share\x07",
-            b"\x1b]7;file://x//attacker.example/share\x07",
             b"\x1b]9;9;\\\\?\\UNC\\attacker\\share\x07",
             b"\x1b]9;9;\\\\.\\pipe\\x\x07",
             b"\x1b]9;9;relative\\dir\x07",
-        ] {
+        ];
+        if cfg!(windows) {
+            // On Linux "//host/share" is an ordinary local path (no network access).
+            refused.push(b"\x1b]9;9;//attacker.example/share\x07");
+            refused.push(b"\x1b]7;file://x//attacker.example/share\x07");
+        }
+        for evil in refused {
             assert_eq!(scan(&[evil]), None, "{}", String::from_utf8_lossy(evil));
         }
         if cfg!(windows) {
@@ -230,9 +235,17 @@ mod tests {
     #[test]
     fn osc9_9_windows_terminal_style() {
         let got = scan(&[b"\x1b]9;9;C:\\Users\\erik\\My Docs\x1b\\PS> "]);
-        assert_eq!(got, Some(native(r"C:\Users\erik\My Docs")));
         let quoted = scan(&[b"\x1b]9;9;\"C:\\x y\"\x07"]);
-        assert_eq!(quoted.as_deref(), Some(native(r"C:\x y")).as_deref());
+        if cfg!(windows) {
+            assert_eq!(got, Some(native(r"C:\Users\erik\My Docs")));
+            assert_eq!(quoted.as_deref(), Some(native(r"C:\x y")).as_deref());
+        } else {
+            // A Windows path means nothing on Linux: not a local path, ignored.
+            assert_eq!(got, None);
+            assert_eq!(quoted, None);
+            // The same report with a Linux path is accepted.
+            assert_eq!(scan(&[b"\x1b]9;9;/home/x\x07"]).as_deref(), Some("/home/x"));
+        }
     }
 
     // Test paths use the MSYS form /c/...: C:\... on Windows, absolute on Unix,
