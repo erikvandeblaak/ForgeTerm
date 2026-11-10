@@ -1,10 +1,19 @@
 {
     "recommendations": [
+        // Rust: language server (clippy on save, test explorer, Run/Debug code lenses)
         "rust-lang.rust-analyzer",
-        "vadimcn.vscode-lldb",
+        // Debuggers: cppvsdbg (MSVC, Windows) and LLDB (tests, Linux/WSL)
         "ms-vscode.cpptools",
+        "vadimcn.vscode-lldb",
+        // Cargo.toml / settings.toml / rustfmt.toml
         "tamasfe.even-better-toml",
+        // Outdated crate versions inline in Cargo.toml
         "fill-labs.dependi",
-        "usernamehw.errorlens"
+        // Errors and clippy warnings inline at the line
+        "usernamehw.errorlens",
+        // scripts/*.ps1 (packaging)
+        "ms-vscode.powershell",
+        // Linux tests in WSL Ubuntu (see CLAUDE.md): "WSL: Connect to WSL"
+        "ms-vscode-remote.remote-wsl"
     ]
 }

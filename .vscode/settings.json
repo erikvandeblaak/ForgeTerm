@@ -1,16 +1,37 @@
 {
+    // --- rust-analyzer ---------------------------------------------------------
+    // Clippy on save, same lints as the quality gate (workspace lints in Cargo.toml).
     "rust-analyzer.check.command": "clippy",
     "rust-analyzer.check.allTargets": true,
+    "rust-analyzer.check.workspace": true,
+    // Own target dir (target/rust-analyzer): no lock contention with `cargo run`/tests.
     "rust-analyzer.cargo.targetDir": true,
     "rust-analyzer.procMacro.enable": true,
     "rust-analyzer.imports.granularity.group": "module",
     "rust-analyzer.completion.autoimport.enable": true,
+    "rust-analyzer.completion.fullFunctionSignatures.enable": true,
     "rust-analyzer.testExplorer": true,
-    "debug.allowBreakpointsEverywhere": true,
-    "rust-analyzer.cargo.features": "all",
+    "rust-analyzer.runnables.extraEnv": { "RUST_BACKTRACE": "1" },
     "rust-analyzer.inlayHints.parameterHints.enable": true,
     "rust-analyzer.inlayHints.typeHints.enable": true,
+    "rust-analyzer.inlayHints.chainingHints.enable": true,
+    "rust-analyzer.inlayHints.closureReturnTypeHints.enable": "with_block",
+    "rust-analyzer.inlayHints.lifetimeElisionHints.enable": "skip_trivial",
     "rust-analyzer.lens.enable": true,
+    "rust-analyzer.lens.references.adt.enable": true,
+    "rust-analyzer.lens.references.trait.enable": true,
+    "rust-analyzer.hover.actions.references.enable": true,
+    "rust-analyzer.diagnostics.styleLints.enable": true,
+    // Unix code paths (#[cfg(unix)]) are checked via the task
+    // "Clippy (Linux-target)"; switch here temporarily to edit them with full IDE support:
+    // "rust-analyzer.cargo.target": "x86_64-unknown-linux-gnu",
+
+    // --- Editor ----------------------------------------------------------------
+    "debug.allowBreakpointsEverywhere": true,
+    "editor.inlayHints.enabled": "onUnlessPressed",
+    "editor.bracketPairColorization.enabled": true,
+    "editor.guides.bracketPairs": "active",
+    "editor.stickyScroll.enabled": true,
     "[rust]": {
         "editor.defaultFormatter": "rust-lang.rust-analyzer",
         "editor.formatOnSave": true,
@@ -20,17 +41,43 @@
         "editor.defaultFormatter": "tamasfe.even-better-toml",
         "editor.formatOnSave": true
     },
+    "[markdown]": {
+        "files.trimTrailingWhitespace": false
+    },
+    "evenBetterToml.formatter.reorderKeys": false,
+    "evenBetterToml.formatter.columnWidth": 100,
+
+    // --- Files: LF everywhere (.gitattributes: eol=lf) ---------------------------
+    "files.eol": "\n",
+    "files.insertFinalNewline": true,
+    "files.trimFinalNewlines": true,
+    "files.trimTrailingWhitespace": true,
+    "files.associations": {
+        "rustfmt.toml": "toml"
+    },
     "files.exclude": {
         "**/target": true
     },
     "files.watcherExclude": {
-        "**/target/**": true
+        "**/target/**": true,
+        "**/dist/**": true
     },
     "search.exclude": {
         "**/target": true,
+        "**/dist": true,
         "Cargo.lock": true
     },
+    "explorer.fileNesting.enabled": true,
+    "explorer.fileNesting.patterns": {
+        "Cargo.toml": "Cargo.lock, rustfmt.toml, rust-toolchain.toml",
+        "README.md": "CLAUDE.md"
+    },
+
+    // --- Integrated terminal -----------------------------------------------------
     "terminal.integrated.env.windows": {
+        "RUST_BACKTRACE": "1"
+    },
+    "terminal.integrated.env.linux": {
         "RUST_BACKTRACE": "1"
     }
 }
