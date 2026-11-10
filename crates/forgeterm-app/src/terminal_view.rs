@@ -5,12 +5,13 @@ use forgeterm_terminal::{CellView, CursorShape, Modes, MouseButton, Snapshot, en
 use iced::alignment::Vertical;
 use iced::font::{Style, Weight};
 use iced::mouse::{self, Cursor, ScrollDelta};
-use iced::widget::canvas::{self, Action, Cache, Event, Frame, Geometry, Path, Stroke, Text};
+use iced::widget::canvas::{self, Action, Cache, Event, Frame, Geometry, Text};
 use iced::widget::text::LineHeight;
 use iced::{Font, Pixels, Point, Rectangle, Renderer, Size, Theme, window};
 
 use crate::app::Message;
 use crate::glyphs;
+use crate::terminal_pane::{TermId, TermMsg};
 use crate::theme::to_color;
 
 pub const TERMINAL_FONT: Font = Font::with_name("JetBrains Mono");
@@ -47,11 +48,14 @@ impl Metrics {
 }
 
 pub struct TerminalCanvas<'a> {
+    pub id: TermId,
     pub snapshot: &'a Snapshot,
     pub cache: &'a Cache,
     pub metrics: Metrics,
     pub modes: Modes,
     pub grid: (u16, u16),
+    /// Keyboard focus: unfocused terminals draw a hollow cursor.
+    pub focused: bool,
 }
 
 #[derive(Default)]
@@ -62,6 +66,14 @@ pub struct Interaction {
 }
 
 impl TerminalCanvas<'_> {
+    fn msg(&self, m: TermMsg) -> Message {
+        Message::Term(self.id, m)
+    }
+
+    fn input(&self, bytes: Vec<u8>, focus: bool) -> Message {
+        self.msg(TermMsg::Input { bytes, focus })
+    }
+
     /// Cell under the pointer, plus whether it is on the right half of the cell.
     fn cell_at(&self, bounds: Rectangle, cursor: Cursor) -> Option<(usize, usize, bool)> {
         let p = cursor.position_in(bounds)?;
@@ -88,7 +100,7 @@ impl TerminalCanvas<'_> {
             crate::keys::modifiers(mods),
             self.modes.sgr_mouse,
         )
-        .map(Message::PtyInput)
+        .map(|bytes| self.input(bytes, pressed && button != MouseButton::Motion))
     }
 }
 
@@ -106,7 +118,8 @@ impl canvas::Program<Message> for TerminalCanvas<'_> {
             // Every redraw: make sure the PTY size matches the real widget size.
             Event::Window(window::Event::RedrawRequested(_) | window::Event::Resized(_)) => {
                 let grid = self.metrics.grid_for(bounds.size());
-                (grid != self.grid).then(|| Action::publish(Message::GridResized(grid.0, grid.1)))
+                (grid != self.grid)
+                    .then(|| Action::publish(self.msg(TermMsg::GridResized(grid.0, grid.1))))
             }
             Event::Mouse(mouse_event) => {
                 let mods = iced::keyboard::Modifiers::default();
@@ -137,7 +150,7 @@ impl canvas::Program<Message> for TerminalCanvas<'_> {
                                 Default::default(),
                                 self.modes.sgr_mouse,
                             )?;
-                            Message::PtyInput(one.repeat(lines.unsigned_abs() as usize))
+                            self.input(one.repeat(lines.unsigned_abs() as usize), false)
                         } else if self.modes.alt_screen && self.modes.alternate_scroll {
                             // Programs like `less` without mouse mode: translate to arrow keys.
                             let arrow: &[u8] = if self.modes.app_cursor {
@@ -147,9 +160,9 @@ impl canvas::Program<Message> for TerminalCanvas<'_> {
                             } else {
                                 b"\x1b[B"
                             };
-                            Message::PtyInput(arrow.repeat(lines.unsigned_abs() as usize))
+                            self.input(arrow.repeat(lines.unsigned_abs() as usize), false)
                         } else {
-                            Message::Scroll(lines)
+                            self.msg(TermMsg::Scroll(lines))
                         };
                         Some(Action::publish(msg).and_capture())
                     }
@@ -171,13 +184,15 @@ impl canvas::Program<Message> for TerminalCanvas<'_> {
                             MouseButton::Left => {
                                 state.selecting = true;
                                 Some(
-                                    Action::publish(Message::SelectStart(col, row, right))
-                                        .and_capture(),
+                                    Action::publish(
+                                        self.msg(TermMsg::SelectStart(col, row, right)),
+                                    )
+                                    .and_capture(),
                                 )
                             }
                             // Right click pastes, like Windows Terminal / PuTTY.
                             MouseButton::Right => {
-                                Some(Action::publish(Message::Paste).and_capture())
+                                Some(Action::publish(self.msg(TermMsg::Paste)).and_capture())
                             }
                             _ => None,
                         }
@@ -186,7 +201,7 @@ impl canvas::Program<Message> for TerminalCanvas<'_> {
                         let (col, row, right) = self.cell_at(bounds, cursor)?;
                         if state.selecting {
                             return Some(
-                                Action::publish(Message::SelectUpdate(col, row, right))
+                                Action::publish(self.msg(TermMsg::SelectUpdate(col, row, right)))
                                     .and_capture(),
                             );
                         }
@@ -204,7 +219,9 @@ impl canvas::Program<Message> for TerminalCanvas<'_> {
                     mouse::Event::ButtonReleased(_) => {
                         if state.selecting {
                             state.selecting = false;
-                            return Some(Action::publish(Message::SelectEnd).and_capture());
+                            return Some(
+                                Action::publish(self.msg(TermMsg::SelectEnd)).and_capture(),
+                            );
                         }
                         if let Some(button) = state.reported_button.take() {
                             let (col, row, _) =
@@ -231,7 +248,13 @@ impl canvas::Program<Message> for TerminalCanvas<'_> {
         _cursor: Cursor,
     ) -> Vec<Geometry> {
         let geometry = self.cache.draw(renderer, bounds.size(), |frame| {
-            draw_snapshot(frame, self.snapshot, self.metrics, bounds.size());
+            draw_snapshot(
+                frame,
+                self.snapshot,
+                self.metrics,
+                bounds.size(),
+                self.focused,
+            );
         });
         vec![geometry]
     }
@@ -266,7 +289,7 @@ fn font_for(cell: &CellView) -> Font {
     }
 }
 
-fn draw_snapshot(frame: &mut Frame, snap: &Snapshot, m: Metrics, size: Size) {
+fn draw_snapshot(frame: &mut Frame, snap: &Snapshot, m: Metrics, size: Size, focused: bool) {
     let (cw, ch) = (m.cell_width, m.cell_height);
     frame.fill_rectangle(Point::ORIGIN, size, to_color(snap.background));
 
@@ -382,7 +405,12 @@ fn draw_snapshot(frame: &mut Frame, snap: &Snapshot, m: Metrics, size: Size) {
         let color = to_color(cursor.color);
         let cell = &snap.row(cursor.row)[cursor.col];
         let width = if cell.flags.wide { 2.0 * cw } else { cw };
-        match cursor.shape {
+        let shape = if focused {
+            cursor.shape
+        } else {
+            CursorShape::HollowBlock
+        };
+        match shape {
             CursorShape::Block => {
                 frame.fill_rectangle(p, Size::new(width, ch), color);
                 if cell.c != ' ' {
@@ -401,11 +429,13 @@ fn draw_snapshot(frame: &mut Frame, snap: &Snapshot, m: Metrics, size: Size) {
                 color,
             ),
             CursorShape::HollowBlock => {
-                let path = Path::rectangle(
-                    Point::new(p.x + 0.5, p.y + 0.5),
-                    Size::new(width - 1.0, ch - 1.0),
-                );
-                frame.stroke(&path, Stroke::default().with_color(color).with_width(1.0));
+                // Four 1px edges: crisp without anti-aliasing.
+                let (x, y) = (p.x.round(), p.y.round());
+                let (w, h) = (width.round(), ch.round());
+                frame.fill_rectangle(Point::new(x, y), Size::new(w, 1.0), color);
+                frame.fill_rectangle(Point::new(x, y + h - 1.0), Size::new(w, 1.0), color);
+                frame.fill_rectangle(Point::new(x, y), Size::new(1.0, h), color);
+                frame.fill_rectangle(Point::new(x + w - 1.0, y), Size::new(1.0, h), color);
             }
         }
     }

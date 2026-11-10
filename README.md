@@ -17,11 +17,19 @@ Vereist: Rust (stable) en op Windows de Visual Studio C++ Build Tools + Windows 
 
 | Actie | Toets |
 |---|---|
+| Nieuwe tab (standaardshell) | Ctrl+Shift+T, of **+** in de tabbalk |
+| Nieuwe tab met shell N (zie menu *New tab with…*) | Ctrl+Shift+1 … 9 |
+| Naar tab N | Alt+1 … 9 |
+| Volgende / vorige tab | Ctrl+Tab / Ctrl+Shift+Tab |
+| Splitsen naast elkaar / onder elkaar | Alt+Shift+= / Alt+Shift+- |
+| Focus naar pane links/rechts/boven/onder | Alt+pijltjes, of klik in de pane |
+| Pane (of tab) sluiten | Ctrl+Shift+W, of **×** op de tab |
+| Pane-grootte | Sleep de scheidingslijn |
 | Kopiëren | Ctrl+Shift+C, of Ctrl+C als er een selectie is |
 | Plakken | Ctrl+Shift+V, Shift+Insert, rechtermuisklik |
 | Scrollback | Muiswiel, Shift+PageUp / Shift+PageDown |
 | Lettergrootte | Ctrl+= / Ctrl+- / Ctrl+0 |
-| Shell herstarten na exit | Enter |
+| Shell herstarten na een fout-exit | Enter (een schone `exit` sluit de pane) |
 
 ## Ontwikkelen in VS Code
 

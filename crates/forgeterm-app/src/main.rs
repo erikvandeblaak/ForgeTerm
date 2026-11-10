@@ -4,8 +4,10 @@
 mod app;
 mod glyphs;
 mod keys;
+mod terminal_pane;
 mod terminal_view;
 mod theme;
+mod workspace;
 
 use tracing_subscriber::EnvFilter;
 

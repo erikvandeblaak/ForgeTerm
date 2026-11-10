@@ -17,9 +17,11 @@ Legenda: ✅ klaar en getest · 🟡 deels · ⬜ open. "Getest" betekent: daadw
 | Item | Status |
 |---|---|
 | Hoofdvenster met app-balk en statusbalk | ✅ |
-| Terminaltabs | ⬜ volgende stap |
-| Splits | ⬜ |
-| Shellkeuze (detectie bestaat al in engine) | 🟡 engine klaar, UI ⬜ |
+| Terminaltabs | ✅ Windows (2026-11-10) |
+| Splits (naast/onder elkaar, resize, focus) | ✅ Windows (2026-11-10) |
+| Shellkeuze per tab (pwsh, Windows PowerShell, cmd, Git Bash, WSL) | ✅ — WSL wordt gedetecteerd maar is nog niet in ForgeTerm getest |
+| Panes verslepen naar andere positie | ⬜ (vereist pane-titelbalk) |
+| Maximaliseren van één pane (zoom) | ⬜ |
 | File Explorer | ⬜ |
 | Drag-and-drop bestanden → terminal (shell-specifieke escaping) | ⬜ |
 | Menubalk + centrale command registry | ⬜ |
@@ -54,3 +56,5 @@ Linux Mint-validatie ⬜ · installers (MSI/winget, .deb/AppImage) ⬜ · benchm
 - **Celbreedte afgeleid van JetBrains Mono** (0,6 em). Een andere font vereist meting van de advance — gepland bij font-instellingen.
 - **Muismodifiers** (Shift/Ctrl bij muisrapportage) worden nog niet meegestuurd.
 - **Geen cursor-knipperen**, geen URL-detectie, geen zoekfunctie in output.
+- **Nieuwe tabs/splits starten in de map van ForgeTerm**, niet in de huidige map van de gefocuste shell (vereist OSC 7-cwd-tracking).
+- **Tab-sneltoets Alt+1…9** i.p.v. Ctrl+Alt+N: Ctrl+Alt is AltGr op Windows en typt tekens op veel layouts.

@@ -7,6 +7,8 @@
 | `input::tests` (7) | Toets-encoding (ctrl, alt, DECCKM, modifiers, F-toetsen), muisrapporten SGR/legacy, paste-veiligheid (geen auto-submit, ESC-injectie) | ✅ |
 | `palette::tests` (2) | 256-kleurenkubus, grijstinten, speciale kleuren | ✅ |
 | `tests/pty_roundtrip.rs` | Echte shell (cmd / sh) in PTY: commando in, resultaat in grid, resize, exit-event | ✅ |
+| `workspace::tests` (5) | Tabs toevoegen/selecteren/cyclen, splitsen geeft focus aan nieuwe pane, sluiten geeft focus aan buur, laatste pane sluit tab, actieve index blijft geldig | ✅ |
+| `terminal_pane::tests` (3) | Tabtitels: exe-pad → shellnaam, `cmd.exe - ping …` → `ping …`, programmatitels blijven | ✅ |
 
 Kwaliteitspoort voor iedere wijziging:
 
@@ -37,6 +39,26 @@ Uitgevoerd 2026-11-10 op Windows 11 (26300), PowerShell 7, met screenshots en ge
 | G13 | Plak 1 regel + newline | Ingevoegd, níet uitgevoerd | ✅ |
 | G14 | `exit` → Enter | "Exited (0)", Enter herstart shell | ✅ |
 | G15 | Venster sluiten | Geen weesprocessen (pwsh/conhost) | ✅ |
+
+### Tabs en splits (2026-11-10, Windows 11)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| S1 | Alt+Shift+= en Alt+Shift+- → 3 panes; invoer gaat naar gefocuste pane | ✅ |
+| S2 | Focusrand cyaan, holle cursor in panes zonder focus | ✅ |
+| S3 | Alt+← verplaatst focus; klik in pane focust | ✅ |
+| S4 | Scheidingslijn slepen → grid van beide panes past zich aan (46×35) | ✅ |
+| S5 | Ctrl+Shift+T, Ctrl+Shift+3 (cmd), **+**-knop, menu → Git Bash | ✅ |
+| S6 | Ctrl+Tab cyclet, Alt+N selecteert | ✅ |
+| S7 | `ping` in achtergrondtab loopt door; bij terugkeer volledige output | ✅ |
+| S8 | `exit 3` → pane blijft met melding + amber stip; Ctrl+Shift+W sluit | ✅ |
+| S9 | `exit` (code 0) in split → alleen die pane sluit | ✅ |
+| S10 | × op middelste tab → tab weg, actieve tab blijft dezelfde | ✅ |
+| S11 | Na sluiten: aantal shellprocessen = aantal panes (geen wezen) | ✅ |
+| S12 | Claude Code in rechter split (68 kolommen), Esc sluit af | ✅ |
+| S13 | Git Bash: kleurprompt met branch, `TERM=xterm-256color`, `ls --color` | ✅ |
+
+Gevonden en opgelost tijdens deze tests: Ctrl+Alt+1 botst met AltGr (US-Intl `¡`) → Alt+1…9; cmd-titel bevatte exe-pad; focusrand werd door canvas overschilderd; shellmenu afgekapt.
 
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)
 

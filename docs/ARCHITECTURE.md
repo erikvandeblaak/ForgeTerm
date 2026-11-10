@@ -41,7 +41,9 @@ ForgeTerm/
 │   │   ├── tests/pty_roundtrip.rs# end-to-end test met echte shell
 │   │   └── examples/probe.rs     # diagnose: dump gestylede cellen van een programma
 │   └── forgeterm-app/            # GUI (binary `forgeterm`)
-│       ├── src/app.rs            # state, messages, update, layout
+│       ├── src/app.rs            # state, messages, update, layout, sneltoetsen
+│       ├── src/workspace.rs      # tabs + split-layout (pane_grid-state), unit-getest
+│       ├── src/terminal_pane.rs  # één terminal: sessie, snapshot, levenscyclus, titel
 │       ├── src/terminal_view.rs  # canvas-renderer + muisafhandeling
 │       ├── src/glyphs.rs         # pixel-exacte box-drawing/blok-tekens
 │       ├── src/keys.rs           # iced-toetsen → engine-toetsen
@@ -76,6 +78,14 @@ Belangrijke details:
 - **Antwoorden aan programma's** (`PtyWrite`: device attributes, cursorpositie; kleur- en grootte-queries) worden direct vanuit de listener teruggeschreven, zonder UI-roundtrip — essentieel voor TUI's zoals Claude Code, vim en fzf.
 - **Generaties:** iedere (her)start krijgt een generatienummer; events van een oude sessie worden genegeerd.
 - **Resize:** de canvas vergelijkt bij iedere redraw zijn echte afmetingen met het huidige grid en publiceert `GridResized`. Zo klopt het grid ook als er later panelen bijkomen (de paste-balk bewijst dit al: 140×35 → 140×32).
+
+## 4b. Tabs en splits
+
+- `App.terminals: HashMap<TermId, TerminalPane>` bezit alle terminals; `Workspace { tabs: Vec<Tab>, active }` beschrijft alleen de indeling. Een `Tab` is een iced `pane_grid::State<TermId>` plus de gefocuste pane. Zo kan een terminal later tussen panes/tabs verhuizen zonder zijn sessie te verliezen.
+- Elk bericht van een canvas draagt zijn `TermId` (`Message::Term(id, TermMsg)`); sessie-events dragen `(id, generation)`.
+- **Onzichtbare terminals renderen niet.** Een `Wakeup` voor een terminal buiten de actieve tab zet alleen `dirty`; bij tabwissel worden dirty terminals ververst. Output gaat nooit verloren (die staat in de emulator), alleen het kopiëren naar een snapshot wordt uitgesteld.
+- **Afsluiten:** exitcode 0 sluit de pane (en tab, en app als het de laatste was); een andere exitcode laat de pane met melding staan (Enter = herstart).
+- Focus bepaalt de cursorstijl (blok vs. hol), dus bij iedere focuswissel worden de caches van de actieve tab gewist.
 
 ## 5. Rendering
 
