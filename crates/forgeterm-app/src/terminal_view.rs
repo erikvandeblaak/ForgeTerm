@@ -64,6 +64,8 @@ pub struct Interaction {
     reported_button: Option<MouseButton>,
     last_cell: Option<(usize, usize)>,
     ctrl: bool,
+    /// Keyboard modifiers, for mouse reports (Shift/Alt/Ctrl+click in vim, htop…).
+    mods: iced::keyboard::Modifiers,
     /// Link under the pointer while Ctrl is held: (row, first col, end col, url).
     hover_link: Option<(usize, usize, usize, String)>,
 }
@@ -142,6 +144,7 @@ impl canvas::Program<Message> for TerminalCanvas<'_> {
         match event {
             Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) => {
                 state.ctrl = mods.control();
+                state.mods = *mods;
                 if !state.ctrl && state.hover_link.take().is_some() {
                     return Some(Action::request_redraw());
                 }
@@ -154,7 +157,7 @@ impl canvas::Program<Message> for TerminalCanvas<'_> {
                     .then(|| Action::publish(self.msg(TermMsg::GridResized(grid.0, grid.1))))
             }
             Event::Mouse(mouse_event) => {
-                let mods = iced::keyboard::Modifiers::default();
+                let mods = state.mods;
                 match mouse_event {
                     mouse::Event::WheelScrolled { delta } => {
                         let (col, row, _) = self.cell_at(bounds, cursor)?;

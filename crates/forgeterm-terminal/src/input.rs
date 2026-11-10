@@ -482,6 +482,28 @@ mod tests {
     }
 
     #[test]
+    fn mouse_reports_carry_modifiers() {
+        let shift = Modifiers {
+            shift: true,
+            ..NONE
+        };
+        let ctrl_alt = Modifiers {
+            ctrl: true,
+            alt: true,
+            ..NONE
+        };
+        // SGR: button + 4 (Shift), + 8 (Alt), + 16 (Ctrl).
+        assert_eq!(
+            encode_mouse(MouseButton::Left, true, 4, 2, shift, true).unwrap(),
+            b"\x1b[<4;5;3M"
+        );
+        assert_eq!(
+            encode_mouse(MouseButton::Right, false, 0, 0, ctrl_alt, true).unwrap(),
+            b"\x1b[<26;1;1m"
+        );
+    }
+
+    #[test]
     fn mouse_reports() {
         assert_eq!(
             encode_mouse(MouseButton::Left, true, 0, 0, NONE, true).unwrap(),
