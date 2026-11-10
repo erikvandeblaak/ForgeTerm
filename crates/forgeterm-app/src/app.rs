@@ -9,10 +9,15 @@ use forgeterm_terminal::{
 use iced::keyboard::{self, key::Named};
 use iced::widget::canvas::Canvas;
 use iced::widget::pane_grid::{self, Axis, Direction, PaneGrid};
-use iced::widget::{button, column, container, pick_list, row, space, stack, svg, text};
-use iced::{Border, Color, Element, Event, Length, Subscription, Task, clipboard, event};
+use iced::widget::{
+    button, column, container, mouse_area, opaque, pick_list, row, space, stack, svg, text,
+};
+use iced::{
+    Border, Color, Element, Event, Length, Shadow, Subscription, Task, Vector, clipboard, event,
+};
 
 use crate::commands::{CommandId, Dir, Keymap, STATIC_COMMANDS};
+use crate::menu::{self, Menu, MenuState};
 use crate::palette::{self as command_palette, CommandPalette, Entry};
 use crate::terminal_pane::{Outcome, Status, TermId, TermMsg, TerminalPane};
 use crate::terminal_view::{Metrics, TerminalCanvas};
@@ -55,6 +60,15 @@ pub enum Message {
     PaletteRun(Option<usize>),
     PaletteHover(usize),
     PaletteClose,
+    /// Click on a menu title: opens it, or closes it when it is already open.
+    MenuOpen(usize),
+    /// Mouse over a menu title: switches menus while one is open.
+    MenuHoverTitle(usize),
+    MenuHoverItem(usize),
+    /// Run the entry at this index of the open menu.
+    MenuRun(usize),
+    MenuClose,
+    AboutClose,
 }
 
 /// Entry of the "new tab with shell…" dropdown.
@@ -85,6 +99,9 @@ pub struct App {
     command_palette: Option<CommandPalette>,
     /// Most recently run commands, newest first (palette ordering).
     recent_commands: Vec<CommandId>,
+    menus: Vec<Menu>,
+    menu: Option<MenuState>,
+    about_open: bool,
 }
 
 impl App {
@@ -101,7 +118,11 @@ impl App {
             keymap: Keymap::default(),
             command_palette: None,
             recent_commands: Vec::new(),
+            menus: Vec::new(),
+            menu: None,
+            about_open: false,
         };
+        app.menus = menu::menus(app.shells.len());
         let task = app.new_tab(None);
         (app, task)
     }
@@ -285,11 +306,15 @@ impl App {
                 return self.run_command(CommandId::NewTabWithShell(choice.index));
             }
             Message::SelectTab(index) => {
+                self.menu = None;
                 if self.workspace.select(index) {
                     self.refresh_visible();
                 }
             }
-            Message::CloseTab(index) => return self.close_tab(index),
+            Message::CloseTab(index) => {
+                self.menu = None;
+                return self.close_tab(index);
+            }
             Message::FocusPane(pane) => {
                 if let Some(tab) = self.workspace.active_tab_mut()
                     && tab.focus != pane
@@ -346,6 +371,40 @@ impl App {
                 }
             }
             Message::PaletteClose => self.command_palette = None,
+            Message::MenuOpen(index) => {
+                self.menu = match self.menu {
+                    Some(state) if state.open == index => None,
+                    _ => Some(MenuState::new(index)),
+                };
+            }
+            Message::MenuHoverTitle(index) => {
+                if let Some(state) = &mut self.menu
+                    && state.open != index
+                {
+                    *state = MenuState::new(index);
+                }
+            }
+            Message::MenuHoverItem(index) => {
+                if let Some(state) = &mut self.menu {
+                    state.highlighted = Some(index);
+                }
+            }
+            Message::MenuRun(index) => {
+                let Some(state) = self.menu else {
+                    return Task::none();
+                };
+                let rows = self.menu_rows(state.open);
+                let run = MenuState {
+                    highlighted: Some(index),
+                    ..state
+                };
+                self.menu = None;
+                if let Some(id) = run.highlighted_command(&rows) {
+                    return self.run_command(id);
+                }
+            }
+            Message::MenuClose => self.menu = None,
+            Message::AboutClose => self.about_open = false,
         }
         Task::none()
     }
@@ -412,7 +471,16 @@ impl App {
             };
         }
 
-        // The palette owns the keyboard while open.
+        // Modal overlays own the keyboard while open.
+        if self.about_open {
+            if matches!(key, keyboard::Key::Named(Named::Escape | Named::Enter)) {
+                self.about_open = false;
+            }
+            return Task::none();
+        }
+        if self.menu.is_some() {
+            return self.menu_key(&key);
+        }
         if self.command_palette.is_some() {
             return self.palette_key(&key, text.as_deref(), mods, captured);
         }
@@ -496,6 +564,32 @@ impl App {
         Task::none()
     }
 
+    fn menu_key(&mut self, key: &keyboard::Key) -> Task<Message> {
+        let Some(mut state) = self.menu else {
+            return Task::none();
+        };
+        match key {
+            keyboard::Key::Named(Named::Escape) => {
+                self.menu = None;
+                return Task::none();
+            }
+            keyboard::Key::Named(Named::ArrowLeft) => state.switch(self.menus.len(), -1),
+            keyboard::Key::Named(Named::ArrowRight) => state.switch(self.menus.len(), 1),
+            keyboard::Key::Named(Named::ArrowDown) => state.step(&self.menu_rows(state.open), 1),
+            keyboard::Key::Named(Named::ArrowUp) => state.step(&self.menu_rows(state.open), -1),
+            keyboard::Key::Named(Named::Enter | Named::Space) => {
+                let command = state.highlighted_command(&self.menu_rows(state.open));
+                if let Some(id) = command {
+                    return self.run_command(id);
+                }
+            }
+            // Everything else is swallowed: an open menu never types into the terminal.
+            _ => {}
+        }
+        self.menu = Some(state);
+        Task::none()
+    }
+
     /// Application-level shortcuts. Returns `None` when the key belongs to the terminal.
     fn app_shortcut(
         &mut self,
@@ -533,6 +627,7 @@ impl App {
 
     /// The single place where commands are executed.
     pub fn run_command(&mut self, id: CommandId) -> Task<Message> {
+        self.menu = None;
         if id != CommandId::CommandPalette {
             self.recent_commands.retain(|c| *c != id);
             self.recent_commands.insert(0, id);
@@ -631,6 +726,9 @@ impl App {
             CommandId::ZoomIn => self.set_font_size(self.metrics.font_size + 1.0),
             CommandId::ZoomOut => self.set_font_size(self.metrics.font_size - 1.0),
             CommandId::ZoomReset => self.set_font_size(DEFAULT_FONT_SIZE),
+            CommandId::About => self.about_open = true,
+            // Same as closing the window: sessions are dropped, shells are shut down.
+            CommandId::Quit => return iced::exit(),
         }
         Task::none()
     }
@@ -662,8 +760,40 @@ impl App {
             | CommandId::NewTab
             | CommandId::ZoomIn
             | CommandId::ZoomOut
-            | CommandId::ZoomReset => true,
+            | CommandId::ZoomReset
+            | CommandId::About
+            | CommandId::Quit => true,
         }
+    }
+
+    /// Display title of a command; parameterised commands use live data.
+    fn command_title(&self, id: CommandId) -> String {
+        match id {
+            CommandId::NewTabWithShell(i) => self.shells.get(i).map_or_else(
+                || id.static_title().to_owned(),
+                |s| format!("New Tab with {}", s.name),
+            ),
+            _ => id.static_title().to_owned(),
+        }
+    }
+
+    /// Entries of menu `index`, resolved against the current state.
+    fn menu_rows(&self, index: usize) -> Vec<menu::Row> {
+        let Some(m) = self.menus.get(index) else {
+            return Vec::new();
+        };
+        m.items
+            .iter()
+            .map(|item| match *item {
+                menu::Item::Separator => menu::Row::Separator,
+                menu::Item::Command(id) => menu::Row::Command {
+                    id,
+                    label: self.command_title(id),
+                    hint: self.keymap.binding_for(id).map(|b| b.to_string()),
+                    enabled: self.is_applicable(id),
+                },
+            })
+            .collect()
     }
 
     fn palette_entries(&self) -> Vec<Entry> {
@@ -676,11 +806,9 @@ impl App {
             .iter()
             .map(|&id| entry(id, id.static_title().to_owned()))
             .collect();
-        for (i, shell) in self.shells.iter().enumerate() {
-            entries.push(entry(
-                CommandId::NewTabWithShell(i),
-                format!("New Tab with {}", shell.name),
-            ));
+        for i in 0..self.shells.len() {
+            let id = CommandId::NewTabWithShell(i);
+            entries.push(entry(id, self.command_title(id)));
         }
         for (i, tab) in self.workspace.tabs.iter().enumerate() {
             let title = tab
@@ -733,10 +861,18 @@ impl App {
             (None, None) => space::vertical().into(),
         };
         let base: Element<'_, Message> = layout.push(body).push(self.view_status_bar()).into();
-        match &self.command_palette {
-            Some(p) => stack![base, p.view()].into(),
-            None => base,
+        let mut layers = stack![base];
+        if let Some(state) = &self.menu {
+            let x = menu::dropdown_x(&self.menus, state.open);
+            layers = layers.push(menu::view_dropdown(x, &self.menu_rows(state.open), state));
         }
+        if let Some(p) = &self.command_palette {
+            layers = layers.push(p.view());
+        }
+        if self.about_open {
+            layers = layers.push(view_about());
+        }
+        layers.into()
     }
 
     fn view_top_bar(&self) -> Element<'_, Message> {
@@ -805,10 +941,20 @@ impl App {
             .text_size(12)
             .padding([3, 8]);
 
-        container(
+        let brand = container(
             row![
                 svg(svg::Handle::from_memory(LOGO)).width(22).height(22),
                 text("ForgeTerm").size(15).color(theme::TEXT),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+        )
+        .width(Length::Fixed(menu::BRAND_WIDTH));
+
+        container(
+            row![
+                brand,
+                menu::view_titles(&self.menus, self.menu.as_ref()),
                 space::horizontal().width(10),
                 tabs,
                 new_tab,
@@ -821,7 +967,9 @@ impl App {
             .spacing(8)
             .align_y(iced::Alignment::Center),
         )
-        .padding([6, 14])
+        .padding([0, 14])
+        .height(Length::Fixed(menu::BAR_HEIGHT))
+        .align_y(iced::Alignment::Center)
         .width(Length::Fill)
         .style(|_| bar_style())
         .into()
@@ -1048,6 +1196,67 @@ fn paste_banner(text_to_paste: &str) -> Element<'_, Message> {
         ..Default::default()
     })
     .into()
+}
+
+/// Help → About: version, creator and the open-source components ForgeTerm is built on.
+fn view_about<'a>() -> Element<'a, Message> {
+    let muted = |s: &'static str| text(s).size(12).color(theme::TEXT_MUTED);
+    let close = button(text("Close (Esc)").size(12))
+        .on_press(Message::AboutClose)
+        .padding([6, 14])
+        .style(|_, status| ghost_button(status, theme::CYAN));
+    let card = container(
+        column![
+            row![
+                svg(svg::Handle::from_memory(LOGO)).width(44).height(44),
+                column![
+                    text("ForgeTerm").size(22).color(theme::TEXT),
+                    text(format!("Version {}", env!("CARGO_PKG_VERSION")))
+                        .size(12)
+                        .color(theme::TEXT_MUTED),
+                ]
+                .spacing(2),
+            ]
+            .spacing(14)
+            .align_y(iced::Alignment::Center),
+            text("Erik van de Blaak Edition")
+                .size(13)
+                .color(theme::CYAN),
+            text("Created by Erik van de Blaak")
+                .size(13)
+                .color(theme::TEXT),
+            column![
+                muted("Built with Rust, iced 0.14 (MIT) and alacritty_terminal 0.26 (Apache-2.0)."),
+                muted("Terminal font: JetBrains Mono (SIL Open Font License 1.1)."),
+            ]
+            .spacing(4),
+            row![space::horizontal(), close],
+        ]
+        .spacing(14),
+    )
+    .padding(22)
+    .width(Length::Fixed(460.0))
+    .style(|_| container::Style {
+        background: Some(theme::SURFACE.into()),
+        border: Border {
+            color: theme::BORDER,
+            width: 1.0,
+            radius: 10.0.into(),
+        },
+        shadow: Shadow {
+            color: Color::from_rgba(0.0, 0.0, 0.0, 0.55),
+            offset: Vector::new(0.0, 12.0),
+            blur_radius: 32.0,
+        },
+        ..Default::default()
+    });
+    let backdrop = container(opaque(card))
+        .center(Length::Fill)
+        .style(|_| container::Style {
+            background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.35).into()),
+            ..Default::default()
+        });
+    opaque(mouse_area(backdrop).on_press(Message::AboutClose))
 }
 
 fn bar_style() -> container::Style {

@@ -22,6 +22,8 @@ pub const CORAL: Color = hex(0xF08080);
 
 pub const TEXT: Color = hex(0xD6DEEB);
 pub const TEXT_MUTED: Color = hex(0x8B98AD);
+/// Disabled menu entries (WCAG exempts disabled controls; still legible on SURFACE).
+pub const DISABLED: Color = hex(0x5F6B80);
 pub const BORDER: Color = hex(0x253247);
 pub const SELECTION: Color = hex(0x2B4466);
 

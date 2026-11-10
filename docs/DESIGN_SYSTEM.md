@@ -28,7 +28,7 @@ Beautiful by default · keyboard-first · minimale visuele ruis · maximale info
 | `TEXT` | `#D6DEEB` | Primaire tekst (contrast 14.4:1 op Obsidian) |
 | `TEXT_MUTED` | `#8B98AD` | Secundaire tekst (contrast 6.7:1 op Obsidian, 6.1:1 op Graphite — beide ≥ WCAG AA) |
 
-Disabled: `TEXT_MUTED` op 50% alpha. Geselecteerd (terminal): bg `#2B4466`, fg `#F2F6FB`.
+Disabled: `DISABLED` `#5F6B80` (3.0:1 op Surface; WCAG stelt geen eis aan uitgeschakelde bedieningselementen, maar het blijft leesbaar). Geselecteerd (terminal): bg `#2B4466`, fg `#F2F6FB`.
 
 ## Terminalpalet "Forge Dark"
 

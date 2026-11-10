@@ -1,6 +1,6 @@
 //! Central command registry: every user-facing action has one `CommandId`, a title, a
 //! category and zero or more key bindings. The Command Palette, keyboard handling and
-//! (later) the menu bar all read from here, so an action can never exist in one place
+//! the menu bar all read from here, so an action can never exist in one place
 //! and be missing or behave differently in another.
 //!
 //! Pure data and logic — no iced types — so it is unit-tested.
@@ -42,6 +42,8 @@ pub enum CommandId {
     ZoomIn,
     ZoomOut,
     ZoomReset,
+    About,
+    Quit,
 }
 
 /// Commands that exist regardless of runtime state, in palette order.
@@ -70,6 +72,8 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::ZoomIn,
     CommandId::ZoomOut,
     CommandId::ZoomReset,
+    CommandId::About,
+    CommandId::Quit,
 ];
 
 impl CommandId {
@@ -82,6 +86,8 @@ impl CommandId {
             RestartShell | ClearScrollback | ScrollToTop | ScrollToBottom | ScrollPageUp
             | ScrollPageDown => "Terminal",
             Copy | Paste => "Edit",
+            About => "Help",
+            Quit => "App",
         }
     }
 
@@ -116,6 +122,8 @@ impl CommandId {
             ZoomIn => "Increase Font Size",
             ZoomOut => "Decrease Font Size",
             ZoomReset => "Reset Font Size",
+            About => "About ForgeTerm",
+            Quit => "Quit ForgeTerm",
         }
     }
 }

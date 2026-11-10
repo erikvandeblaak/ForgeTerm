@@ -24,10 +24,9 @@ Legenda: ✅ klaar en getest · 🟡 deels · ⬜ open. "Getest" betekent: daadw
 | Maximaliseren van één pane (zoom) | ✅ Ctrl+Shift+Enter |
 | Centrale command registry (acties + sneltoetsen op één plek) | ✅ |
 | Command Palette (Ctrl+Shift+P, fuzzy, recent, alleen toepasbare acties) | ✅ Windows (2026-11-10) |
-| Menubalk (leest uit de registry) | ⬜ volgende stap |
+| Menubalk (leest uit de registry; File/Edit/View/Terminal/Help, About-venster) | 🟡 Windows: muisbediening getest (2026-11-10); toetsenbordnavigatie, About en Quit nog niet in de GUI getest |
 | File Explorer | ⬜ |
 | Drag-and-drop bestanden → terminal (shell-specifieke escaping) | ⬜ |
-| Menubalk + centrale command registry | ⬜ |
 | Instellingen (TOML) + workspace-opslag (SQLite) | ⬜ |
 
 ## Fase 3 — Premium UI
@@ -60,4 +59,6 @@ Linux Mint-validatie ⬜ · installers (MSI/winget, .deb/AppImage) ⬜ · benchm
 - **Muismodifiers** (Shift/Ctrl bij muisrapportage) worden nog niet meegestuurd.
 - **Geen cursor-knipperen**, geen URL-detectie, geen zoekfunctie in output.
 - **Nieuwe tabs/splits starten in de map van ForgeTerm**, niet in de huidige map van de gefocuste shell (vereist OSC 7-cwd-tracking).
+- **Afsluiten vraagt geen bevestiging** (menu Quit en venster-×), ook niet als er nog processen lopen.
+- **Geen Alt-mnemonics in de menubalk** (Alt+F enz. horen bij de shell); menu's openen met de muis of via de Command Palette.
 - **Tab-sneltoets Alt+1…9** i.p.v. Ctrl+Alt+N: Ctrl+Alt is AltGr op Windows en typt tekens op veel layouts.

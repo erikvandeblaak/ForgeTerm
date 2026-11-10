@@ -12,6 +12,7 @@
 | `fuzzy::tests` (5) | Subsequence, hoofdletterongevoelig, woordbegin wint ("spr" → Split Right), highlight-indices | ✅ |
 | `palette::tests` (5) | Recent eerst, filteren/rangschikken, wrap, venster volgt selectie, vroege toetsaanslagen | ✅ |
 | `tests/pty_roundtrip.rs::scrollback_scroll_and_clear` | 80 regels in echte shell → geschiedenis, naar boven/onder, wissen behoudt scherm | ✅ |
+| `menu::tests` (6) | Elk command staat in een menu, shells per detectie, geen losse/dubbele scheidingslijnen, dropdownpositie volgt titelbreedtes, ↑↓ slaat scheidingslijnen en uitgeschakelde items over (wrap), uitgeschakeld item wordt nooit uitgevoerd | ✅ |
 | `terminal_pane::tests` (3) | Tabtitels: exe-pad → shellnaam, `cmd.exe - ping …` → `ping …`, programmatitels blijven | ✅ |
 
 Kwaliteitspoort voor iedere wijziging:
@@ -79,6 +80,24 @@ Gevonden en opgelost tijdens deze tests: Ctrl+Alt+1 botst met AltGr (US-Intl `¡
 | P9 | Na sluiten gaat typen weer naar de terminal | ✅ |
 
 Gevonden en opgelost: (1) de Enter die de palette bevestigde kwam óók in de nieuwe terminal (dubbele prompt); (2) Esc werd door het invoerveld afgevangen, waardoor de palette onzichtbaar "open" bleef en de volgende Ctrl+Shift+P hem sloot — getypte tekst ging dan naar de shell en werd uitgevoerd. Beide via de `captured`-status opgelost.
+
+### Menubalk (2026-11-10, Windows 11)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| M1 | Titels File/Edit/View/Terminal/Help in topbalk, tabs en branding blijven passen | ✅ |
+| M2 | Klik op File → dropdown exact onder de titel; 5 gedetecteerde shells met Ctrl+Shift+1…5 | ✅ |
+| M3 | Hover over andere titel wisselt van menu; hover markeert item | ✅ |
+| M4 | Niet-toepasbaar is grijs: Copy zonder selectie, Focus Pane / Toggle Zoom bij één pane | ✅ |
+| M5 | Klik buiten het menu sluit het, zonder doorklik naar de terminal | ✅ |
+| M6 | Terminal → Split Right voert de split uit (2 panes, 68×35) | ✅ |
+| M7 | Toetsen bij open menu: ←→ wisselt, ↑↓ navigeert, Enter voert uit, Esc sluit, getypte tekst komt níet in de shell | ⬜ nog niet in GUI (logica unit-getest) |
+| M8 | Help → About: versie, maker, componenten + licenties; Esc / klik sluit | ⬜ |
+| M9 | File → Quit: app sluit, geen weesprocessen | ⬜ |
+
+Gevonden en opgelost: lange items ("New Tab with Windows PowerShell") liepen buiten de dropdown → breedte 340 px.
+
+Testvalkuil: de GUI-scripts klikken op schermcoördinaten. Ligt een ander venster bovenop, dan gaat de klik dáárheen. De helpers controleren nu eerst dat ForgeTerm het voorgrondvenster is en dat het doelpunt op ForgeTerm ligt, en breken anders af. Test niet terwijl de gebruiker de pc actief gebruikt.
 
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)
 

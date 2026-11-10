@@ -6,6 +6,7 @@ mod commands;
 mod fuzzy;
 mod glyphs;
 mod keys;
+mod menu;
 mod palette;
 mod terminal_pane;
 mod terminal_view;

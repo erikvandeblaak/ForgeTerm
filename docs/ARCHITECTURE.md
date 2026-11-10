@@ -46,6 +46,7 @@ ForgeTerm/
 │       ├── src/commands.rs       # centrale command registry + keymap, unit-getest
 │       ├── src/fuzzy.rs          # fuzzy matcher, unit-getest
 │       ├── src/palette.rs        # Command Palette (logica getest + overlay-view)
+│       ├── src/menu.rs           # menubalk: structuur uit de registry, navigatie (getest), dropdown
 │       ├── src/terminal_pane.rs  # één terminal: sessie, snapshot, levenscyclus, titel
 │       ├── src/terminal_view.rs  # canvas-renderer + muisafhandeling
 │       ├── src/glyphs.rs         # pixel-exacte box-drawing/blok-tekens
@@ -93,10 +94,11 @@ Belangrijke details:
 ## 4c. Commands, sneltoetsen en Command Palette
 
 - `commands.rs` is de **centrale registry** (spec §9): elke actie is een `CommandId` met categorie, titel en key bindings (`Keymap`). Geen iced-types; unit-getest (o.a. "geen conflicterende bindings" en "Ctrl+C / AltGr / gewone toetsen worden nooit afgevangen").
-- `App::run_command` is de **enige** plek waar acties worden uitgevoerd. Sneltoetsen, palette, knoppen (en straks de menubalk) sturen allemaal een `CommandId`.
+- `App::run_command` is de **enige** plek waar acties worden uitgevoerd. Sneltoetsen, palette, knoppen en de menubalk sturen allemaal een `CommandId`.
 - `App::is_applicable` bepaalt wat nu zin heeft; de palette toont alleen die commando's, zodat er nooit een optie verschijnt die niets doet.
 - `fuzzy.rs`: subsequence-matcher met bonussen voor woordbegin en aaneengesloten tekens; levert indices voor highlighting.
 - `palette.rs`: filter/rangschik/recent/zichtbaar-venster-logica (getest) + de overlay-view (`stack` + `opaque`, klik buiten = sluiten).
+- **Menubalk** (`menu.rs`): menu's bevatten alleen `CommandId`s (een test eist dat elk command in een menu staat). Labels, sneltoetsen en de aan/uit-status worden bij het tekenen uit de registry, keymap en `is_applicable` gehaald; niet-toepasbare items zijn grijs en niet klikbaar. Titels hebben een vaste breedte, zodat de dropdown zonder tekstmeting exact onder zijn titel staat (`pin` in een `stack`). Een onzichtbare backdrop onder de topbalk sluit het menu bij klikken erbuiten zonder dat de klik doorgaat; de topbalk blijft klikbaar, dus hover over een andere titel wisselt van menu. Geen Alt+letter-mnemonics: Alt+F/B/… zijn readline-sneltoetsen van de shell.
 - **Toetsroutering:** de globale toetsenlistener geeft per toets mee of een widget hem al heeft afgehandeld (`captured`). Afgevangen toetsen gaan nooit naar de terminal; Esc sluit de palette altijd; toetsen die binnenkomen vóórdat het invoerveld focus heeft, worden aan de zoekterm toegevoegd in plaats van verloren te gaan.
 
 ## 5. Rendering
