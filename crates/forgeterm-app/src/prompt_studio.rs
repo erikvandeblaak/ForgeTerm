@@ -1,5 +1,8 @@
 //! Prompt Studio: pick a template, fill in its variables, preview, and insert the
 //! result at the focused terminal's prompt (never followed by Enter) or copy it.
+//! Shown as a floating window (modal) or as a panel beside the terminal (docked),
+//! where the terminal keeps working and the result goes to whichever terminal has
+//! the focus when Insert is pressed.
 
 use std::collections::HashMap;
 
@@ -11,7 +14,6 @@ use iced::{Border, Color, Element, Length, Shadow, Vector};
 
 use crate::app::Message;
 use crate::commands::CommandId;
-use crate::terminal_pane::TermId;
 use crate::terminal_view::TERMINAL_FONT;
 use crate::theme;
 
@@ -22,14 +24,11 @@ pub struct PromptStudio {
     /// One editor per variable name, shared between templates (so `file` stays
     /// filled in when switching).
     editors: HashMap<String, text_editor::Content>,
-    /// Terminal the result goes to: the one focused when the studio opened.
-    pub target: Option<TermId>,
-    target_name: String,
 }
 
 impl PromptStudio {
     /// `auto` holds the values ForgeTerm knows (project, cwd, selection, …).
-    pub fn new(target: Option<TermId>, target_name: String, auto: HashMap<String, String>) -> Self {
+    pub fn new(auto: HashMap<String, String>) -> Self {
         let editors = auto
             .into_iter()
             .filter(|(_, v)| !v.trim().is_empty())
@@ -39,8 +38,6 @@ impl PromptStudio {
             library: None,
             selected: 0,
             editors,
-            target,
-            target_name,
         }
     }
 
@@ -98,13 +95,15 @@ impl PromptStudio {
             .map(|t| forgeterm_prompts::render(&t.body, &self.values()))
     }
 
-    pub fn view(&self) -> Element<'_, Message> {
+    /// Floating window. `target`: name of the terminal Insert goes to.
+    pub fn view(&self, target: Option<&str>) -> Element<'_, Message> {
         let header = row![
             text("Prompt Studio").size(16).color(theme::TEXT),
             space::horizontal(),
-            text(format!("Inserts into: {}", self.target_name))
+            text(format!("Inserts into: {}", target.unwrap_or("no terminal")))
                 .size(12)
                 .color(theme::TEXT_MUTED),
+            plain_button("Dock beside terminal", Some(DOCK)),
             plain_button("×", Some(Message::PromptClose)),
         ]
         .spacing(12)
@@ -114,30 +113,34 @@ impl PromptStudio {
             None => container(text("Loading templates…").size(13).color(theme::TEXT_MUTED))
                 .center(Length::Fill)
                 .into(),
-            Some(lib) => row![self.view_list(lib), self.view_editor()]
-                .spacing(14)
-                .height(Length::Fill)
-                .into(),
+            Some(lib) => row![
+                self.view_list(lib, Length::Fixed(270.0)),
+                self.view_editor(false)
+            ]
+            .spacing(14)
+            .height(Length::Fill)
+            .into(),
         };
 
-        let card = container(column![header, body, self.view_footer()].spacing(12))
-            .padding(16)
-            .width(Length::Fixed(940.0))
-            .height(Length::Fixed(620.0))
-            .style(|_| container::Style {
-                background: Some(theme::SURFACE.into()),
-                border: Border {
-                    color: theme::BORDER,
-                    width: 1.0,
-                    radius: 10.0.into(),
-                },
-                shadow: Shadow {
-                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.55),
-                    offset: Vector::new(0.0, 12.0),
-                    blur_radius: 32.0,
-                },
-                ..Default::default()
-            });
+        let card =
+            container(column![header, body, self.view_footer(target.is_some(), false)].spacing(12))
+                .padding(16)
+                .width(Length::Fixed(940.0))
+                .height(Length::Fixed(620.0))
+                .style(|_| container::Style {
+                    background: Some(theme::SURFACE.into()),
+                    border: Border {
+                        color: theme::BORDER,
+                        width: 1.0,
+                        radius: 10.0.into(),
+                    },
+                    shadow: Shadow {
+                        color: Color::from_rgba(0.0, 0.0, 0.0, 0.55),
+                        offset: Vector::new(0.0, 12.0),
+                        blur_radius: 32.0,
+                    },
+                    ..Default::default()
+                });
         let backdrop = container(opaque(card))
             .center(Length::Fill)
             .padding(16)
@@ -149,7 +152,67 @@ impl PromptStudio {
         opaque(mouse_area(backdrop))
     }
 
-    fn view_list<'a>(&'a self, lib: &'a Library) -> Element<'a, Message> {
+    /// Panel beside the terminal. `focused`: the keyboard is in the studio (Esc or a
+    /// click in a terminal gives it back).
+    pub fn view_docked(&self, target: Option<&str>, focused: bool) -> Element<'_, Message> {
+        let header = row![
+            text("Prompt Studio").size(14).color(theme::TEXT),
+            space::horizontal(),
+            plain_button("Float", Some(DOCK)),
+            plain_button("×", Some(Message::PromptClose)),
+        ]
+        .spacing(6)
+        .align_y(iced::Alignment::Center);
+        let target_line = text(format!(
+            "Inserts into: {}{}",
+            target.unwrap_or("no terminal"),
+            if focused {
+                "  ·  Esc returns to the terminal"
+            } else {
+                ""
+            }
+        ))
+        .size(11)
+        .color(theme::TEXT_MUTED);
+
+        let body: Element<'_, Message> = match &self.library {
+            None => container(text("Loading templates…").size(13).color(theme::TEXT_MUTED))
+                .center(Length::Fill)
+                .into(),
+            Some(lib) => column![
+                container(self.view_list(lib, Length::Fill)).height(Length::FillPortion(2)),
+                container(self.view_editor(true)).height(Length::FillPortion(5)),
+            ]
+            .spacing(10)
+            .height(Length::Fill)
+            .into(),
+        };
+
+        container(
+            column![
+                header,
+                target_line,
+                body,
+                self.view_footer(target.is_some(), true)
+            ]
+            .spacing(8),
+        )
+        .padding(12)
+        .width(Length::Fixed(400.0))
+        .height(Length::Fill)
+        .style(move |_| container::Style {
+            background: Some(theme::SURFACE.into()),
+            border: Border {
+                color: if focused { theme::CYAN } else { theme::BORDER },
+                width: 1.0,
+                radius: 0.0.into(),
+            },
+            ..Default::default()
+        })
+        .into()
+    }
+
+    fn view_list<'a>(&'a self, lib: &'a Library, width: Length) -> Element<'a, Message> {
         let mut list = column![].spacing(2);
         for (index, t) in lib.templates.iter().enumerate() {
             let selected = index == self.selected;
@@ -194,10 +257,11 @@ impl PromptStudio {
                 .size(11)
                 .color(theme::TEXT_MUTED),
         );
-        container(side).width(Length::Fixed(270.0)).into()
+        container(side).width(width).into()
     }
 
-    fn view_editor(&self) -> Element<'_, Message> {
+    /// `docked`: the narrow panel gives the fields more room than the preview.
+    fn view_editor(&self, docked: bool) -> Element<'_, Message> {
         let Some(t) = self.current() else {
             return container(text("No templates").size(13).color(theme::TEXT_MUTED))
                 .center(Length::Fill)
@@ -249,47 +313,56 @@ impl PromptStudio {
         });
 
         column![
-            scrollable(fields).height(Length::FillPortion(1)),
+            scrollable(fields).height(Length::FillPortion(if docked { 3 } else { 1 })),
             text("PREVIEW").size(11).color(theme::TEXT_MUTED),
-            container(preview).height(Length::FillPortion(1)),
+            container(preview).height(Length::FillPortion(if docked { 2 } else { 1 })),
         ]
         .spacing(8)
         .width(Length::Fill)
         .into()
     }
 
-    fn view_footer(&self) -> Element<'_, Message> {
+    /// `has_target`: a running terminal can take the text. `stacked`: status above
+    /// the buttons (narrow panel).
+    fn view_footer(&self, has_target: bool, stacked: bool) -> Element<'_, Message> {
         let rendered = self.rendered();
         let ready = rendered.as_ref().is_some_and(|r| r.missing.is_empty());
         let status = match &rendered {
             Some(r) if !r.missing.is_empty() => text(format!("Fill in: {}", r.missing.join(", ")))
                 .size(12)
                 .color(theme::AMBER),
-            Some(_) if self.target.is_none() => {
-                text("No terminal to insert into; Copy still works.")
-                    .size(12)
-                    .color(theme::AMBER)
-            }
+            Some(_) if !has_target => text("No terminal to insert into; Copy still works.")
+                .size(12)
+                .color(theme::AMBER),
             Some(_) => text("Inserted at the prompt without Enter: you decide when to send it.")
                 .size(12)
                 .color(theme::TEXT_MUTED),
             None => text("").size(12),
         };
         let has_text = rendered.as_ref().is_some_and(|r| !r.text.is_empty());
-        row![
-            status,
+        let buttons = row![
             space::horizontal(),
             plain_button("Copy", has_text.then_some(Message::PromptCopy)),
             primary_button(
                 "Insert (no Enter)",
-                (ready && self.target.is_some()).then_some(Message::PromptInsert)
+                (ready && has_target).then_some(Message::PromptInsert)
             ),
         ]
         .spacing(8)
-        .align_y(iced::Alignment::Center)
-        .into()
+        .align_y(iced::Alignment::Center);
+        if stacked {
+            column![status, buttons].spacing(6).into()
+        } else {
+            row![status, buttons]
+                .spacing(8)
+                .align_y(iced::Alignment::Center)
+                .into()
+        }
     }
 }
+
+/// Header button: switch between floating window and panel beside the terminal.
+const DOCK: Message = Message::Command(CommandId::TogglePromptStudioDock);
 
 fn field(content: &text_editor::Content, name: String) -> Element<'_, Message> {
     text_editor(content)
@@ -411,7 +484,7 @@ mod tests {
             ("project".to_owned(), "Forge".to_owned()),
             ("selection".to_owned(), "   ".to_owned()),
         ]);
-        let mut s = PromptStudio::new(Some(1), "PowerShell".into(), auto);
+        let mut s = PromptStudio::new(auto);
         s.set_library(forgeterm_prompts::load(None));
         s
     }

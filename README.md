@@ -33,6 +33,7 @@ Vereist: Rust (stable) en op Windows de Visual Studio C++ Build Tools + Windows 
 | Instellingen openen (`settings.toml`, wordt live toegepast) | **Ctrl+,** of File → Open Settings File |
 | AI-werkplek (Claude Code / Codex starten, projectcontext) | **Ctrl+Shift+A** of menu AI |
 | Prompt Studio (sjabloon kiezen, variabelen invullen, invoegen zonder Enter) | **Ctrl+Shift+I** of AI → Prompt Studio |
+| Prompt Studio naast de terminal (of weer zwevend) | knop *Dock beside terminal* / *Float* in de studio, of AI → Prompt Studio Beside Terminal / Floating |
 | Monitor: CPU en geheugen van het systeem en per terminal (echte metingen) | **Ctrl+Shift+M** of View → Toggle Monitor |
 | Code-viewer (bestanden bekijken met kleuring, minimap, zoeken) | **Ctrl+Shift+O**, View in de verkenner, of *Open in viewer* in een Git-diff |
 | Git-paneel (status, diff, stage/unstage, commit, recente commits) | **Ctrl+Shift+G**, menu Git, of klik op de branch in de statusbalk |
@@ -48,7 +49,9 @@ Vereist: Rust (stable) en op Windows de Visual Studio C++ Build Tools + Windows 
 
 ## Prompt Studio
 
-Sjablonen met `{{variabelen}}`. ForgeTerm vult in wat het echt weet (`project`, `project_path`, `cwd`, `selection` = geselecteerde terminaltekst, `file` = in de verkenner geselecteerd bestand, relatief aan de projectroot); al het andere typ je zelf. **Insert (no Enter)** zet de tekst bij de prompt van de terminal die gefocust was toen de studio openging; jij beslist wanneer je verstuurt. Meerregelige tekst in een shell zonder bracketed paste vraagt eerst bevestiging. **Copy** zet hem op het klembord.
+Sjablonen met `{{variabelen}}`. ForgeTerm vult in wat het echt weet (`project`, `project_path`, `cwd`, `selection` = geselecteerde terminaltekst, `file` = in de verkenner geselecteerd bestand, relatief aan de projectroot); al het andere typ je zelf. **Insert (no Enter)** zet de tekst bij de prompt van de gefocuste terminal; jij beslist wanneer je verstuurt. Meerregelige tekst in een shell zonder bracketed paste vraagt eerst bevestiging. **Copy** zet hem op het klembord.
+
+**Naast de terminal:** met *Dock beside terminal* wordt de studio een paneel rechts van de terminal. De terminal blijft gewoon werken: klik in een veld om te typen (cyaan rand, cursor in de terminal wordt hol), **Esc** of een klik in de terminal geeft het toetsenbord terug, **Tab** springt tussen velden. *Insert* zet de tekst in de terminal die op dat moment focus heeft en laat het paneel open, zodat je meteen het volgende sjabloon kunt invullen. *Float* maakt er weer een zwevend venster van. De plek wordt onthouden in de sessie (met `restore_session`); ingevulde waarden niet.
 
 Eigen sjablonen: `.md`-bestanden in de map `prompts` naast `settings.toml` (AI → Open Prompts Folder maakt de map met een voorbeeld). Optionele front matter `name:` en `description:`; een eigen bestand met dezelfde naam als een ingebouwd sjabloon (bijv. `review-file.md`) vervangt dat.
 

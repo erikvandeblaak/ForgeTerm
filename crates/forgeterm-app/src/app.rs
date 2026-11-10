@@ -241,6 +241,11 @@ pub struct App {
     /// Folder the context was (or is being) scanned for.
     ai_context_for: Option<PathBuf>,
     prompt_studio: Option<PromptStudio>,
+    /// Prompt Studio is shown beside the terminal instead of as a floating window.
+    prompt_docked: bool,
+    /// The docked studio has the keyboard (set by editing in it; Esc or a click in a
+    /// terminal gives the keyboard back to the terminal).
+    prompt_focused: bool,
     git_visible: bool,
     git: GitState,
     viewer: Viewer,
@@ -291,6 +296,8 @@ impl App {
             ai_context: None,
             ai_context_for: None,
             prompt_studio: None,
+            prompt_docked: false,
+            prompt_focused: false,
             git_visible: false,
             git: GitState::default(),
             viewer: Viewer::default(),
@@ -565,8 +572,24 @@ impl App {
         Some(load_dir(self.explorer.set_root(cwd)))
     }
 
+    /// The docked studio takes or returns the keyboard; the focused terminal redraws
+    /// its cursor (hollow while the keyboard is elsewhere).
+    fn set_prompt_focused(&mut self, focused: bool) {
+        if self.prompt_focused != focused {
+            self.prompt_focused = focused;
+            if let Some(t) = self
+                .workspace
+                .focused()
+                .and_then(|id| self.terminals.get(&id))
+            {
+                t.cache.clear();
+            }
+        }
+    }
+
     fn focus_terminal(&mut self, id: TermId) {
         self.viewer.focused = false;
+        self.set_prompt_focused(false);
         if self.workspace.focused() == Some(id) {
             return;
         }
@@ -960,12 +983,23 @@ impl App {
             Message::PromptEdit(name, action) => {
                 if let Some(studio) = &mut self.prompt_studio {
                     studio.edit(name, action);
+                    // Clicking or typing in a field: the keyboard belongs to the studio.
+                    self.set_prompt_focused(self.prompt_docked);
                 }
             }
-            Message::PromptInsert => self.insert_prompt(),
+            Message::PromptInsert => return self.insert_prompt(),
             Message::PromptCopy => {
-                if let Some(r) = self.prompt_studio.take().and_then(|s| s.rendered()) {
-                    return clipboard::write(r.text);
+                let text = self
+                    .prompt_studio
+                    .as_ref()
+                    .and_then(PromptStudio::rendered)
+                    .map(|r| r.text);
+                // The floating window closes; the docked panel stays.
+                if !self.prompt_docked {
+                    self.prompt_studio = None;
+                }
+                if let Some(text) = text {
+                    return clipboard::write(text);
                 }
             }
             Message::PromptReload => {
@@ -973,7 +1007,10 @@ impl App {
                     return load_prompts(self.prompts_dir());
                 }
             }
-            Message::PromptClose => self.prompt_studio = None,
+            Message::PromptClose => {
+                self.prompt_studio = None;
+                self.set_prompt_focused(false);
+            }
             Message::GitTick => return self.refresh_git(false),
             Message::GitRefreshed(snapshot) => {
                 if self.git.refreshing.as_ref() == Some(&snapshot.dir) {
@@ -1186,7 +1223,7 @@ impl App {
         if self.command_palette.is_some() {
             return self.palette_key(&key, text.as_deref(), mods, captured);
         }
-        if self.prompt_studio.is_some() {
+        if self.prompt_studio.is_some() && !self.prompt_docked {
             return self.prompt_studio_key(&key, mods, captured);
         }
         if self.git.diff.is_some() {
@@ -1236,9 +1273,30 @@ impl App {
         {
             return self.viewer_msg(ViewerMsg::CloseFind);
         }
+        // Docked studio with the keyboard: Esc gives it back to the terminal (the field
+        // also lets go of it), Tab moves between fields.
+        let studio_keys = self.prompt_docked && self.prompt_focused && self.prompt_studio.is_some();
+        if studio_keys {
+            if matches!(key, keyboard::Key::Named(Named::Escape)) {
+                self.set_prompt_focused(false);
+                return unfocus_widgets();
+            }
+            if !captured && matches!(key, keyboard::Key::Named(Named::Tab)) {
+                return if mods.shift() {
+                    iced::widget::operation::focus_previous()
+                } else {
+                    iced::widget::operation::focus_next()
+                };
+            }
+        }
         // Keys handled by a widget never reach the terminal.
         if captured {
             return Task::none();
+        }
+        // Keys the studio's fields do not use (F-keys, Ctrl+letter, …) never leak to
+        // the terminal either; app shortcuts still work.
+        if studio_keys {
+            return self.app_shortcut(&key, mods).unwrap_or_else(Task::none);
         }
         // The focused viewer takes navigation keys; app shortcuts still work, the
         // terminal gets nothing.
@@ -1619,7 +1677,15 @@ impl App {
                 }
             }
             CommandId::OpenPromptStudio => {
+                self.set_prompt_focused(false);
                 if self.prompt_studio.take().is_none() {
+                    return self.open_prompt_studio();
+                }
+            }
+            CommandId::TogglePromptStudioDock => {
+                self.prompt_docked = !self.prompt_docked;
+                self.set_prompt_focused(false);
+                if self.prompt_studio.is_none() {
                     return self.open_prompt_studio();
                 }
             }
@@ -1721,6 +1787,7 @@ impl App {
             CommandId::ViewSelectedFile => self.explorer.selected().is_some_and(|e| !e.is_dir),
             CommandId::CommandPalette
             | CommandId::OpenPromptStudio
+            | CommandId::TogglePromptStudioDock
             | CommandId::ToggleGitPanel
             | CommandId::GitRefresh
             | CommandId::NewTab
@@ -1950,6 +2017,18 @@ impl App {
             .filter(|_| self.settings.workspace.restore_session)
             .map(|p| forgeterm_settings::session::load(&p))
             .unwrap_or_default();
+        let docked = saved.prompt_studio_docked;
+        let task = self.restore_tabs(saved);
+        if docked {
+            // Prompt Studio was open beside the terminal: open it there again (empty;
+            // typed values are never saved).
+            self.prompt_docked = true;
+            return Task::batch([task, self.open_prompt_studio()]);
+        }
+        task
+    }
+
+    fn restore_tabs(&mut self, saved: forgeterm_settings::session::SavedSession) -> Task<Message> {
         // No shell at all: new_tab shows the error screen.
         if saved.tabs.is_empty() || self.shells.is_empty() {
             return self.new_tab(None, None);
@@ -2068,6 +2147,7 @@ impl App {
                 .iter()
                 .map(|t| t.doc.path.clone())
                 .collect(),
+            prompt_studio_docked: self.prompt_docked && self.prompt_studio.is_some(),
         }
     }
 
@@ -2468,11 +2548,8 @@ impl App {
     fn open_prompt_studio(&mut self) -> Task<Message> {
         self.menu = None;
         self.command_palette = None;
-        let target = self.focused().filter(|t| t.is_running());
-        let target_id = target.map(|t| t.id);
-        let target_name = target.map_or_else(|| "no terminal".to_owned(), |t| t.shell.name.clone());
         let auto = self.auto_prompt_values();
-        self.prompt_studio = Some(PromptStudio::new(target_id, target_name, auto));
+        self.prompt_studio = Some(PromptStudio::new(auto));
         load_prompts(self.prompts_dir())
     }
 
@@ -2503,31 +2580,33 @@ impl App {
         values
     }
 
-    /// Inserts the rendered prompt into the studio's target terminal, without Enter.
-    fn insert_prompt(&mut self) {
-        let Some(studio) = &mut self.prompt_studio else {
-            return;
-        };
-        let Some(r) = studio
-            .rendered()
+    /// The terminal Prompt Studio inserts into: the focused one, while it runs. The
+    /// floating studio is modal, so that is the terminal focused when it opened.
+    fn prompt_target(&self) -> Option<&TerminalPane> {
+        self.focused().filter(|t| t.is_running())
+    }
+
+    /// Inserts the rendered prompt into the focused terminal, without Enter, and
+    /// gives that terminal the keyboard. The docked studio stays open.
+    fn insert_prompt(&mut self) -> Task<Message> {
+        let Some(r) = self
+            .prompt_studio
+            .as_ref()
+            .and_then(PromptStudio::rendered)
             .filter(|r| r.missing.is_empty() && !r.text.is_empty())
         else {
-            return;
+            return Task::none();
         };
-        match studio.target {
-            Some(id)
-                if self
-                    .terminals
-                    .get(&id)
-                    .is_some_and(TerminalPane::is_running) =>
-            {
-                self.prompt_studio = None;
-                self.focus_terminal(id);
-                self.insert_text_into(id, r.text);
-            }
-            // The terminal ended while the studio was open: keep the text, offer Copy.
-            _ => studio.target = None,
+        // No running terminal (it ended meanwhile): the text stays, Copy still works.
+        let Some(id) = self.prompt_target().map(|t| t.id) else {
+            return Task::none();
+        };
+        if !self.prompt_docked {
+            self.prompt_studio = None;
         }
+        self.focus_terminal(id);
+        self.insert_text_into(id, r.text);
+        unfocus_widgets()
     }
 
     /// Inserts paths quoted for the focused terminal's shell, followed by a space.
@@ -2704,6 +2783,13 @@ impl App {
         } else {
             body
         };
+        let target = self.prompt_target().map(|t| t.shell.name.as_str());
+        let body: Element<'_, Message> = match &self.prompt_studio {
+            Some(studio) if self.prompt_docked => {
+                row![body, studio.view_docked(target, self.prompt_focused)].into()
+            }
+            _ => body,
+        };
         let base: Element<'_, Message> = layout.push(body).push(self.view_status_bar()).into();
         let mut layers = stack![base];
         if let Some(state) = &self.menu {
@@ -2723,8 +2809,8 @@ impl App {
         if let Some(diff) = &self.git.diff {
             layers = layers.push(git_view::view_diff(diff));
         }
-        if let Some(studio) = &self.prompt_studio {
-            layers = layers.push(studio.view());
+        if let Some(studio) = self.prompt_studio.as_ref().filter(|_| !self.prompt_docked) {
+            layers = layers.push(studio.view(target));
         }
         if self.about_open {
             layers = layers.push(view_about());
@@ -2884,7 +2970,9 @@ impl App {
 
     fn view_terminal<'a>(&'a self, t: &'a TerminalPane) -> Element<'a, Message> {
         let canvas = Canvas::new(TerminalCanvas {
-            focused: self.workspace.focused() == Some(t.id),
+            // Hollow cursor while the docked Prompt Studio has the keyboard.
+            focused: self.workspace.focused() == Some(t.id)
+                && !(self.prompt_docked && self.prompt_focused),
             id: t.id,
             snapshot: &t.snapshot,
             cache: &t.cache,
@@ -3732,4 +3820,11 @@ fn bar_style() -> container::Style {
         },
         ..Default::default()
     }
+}
+
+/// Takes the keyboard focus away from every text field (so keys reach the terminal):
+/// iced's focus operation unfocuses every widget whose id differs from the target,
+/// and no widget carries this id.
+fn unfocus_widgets() -> Task<Message> {
+    iced::widget::operation::focus(iced::widget::Id::new("forgeterm-no-widget"))
 }

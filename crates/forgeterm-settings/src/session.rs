@@ -1,6 +1,7 @@
 //! The last session's layout (`session.toml` next to `settings.toml`): tabs, their
-//! splits with ratios, each pane's shell and folder, the active tab and the files
-//! open in the viewer. Never terminal output, commands or environment.
+//! splits with ratios, each pane's shell and folder, the active tab, the files
+//! open in the viewer and whether Prompt Studio was open beside the terminal. Never
+//! terminal output, commands, prompt texts or environment.
 //!
 //! Format: one `[[tab]]` per tab with its layout as a flat list in prefix order
 //! (`{ split = "right" | "down", ratio }` followed by its two parts, or a pane
@@ -43,6 +44,9 @@ pub struct SavedSession {
     pub tabs: Vec<Layout>,
     pub active: usize,
     pub viewer_files: Vec<PathBuf>,
+    /// Prompt Studio was open beside the terminal (only its place; typed values are
+    /// never saved).
+    pub prompt_studio_docked: bool,
 }
 
 /// `session.toml` in the folder of the settings file.
@@ -64,6 +68,9 @@ pub fn to_toml(session: &SavedSession) -> String {
                     .collect(),
             ),
         );
+    }
+    if session.prompt_studio_docked {
+        root.insert("prompt_studio".into(), Value::String("docked".into()));
     }
     let tabs = session
         .tabs
@@ -151,10 +158,12 @@ pub fn parse(text: &str) -> SavedSession {
             .collect(),
         _ => Vec::new(),
     };
+    let prompt_studio_docked = root.get("prompt_studio").and_then(Value::as_str) == Some("docked");
     SavedSession {
         tabs,
         active,
         viewer_files,
+        prompt_studio_docked,
     }
 }
 
@@ -256,6 +265,7 @@ mod tests {
             ],
             active: 1,
             viewer_files: vec![PathBuf::from(r"C:\Projects\a\src\main.rs")],
+            prompt_studio_docked: true,
         }
     }
 
@@ -293,6 +303,8 @@ mod tests {
             other => panic!("{other:?}"),
         }
         assert_eq!(s.active, 0);
+        assert!(!s.prompt_studio_docked, "absent = not docked");
+        assert!(!parse("prompt_studio = \"floating\"").prompt_studio_docked);
     }
 
     #[test]
