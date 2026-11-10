@@ -28,6 +28,12 @@ const MAX_ROWS: usize = 150;
 pub enum Repo {
     /// The folder is not inside a repository.
     Outside,
+    /// The repository's own config makes git run programs (filters, …): automatic
+    /// reads are paused until the user trusts it.
+    Untrusted {
+        root: PathBuf,
+        programs: Vec<String>,
+    },
     /// git could not be run or failed (message from git).
     Error(String),
     Found {
@@ -88,6 +94,8 @@ pub struct GitState {
     pub show_remotes: bool,
     pub new_branch: String,
     pub history: Option<HistoryView>,
+    /// Repositories the user trusted in this session despite their own programs.
+    pub trusted: std::collections::HashSet<PathBuf>,
 }
 
 impl GitState {
@@ -132,6 +140,9 @@ impl GitState {
 
     /// Status-bar text: `main ↑1 ↓2 · 3 changed`; `None` outside a repository.
     pub fn summary(&self) -> Option<(String, Color)> {
+        if let Some(Repo::Untrusted { .. }) = &self.repo {
+            return Some(("git paused (repository runs programs)".into(), theme::AMBER));
+        }
         let status = self.status()?;
         let b = &status.branch;
         let mut s = b.label();
@@ -188,6 +199,35 @@ pub fn view(git: &GitState) -> Element<'_, Message> {
             if let Some(dir) = &git.dir {
                 body = body.push(path_text(dir.display().to_string()));
             }
+        }
+        Some(Repo::Untrusted { root, programs }) => {
+            body = body.push(
+                text("Automatic Git status is paused for this repository.")
+                    .size(13)
+                    .color(theme::AMBER),
+            );
+            body = body.push(muted(
+                "Its own configuration (.git/config) makes git run these programs, \
+                 which reading the status could start:",
+            ));
+            for p in programs.iter().take(8) {
+                body = body.push(
+                    text(p.as_str())
+                        .size(11)
+                        .font(TERMINAL_FONT)
+                        .color(theme::TEXT)
+                        .wrapping(text::Wrapping::Glyph),
+                );
+            }
+            body = body.push(muted(
+                "Only trust it if you know this repository (for example your own). \
+                 The choice lasts until ForgeTerm closes.",
+            ));
+            body = body.push(small_button(
+                "Trust this repository",
+                Some(Message::GitTrust(root.clone())),
+                "Run git status here, including the programs above",
+            ));
         }
         Some(Repo::Error(e)) => {
             body = body.push(text(e.as_str()).size(12).color(theme::CORAL));

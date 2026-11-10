@@ -71,7 +71,10 @@ fn find_in_path(program: &str) -> Option<PathBuf> {
     } else {
         program.to_owned()
     };
+    // Empty or relative entries ("C:\\a;;C:\\b") would mean the current folder,
+    // where a cloned repository could plant its own "pwsh.exe".
     env::split_paths(&env::var_os("PATH")?)
+        .filter(|dir| dir.is_absolute())
         .map(|dir| dir.join(&exe))
         .find(|p| p.is_file())
 }

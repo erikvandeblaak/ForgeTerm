@@ -206,6 +206,17 @@ Quit (menu, venster-× via `exit_on_close_request: false` + `close_requests`), t
 
 ## 6. Beveiligingsbeslissingen (al geïmplementeerd)
 
+**Security review 2026-11-10** (onafhankelijke reviewer, alle bevindingen tegen de code én deels met een echte reproductie geverifieerd, alle vijf opgelost):
+
+1. *Netwerkpaden uit terminaluitvoer* (hoog): een OSC 7 / OSC 9;9 met `\\\\host\\share` liet de `is_dir`-controle een SMB-verbinding maken (NTLM-hash-lek, daarna git in die map). Nu: `cwd::is_local_path` vóór elke bestandssysteemaanroep — Windows alleen `X:\\…` (gekoppelde netwerkschijven tellen als lokaal), elders een absoluut pad; ook voor mappen en bestanden uit `session.toml`. Beperking: een shell die in een UNC-map staat, wordt niet gevolgd.
+2. *Git-filters uit de repository* (hoog, gereproduceerd: een "racy" `git status` en `git diff` voerden `filter.x.clean` uit): `forgeterm_git::repo_programs` leest met `git config --show-scope --includes` welke programma's de **eigen** config van de repository noemt (filters, diff-commando's/textconv, merge-drivers, core.fsmonitor/hooksPath/sshCommand/pager/editor/askpass, credential helpers, includes). Staat er iets, dan pauzeert de automatische status ("git paused") met de lijst en een knop *Trust this repository* (geldt tot ForgeTerm sluit). Globale/systeemconfig (bijv. git-lfs) blijft vertrouwd. Elke verversing controleert opnieuw.
+3. *Lege/relatieve PATH-items* (middel): `C:\\a;;C:\\b` liet het zoeken naar shells en agents in de huidige map kijken (een gekloonde repo kon `pwsh.exe`/`claude.cmd` neerzetten die automatisch startte). Nu alleen absolute PATH-items.
+4. *Besturingstekens bij plakken* (middel): zonder bracketed paste worden alle besturingstekens behalve tab/CR/LF verwijderd (Ctrl+O zou in bash de regel uitvoeren); met bracketed paste ook de 8-bit CSI (U+009B). Een programma dat het klembord vult (OSC 52) krijgt een zichtbare melding met de tab; meer dan 1 MB wordt geweigerd. OSC 52 *lezen* was al geblokkeerd.
+5. *cmd-metatekens in het agentpad* (laag): een `.cmd`/`.bat`-pad met `& | < > ^ % ! "` wordt niet gestart (melding) in plaats van door `cmd /c` geïnterpreteerd.
+
+Door de reviewer gecontroleerd en in orde bevonden: OSC 52 lezen geweigerd, titels alleen weergave, links alleen http(s) + Ctrl+klik + één argument, git-argumenten (`--`, hex-hash, `-`-namen geweigerd, check-ref-format), viewer (limiet, besturingstekens zichtbaar), sessiebestand (alleen lay-out, shell alleen uit de gedetecteerde lijst), quoting per shell, `cmd /d`.
+
+
 | Risico | Maatregel |
 |---|---|
 | Plakken voert commando's uit | Afsluitende regeleinden worden altijd gestript. Meerregelig plakken zonder bracketed paste vraagt expliciete bevestiging (balk, Enter/Esc). |

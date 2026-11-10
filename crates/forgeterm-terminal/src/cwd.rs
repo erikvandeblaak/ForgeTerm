@@ -93,18 +93,22 @@ impl CwdScanner {
             return None;
         }
         let payload = std::str::from_utf8(&self.payload).ok()?;
-        if let Some(uri) = payload.strip_prefix("7;") {
-            return path_from_file_uri(uri);
-        }
-        if let Some(path) = payload.strip_prefix("9;9;") {
-            let path = path.trim();
+        let path = if let Some(uri) = payload.strip_prefix("7;") {
+            path_from_file_uri(uri)?
+        } else {
+            let path = payload.strip_prefix("9;9;")?.trim();
             let path = path
                 .strip_prefix('"')
                 .and_then(|p| p.strip_suffix('"'))
                 .unwrap_or(path);
-            return (!path.is_empty()).then(|| native_path(path));
-        }
-        None
+            if path.is_empty() {
+                return None;
+            }
+            native_path(path)
+        };
+        // Terminal output is untrusted: a network path would make the existence
+        // check below contact a remote host (SMB, leaking the Windows login hash).
+        is_local_path(&path).then_some(path)
     }
 }
 
@@ -167,6 +171,18 @@ fn windows_path(path: &str) -> String {
     path.to_owned()
 }
 
+/// A local absolute path: on Windows `X:\...` (a drive letter; mapped network
+/// drives count as local), never `\\server\share`, `//server`, `\\?\UNC`
+/// or device paths; elsewhere an absolute path.
+pub fn is_local_path(path: &str) -> bool {
+    if cfg!(windows) {
+        let b = path.as_bytes();
+        has_drive(path) && (b.len() == 2 || b[2] == b'\\' || b[2] == b'/')
+    } else {
+        path.starts_with('/')
+    }
+}
+
 fn has_drive(p: &str) -> bool {
     let b = p.as_bytes();
     b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':'
@@ -188,6 +204,30 @@ mod tests {
     }
 
     #[test]
+    fn network_and_device_paths_are_refused() {
+        // Would make the is_dir check contact a remote host.
+        for evil in [
+            &b"\x1b]9;9;\\\\attacker.example\\share\x07"[..],
+            b"\x1b]9;9;//attacker.example/share\x07",
+            b"\x1b]7;file://x//attacker.example/share\x07",
+            b"\x1b]9;9;\\\\?\\UNC\\attacker\\share\x07",
+            b"\x1b]9;9;\\\\.\\pipe\\x\x07",
+            b"\x1b]9;9;relative\\dir\x07",
+        ] {
+            assert_eq!(scan(&[evil]), None, "{}", String::from_utf8_lossy(evil));
+        }
+        if cfg!(windows) {
+            assert!(is_local_path(r"C:\Users"));
+            assert!(is_local_path("Z:"));
+            assert!(!is_local_path(r"\\server\share"));
+            assert!(!is_local_path("C:relative"));
+        } else {
+            assert!(is_local_path("/home/x"));
+            assert!(!is_local_path("relative"));
+        }
+    }
+
+    #[test]
     fn osc9_9_windows_terminal_style() {
         let got = scan(&[b"\x1b]9;9;C:\\Users\\erik\\My Docs\x1b\\PS> "]);
         assert_eq!(got, Some(native(r"C:\Users\erik\My Docs")));
@@ -195,27 +235,32 @@ mod tests {
         assert_eq!(quoted.as_deref(), Some(native(r"C:\x y")).as_deref());
     }
 
+    // Test paths use the MSYS form /c/...: C:\... on Windows, absolute on Unix,
+    // so they are local paths on both.
     #[test]
     fn osc7_file_uri_with_percent_encoding() {
-        let got = scan(&[b"\x1b]7;file://box/home/erik/my%20dir\x07"]);
-        assert_eq!(got.as_deref(), Some(native("/home/erik/my dir")).as_deref());
+        let got = scan(&[b"\x1b]7;file://box/c/home/erik/my%20dir\x07"]);
+        assert_eq!(
+            got.as_deref(),
+            Some(native("/c/home/erik/my dir")).as_deref()
+        );
         // Multi-byte UTF-8, percent-encoded.
-        let utf8 = scan(&[b"\x1b]7;file:///tmp/caf%C3%A9\x1b\\"]);
-        assert_eq!(utf8.as_deref(), Some(native("/tmp/café")).as_deref());
+        let utf8 = scan(&[b"\x1b]7;file:///c/tmp/caf%C3%A9\x1b\\"]);
+        assert_eq!(utf8.as_deref(), Some(native("/c/tmp/café")).as_deref());
     }
 
     #[test]
     fn split_across_reads_and_surrounded_by_output() {
-        let got = scan(&[b"output\x1b]7;fi", b"le://h/srv/da", b"ta\x1b", b"\\more"]);
-        assert_eq!(got.as_deref(), Some(native("/srv/data")).as_deref());
+        let got = scan(&[b"output\x1b]7;fi", b"le://h/c/srv/da", b"ta\x1b", b"\\more"]);
+        assert_eq!(got.as_deref(), Some(native("/c/srv/data")).as_deref());
     }
 
     #[test]
     fn last_report_wins_and_other_osc_ignored() {
         let got = scan(&[
-            b"\x1b]0;title\x07\x1b]7;file:///a\x07\x1b]7;file:///b\x07\x1b]8;;http://x\x07",
+            b"\x1b]0;title\x07\x1b]7;file:///c/a\x07\x1b]7;file:///c/b\x07\x1b]8;;http://x\x07",
         ]);
-        assert_eq!(got.as_deref(), Some(native("/b")).as_deref());
+        assert_eq!(got.as_deref(), Some(native("/c/b")).as_deref());
         assert_eq!(scan(&[b"\x1b]0;just a title\x07", b"\x1b[31mred"]), None);
     }
 
@@ -232,8 +277,8 @@ mod tests {
         assert_eq!(scan(&[b"\x1b]7;file:///a\x18/b\x07"]), None);
         // The scanner recovers afterwards.
         assert_eq!(
-            scan(&[&long, b"\x1b]7;file:///ok\x07"]).as_deref(),
-            Some(native("/ok")).as_deref()
+            scan(&[&long, b"\x1b]7;file:///c/ok\x07"]).as_deref(),
+            Some(native("/c/ok")).as_deref()
         );
     }
 

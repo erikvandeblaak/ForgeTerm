@@ -246,6 +246,19 @@ Let op: Kladblok in Windows 11 opent het bestand als tabblad in een al geopend K
 | M5 | Na `ping`: "1 process · waiting at the prompt"; ForgeTerm hard beëindigd → geen achtergebleven ping | ✅ |
 | I1 | Venstericoon (titelbalk) = logo; `forgeterm.exe` bevat het icoon (ExtractAssociatedIcon toont het F-logo) | ✅ |
 
+### Beveiliging en sneltoetsen (2026-11-10, Windows 11)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| X1 | Unit: OSC 9;9 / OSC 7 met `\\\\host\\share`, `//host/share`, `file://x//host/share`, `\\\\?\\UNC\\…`, `\\\\.\\pipe\\…`, relatief → genegeerd | ✅ |
+| X2 | Echte git: repository met `filter.evil.clean` → `repo_programs` meldt het; controle: gewone racy `git status` en `git diff` vóérden het filter uit | ✅ |
+| X3 | GUI: `cd` naar zo'n repo → statusbalk "git paused (repository runs programs)", paneel toont het programma + *Trust this repository*; filter niet uitgevoerd; na Trust gewone status | ✅ |
+| X4 | Unit: plakken zonder brackets laat Ctrl+O/ESC/DEL/C1 weg, tab en regeleinden blijven; bracketed verwijdert ook U+009B | ✅ |
+| X5 | GUI: script stuurt OSC 52 → klembord gezet én melding "PowerShell 7 (tab 1) copied 10 characters to the clipboard." | ✅ |
+| X6 | Unit: agentpad `C:\\a&b\\claude.cmd` / met `%…%` geweigerd, `.exe` met `&` toegestaan | ✅ |
+| K1 | `[keys]` `"F6" = "keyboard_shortcuts"`, `"Ctrl+Shift+G" = "none"`, `"Ctrl+Alt+G" = "toggle_git_panel"` → F6 opent het overzicht, Git-paneel toont alleen Ctrl+Alt+G en opent daarmee | ✅ |
+| K2 | Unit: toetstekst parsen (incl. `Ctrl++`, F1–F12), commandonamen uniek en omkeerbaar, toevoegen/vervangen/verwijderen, eerlijke melding bij Ctrl+letter, onbekende namen gemeld | ✅ |
+
 ### Release-build (2026-11-10, Windows 11)
 
 | # | Scenario | Resultaat |

@@ -2,8 +2,10 @@
 //! documents as stable for scripts).
 //!
 //! Safety, because ForgeTerm may look at repositories the user did not create:
-//! - read commands never run repository-configured programs: `core.fsmonitor` is
-//!   switched off, diffs use `--no-ext-diff --no-textconv`;
+//! - `core.fsmonitor` is switched off and diffs use `--no-ext-diff --no-textconv`;
+//!   clean/smudge *filters* cannot be switched off that way, so the app asks
+//!   [`repo_programs`] first and pauses automatic reads in a repository whose own
+//!   config names programs, until the user trusts it;
 //! - `--no-optional-locks`: background status refreshes never take `index.lock`, so
 //!   they cannot make the user's own git commands fail;
 //! - git never prompts (`GIT_TERMINAL_PROMPT=0`, stdin closed), every call has a
@@ -34,6 +36,31 @@ pub const READ_TIMEOUT: Duration = Duration::from_secs(15);
 pub const COMMIT_TIMEOUT: Duration = Duration::from_secs(120);
 /// Diffs longer than this are cut off (and marked as such).
 pub const MAX_DIFF_LINES: usize = 5000;
+
+/// Settings in the repository's *own* config (`.git/config`, worktree config and
+/// what they include) that make git run a program, as `key value` lines. The
+/// user's global and system config are trusted and not listed (git-lfs lives
+/// there). Running `git config` itself runs nothing from the repository.
+pub fn repo_programs(root: &Path) -> Result<Vec<String>, String> {
+    const KEYS: &str = r"^(filter\..*\.(clean|smudge|process)|diff\..*\.(command|textconv)|merge\..*\.driver|core\.(fsmonitor|hookspath|sshcommand|pager|editor|askpass|gitproxy|alternaterefscommand)|credential\..*helper|include\.path|includeif\..*\.path)$";
+    let out = git(
+        root,
+        &["config", "--show-scope", "--includes", "--get-regexp", KEYS],
+        READ_TIMEOUT,
+    )?;
+    // Exit code 1 = no matching key.
+    if out.code == Some(1) {
+        return Ok(Vec::new());
+    }
+    out.check()?;
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|line| {
+            let (scope, rest) = line.split_once('\t')?;
+            matches!(scope, "local" | "worktree").then(|| rest.trim().to_owned())
+        })
+        .collect())
+}
 
 /// The repository root containing `dir`, `Ok(None)` when `dir` is not inside a
 /// repository, `Err` when git itself could not be run.
@@ -473,6 +500,50 @@ mod tests {
         assert_eq!(renamed.orig_path.as_deref(), Some("old name.txt"));
         assert_eq!(renamed.staged, Some(Change::Renamed));
         run(&["merge", "--abort"]).check().unwrap();
+    }
+
+    #[test]
+    fn repository_programs_are_detected_before_anything_runs_them() {
+        let Some(repo) = Repo::new("filters") else {
+            return;
+        };
+        let root = &repo.0;
+        assert_eq!(repo_programs(root).unwrap(), Vec::<String>::new());
+        // A hostile repository: a clean filter on every file.
+        let marker = root.join("filter-ran.txt");
+        let program = if cfg!(windows) {
+            format!("cmd /c echo x> \"{}\" & more", marker.display())
+        } else {
+            format!("sh -c 'echo x > \"{}\"; cat'", marker.display())
+        };
+        git(
+            root,
+            &["config", "filter.evil.clean", &program],
+            READ_TIMEOUT,
+        )
+        .unwrap()
+        .check()
+        .unwrap();
+        repo.write(".gitattributes", "* filter=evil\n");
+        let found = repo_programs(root).unwrap();
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].starts_with("filter.evil.clean "), "{found:?}");
+        // Settings given on the command line (scope "command") are not the repo's.
+        let out = git(
+            root,
+            &[
+                "-c",
+                "core.pager=x",
+                "config",
+                "--show-scope",
+                "--get-regexp",
+                "^core\\.pager$",
+            ],
+            READ_TIMEOUT,
+        )
+        .unwrap();
+        assert!(String::from_utf8_lossy(&out.stdout).starts_with("command"));
+        assert_eq!(repo_programs(root).unwrap().len(), 1);
     }
 
     #[test]

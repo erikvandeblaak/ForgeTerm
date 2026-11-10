@@ -6,6 +6,8 @@
 //! out of this crate, so it can be tested headless.
 
 mod cwd;
+
+pub use cwd::is_local_path;
 mod input;
 mod integration;
 mod palette;

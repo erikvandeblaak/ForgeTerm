@@ -24,7 +24,10 @@ const WINDOWS_EXTENSIONS: [&str; 3] = ["exe", "cmd", "bat"];
 
 /// Finds `kind`'s executable on `path_var` (the value of `PATH`).
 pub fn locate_in(kind: AgentKind, path_var: Option<OsString>) -> Option<PathBuf> {
-    let dirs: Vec<PathBuf> = env::split_paths(&path_var?).collect();
+    // Empty or relative entries would search the current folder (a planted shim).
+    let dirs: Vec<PathBuf> = env::split_paths(&path_var?)
+        .filter(|d| d.is_absolute())
+        .collect();
     for dir in dirs {
         if cfg!(windows) {
             for ext in WINDOWS_EXTENSIONS {
@@ -74,23 +77,30 @@ pub struct LaunchCommand {
     pub args: Vec<String>,
 }
 
-pub fn launch_command(path: &Path) -> LaunchCommand {
+pub fn launch_command(path: &Path) -> Result<LaunchCommand, String> {
     let is_batch = path
         .extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
     let path_str = path.to_string_lossy().into_owned();
     if is_batch {
-        LaunchCommand {
+        // cmd.exe would interpret these in the path itself (`&` runs a second
+        // command, `%X%` expands): refuse instead of guessing a quoting.
+        if let Some(c) = path_str.chars().find(|c| "&|<>^%!\"".contains(*c)) {
+            return Err(format!(
+                "not started: the path {path_str} contains '{c}', which cmd.exe treats as a command character"
+            ));
+        }
+        Ok(LaunchCommand {
             program: "cmd.exe".into(),
             // /d: no AutoRun commands from the registry.
             args: vec!["/d".into(), "/c".into(), path_str],
-        }
+        })
     } else {
-        LaunchCommand {
+        Ok(LaunchCommand {
             program: path_str,
             args: Vec::new(),
-        }
+        })
     }
 }
 
@@ -195,10 +205,14 @@ mod tests {
 
     #[test]
     fn batch_shims_go_through_cmd() {
-        let l = launch_command(Path::new(r"C:\Program Files\nodejs\claude.cmd"));
+        let l = launch_command(Path::new(r"C:\Program Files\nodejs\claude.cmd")).unwrap();
         assert_eq!(l.program, "cmd.exe");
         assert_eq!(l.args, ["/d", "/c", r"C:\Program Files\nodejs\claude.cmd"]);
-        let l = launch_command(Path::new("/usr/local/bin/claude"));
+        let l = launch_command(Path::new("/usr/local/bin/claude")).unwrap();
+        assert!(launch_command(Path::new(r"C:\a&b\claude.cmd")).is_err());
+        assert!(launch_command(Path::new(r"C:\Users\%USERNAME%\claude.cmd")).is_err());
+        // Only batch shims go through cmd.exe; an .exe path may contain '&'.
+        assert!(launch_command(Path::new(r"C:\Tom & Jerry\claude.exe")).is_ok());
         assert_eq!(l.program, "/usr/local/bin/claude");
         assert!(l.args.is_empty());
     }

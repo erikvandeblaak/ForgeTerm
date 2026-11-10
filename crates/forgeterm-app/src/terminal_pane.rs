@@ -55,7 +55,8 @@ pub enum Outcome {
     None,
     /// The shell ended cleanly; the pane should close.
     Close,
-    Task(Task<Message>),
+    /// A program asked to set the clipboard (OSC 52).
+    Clipboard(String),
     /// The shell reported a new working directory.
     CwdChanged,
 }
@@ -241,9 +242,7 @@ impl TerminalPane {
                     return Outcome::CwdChanged;
                 }
             }
-            SessionEvent::ClipboardStore(t) => {
-                return Outcome::Task(iced::clipboard::write(t));
-            }
+            SessionEvent::ClipboardStore(t) => return Outcome::Clipboard(t),
             SessionEvent::Exited(code) => {
                 self.refresh(palette);
                 self.session = None;

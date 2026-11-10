@@ -47,11 +47,11 @@ Agent Adapter System: detectie + versie ✅ Windows (GUI: Claude Code 2.1.322, c
 
 Code-viewer met syntaxkleuring, minimap (code glance), tabbladen, zoeken, kopiëren en automatisch herladen ✅ Windows · bewerken/opslaan ⬜ (bewust later).
 
-Git Control Center: statusbalk (branch, ahead/behind, wijzigingen), paneel met diff, stage/unstage, commit, recente commits ✅ Windows · branches (wisselen met bevestiging, nieuw, volgen) ✅ Windows · history + commitdetails ✅ Windows · Git Activity Chart (commits per dag, 30 dagen) ✅ Windows · push/pull/discard ⬜ (bewust terminal) · layouts ⬜ · sneltoetsbeheer ⬜.
+Git Control Center: statusbalk (branch, ahead/behind, wijzigingen), paneel met diff, stage/unstage, commit, recente commits ✅ Windows · branches (wisselen met bevestiging, nieuw, volgen) ✅ Windows · history + commitdetails ✅ Windows · Git Activity Chart (commits per dag, 30 dagen) ✅ Windows · push/pull/discard ⬜ (bewust terminal) · layouts ✅ (sessie herstellen) · sneltoetsbeheer ✅ (`[keys]` + Help → Keyboard Shortcuts).
 
 ## Fase 7 — Release
 
-App-icoon: venster (gerenderd uit het SVG-logo) en `forgeterm.exe` (ICO via build.rs + Windows SDK rc) ✅ Windows · Linux Mint-validatie ⬜ · draagbare Windows-zip met licentielijst en SHA-256 (`scripts/package-windows.ps1`) ✅ · installers (MSI/winget, .deb/AppImage) ⬜ · benchmarks ⬜ · security review ⬜ · documentatie ⬜.
+App-icoon: venster (gerenderd uit het SVG-logo) en `forgeterm.exe` (ICO via build.rs + Windows SDK rc) ✅ Windows · Linux Mint-validatie ⬜ · draagbare Windows-zip met licentielijst en SHA-256 (`scripts/package-windows.ps1`) ✅ · installers (MSI/winget, .deb/AppImage) ⬜ · benchmarks ⬜ · security review ✅ (2026-11-10, 5 bevindingen opgelost, zie ARCHITECTURE §6) · documentatie ⬜.
 
 ## Bekende beperkingen (eerlijk)
 

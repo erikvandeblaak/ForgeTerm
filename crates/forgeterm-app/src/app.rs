@@ -139,6 +139,8 @@ pub enum Message {
     GitToggleRemotes,
     /// "Open in viewer" in the diff overlay (path relative to the repository root).
     GitOpenInViewer(String),
+    /// Trust a repository whose own config names programs (session only).
+    GitTrust(PathBuf),
     Viewer(ViewerMsg),
     /// The window's close button.
     WindowCloseRequested,
@@ -658,7 +660,13 @@ impl App {
         let Some(agent) = self.found_agent(kind) else {
             return Task::none();
         };
-        let launch = forgeterm_agents::launch_command(&agent.path);
+        let launch = match forgeterm_agents::launch_command(&agent.path) {
+            Ok(l) => l,
+            Err(e) => {
+                self.notice = Some(e);
+                return Task::none();
+            }
+        };
         let shell = ShellSpec::new(kind.name(), launch.program, launch.args);
         let here = self.focused_cwd().unwrap_or_else(|| self.start_dir.clone());
         let root = forgeterm_agents::project_root(&here).0;
@@ -715,7 +723,7 @@ impl App {
                 };
                 match terminal.on_session_event(generation, event, visible, &self.palette) {
                     Outcome::None => {}
-                    Outcome::Task(task) => return task,
+                    Outcome::Clipboard(text) => return self.program_clipboard(id, text),
                     Outcome::Close => return self.close_terminal(id),
                     // Picked up by `sync_explorer` after this message.
                     Outcome::CwdChanged => {}
@@ -1052,6 +1060,10 @@ impl App {
                 }
             }
             Message::Viewer(msg) => return self.viewer_msg(msg),
+            Message::GitTrust(root) => {
+                self.git.trusted.insert(root);
+                return self.refresh_git(true);
+            }
             Message::FileDropped(path) => {
                 self.drop_hover = false;
                 self.insert_paths(&[path]);
@@ -1934,7 +1946,7 @@ impl App {
         let files: Vec<PathBuf> = saved
             .viewer_files
             .into_iter()
-            .filter(|p| p.is_file())
+            .filter(|p| forgeterm_terminal::is_local_path(&p.to_string_lossy()) && p.is_file())
             .collect();
         if !files.is_empty() {
             self.viewer.visible = true;
@@ -1956,7 +1968,9 @@ impl App {
                     .find(|s| s.program.eq_ignore_ascii_case(&spec.shell))
                     .cloned()
                     .or_else(|| self.shell_at(None));
-                let cwd = spec.cwd.clone().filter(|d| d.is_dir());
+                let cwd = spec.cwd.clone().filter(|d| {
+                    forgeterm_terminal::is_local_path(&d.to_string_lossy()) && d.is_dir()
+                });
                 let id = match shell {
                     Some(shell) => self.spawn_terminal(shell, cwd),
                     None => self.next_id,
@@ -2049,6 +2063,31 @@ impl App {
             Ok(()) => self.saved_session = Some(text),
             Err(e) => tracing::warn!("could not save {}: {e}", path.display()),
         }
+    }
+
+    /// A program in a terminal set the clipboard (OSC 52). Allowed, as in other
+    /// terminals, but never silently: the user sees which tab did it. Huge
+    /// payloads are refused.
+    fn program_clipboard(&mut self, id: TermId, text: String) -> Task<Message> {
+        const MAX: usize = 1024 * 1024;
+        let tab = self.workspace.locate(id).map_or(0, |(i, _)| i + 1);
+        let who = self.terminals.get(&id).map_or_else(
+            || "A program".to_owned(),
+            |t| format!("{} (tab {tab})", t.display_title()),
+        );
+        if text.len() > MAX {
+            self.notice = Some(format!(
+                "{who} tried to put {} KB on the clipboard; refused (limit 1 MB).",
+                text.len() / 1024
+            ));
+            return Task::none();
+        }
+        self.notice = Some(format!(
+            "{who} copied {} character{} to the clipboard.",
+            text.chars().count(),
+            if text.chars().count() == 1 { "" } else { "s" }
+        ));
+        clipboard::write(text)
     }
 
     // ---- closing ------------------------------------------------------------------
@@ -2351,8 +2390,9 @@ impl App {
     fn start_git_refresh(&mut self, dir: PathBuf, known_root: Option<PathBuf>) -> Task<Message> {
         self.git.refreshing = Some(dir.clone());
         let with_log = self.git_visible;
+        let trusted: Vec<PathBuf> = self.git.trusted.iter().cloned().collect();
         background(
-            move || git_snapshot(dir, known_root, with_log),
+            move || git_snapshot(dir, known_root, with_log, &trusted),
             |s| Message::GitRefreshed(Box::new(s)),
         )
     }
@@ -3538,7 +3578,12 @@ fn describe(paths: &[String]) -> String {
 }
 
 /// One refresh: find the repository (unless known) and read its status (and log).
-fn git_snapshot(dir: PathBuf, known_root: Option<PathBuf>, with_log: bool) -> Snapshot {
+fn git_snapshot(
+    dir: PathBuf,
+    known_root: Option<PathBuf>,
+    with_log: bool,
+    trusted: &[PathBuf],
+) -> Snapshot {
     let root = match known_root.filter(|r| r.is_dir()) {
         Some(r) => Ok(Some(r)),
         None => forgeterm_git::discover(&dir),
@@ -3546,10 +3591,22 @@ fn git_snapshot(dir: PathBuf, known_root: Option<PathBuf>, with_log: bool) -> Sn
     let repo = match root {
         Err(e) => Repo::Error(e),
         Ok(None) => Repo::Outside,
-        Ok(Some(root)) => match forgeterm_git::status(&root) {
-            Ok(status) => Repo::Found { root, status },
-            Err(e) => Repo::Error(e),
-        },
+        Ok(Some(root)) => {
+            // Checked on every refresh: the repository's config can change.
+            let programs = if trusted.contains(&root) {
+                Ok(Vec::new())
+            } else {
+                forgeterm_git::repo_programs(&root)
+            };
+            match programs {
+                Err(e) => Repo::Error(e),
+                Ok(p) if !p.is_empty() => Repo::Untrusted { root, programs: p },
+                Ok(_) => match forgeterm_git::status(&root) {
+                    Ok(status) => Repo::Found { root, status },
+                    Err(e) => Repo::Error(e),
+                },
+            }
+        }
     };
     let (log, branches) = match (&repo, with_log) {
         (Repo::Found { root, .. }, true) => (
