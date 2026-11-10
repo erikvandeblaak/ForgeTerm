@@ -62,13 +62,37 @@ De statusbalk toont branch, ahead/behind en het aantal gewijzigde bestanden van 
 
 Veilig in onbekende repositories: lezen voert nooit door de repository geconfigureerde programma's uit (`core.fsmonitor` uit, diffs met `--no-ext-diff --no-textconv`), achtergrond-status neemt geen `index.lock` (`--no-optional-locks`), git vraagt nooit om invoer. Vereist `git` op PATH.
 
-## Release bouwen (Windows, draagbaar)
+## Installeren
+
+**Windows 11** — `ForgeTerm-<versie>-setup-x64.exe`: installeert per gebruiker (geen beheerdersrechten) naar `%LOCALAPPDATA%\Programs\ForgeTerm`, met snelkoppeling in het Startmenu (bureaublad optioneel) en een vermelding onder *Instellingen › Apps*. Verwijderen haalt alleen de geïnstalleerde bestanden weg; je instellingen en sessie in `%APPDATA%\ForgeTerm` blijven staan. Draait ForgeTerm nog, dan vraagt de installer of verwijderaar eerst om het te sluiten. De installer is niet ondertekend: SmartScreen meldt "Onbekende uitgever" (*Meer info › Toch uitvoeren*). Zonder installer: de zip uitpakken en `forgeterm.exe` starten.
+
+**Linux Mint 22 / Ubuntu 24.04** — `forgeterm_<versie>-1_amd64.deb`:
+
+```
+sudo apt install ./forgeterm_0.1.0-1_amd64.deb     # verwijderen: sudo apt remove forgeterm
+```
+
+Installeert `/usr/bin/forgeterm`, een menu-item (*Systeemgereedschap / Ontwikkeling*) met icoon, en de documentatie in `/usr/share/doc/forgeterm`. apt haalt ontbrekende bibliotheken zelf op (X11/Wayland, xkbcommon, EGL; aanbevolen: git en Vulkan). Getest in WSL Ubuntu 24.04 (pakketinhoud, afhankelijkheden via `apt-get install --simulate`, starten en Wayland-app-id); nog niet op een echte Mint-desktop.
+
+Controleer een download met het bijbehorende `.sha256`-bestand (`Get-FileHash` / `sha256sum`).
+
+## Release bouwen
+
+Windows (zip, en de installer als [NSIS 3](https://nsis.sourceforge.io) aanwezig is: op PATH, in de standaardmap, of `-Makensis <pad>`):
 
 ```
 pwsh scripts\package-windows.ps1
 ```
 
-Maakt `dist\ForgeTerm-<versie>-windows-x64.zip` (+ `.sha256`) met `forgeterm.exe` (met icoon, zonder consolevenster), deze README, de lettertypelicentie en `THIRD-PARTY.txt`: alle meegecompileerde crates met hun licentie, gegenereerd uit `cargo tree`. Installeert niets; uitpakken en `forgeterm.exe` starten. Een MSI/winget-pakket volgt (vereist WiX of een gepubliceerde release).
+Maakt `dist\ForgeTerm-<versie>-windows-x64.zip` en `dist\ForgeTerm-<versie>-setup-x64.exe` (elk + `.sha256`) met `forgeterm.exe` (met icoon, zonder consolevenster), deze README, de lettertypelicentie en `THIRD-PARTY.txt`: alle meegecompileerde crates met hun licentie, gegenereerd uit `cargo tree`. Het installerscript staat in `packaging/windows/forgeterm.nsi`.
+
+Linux (.deb; vereist `cargo install --locked cargo-deb` en `dpkg-dev`):
+
+```
+bash scripts/package-linux.sh
+```
+
+Maakt `dist/forgeterm_<versie>-1_amd64.deb` (+ `.sha256`). Pakketgegevens: `[package.metadata.deb]` in `crates/forgeterm-app/Cargo.toml`; menu-item: `packaging/linux/forgeterm.desktop`.
 
 ## Ontwikkelen in VS Code
 

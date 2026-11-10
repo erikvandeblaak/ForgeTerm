@@ -267,6 +267,17 @@ Rust 1.99.1 per gebruiker (rustup, geen sudo); verse clone in het Linux-bestands
 | LX4 | Invoer via het WSLg-venster: `touch /tmp/ft_input_ok; cd crates; ls --color=auto` + Enter → bestand bestaat in Linux, gekleurde uitvoer, statusbalk volgt direct naar `~/forgeterm-linux-test/crates` | ✅ |
 | LX5 | Echte Linux Mint-desktop (Cinnamon, X11) | ⬜ niet getest — WSL is dezelfde Ubuntu-basis maar een andere desktop/compositor |
 
+### Pakketten (2026-11-10)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| PK1 | `scripts/package-linux.sh` in WSL Ubuntu 24.04 → `forgeterm_0.1.0-1_amd64.deb`; `dpkg-deb -I/-c`: binary 755 in `/usr/bin`, `.desktop`, SVG-icoon in hicolor, README/licenties/THIRD-PARTY/copyright in `/usr/share/doc/forgeterm`; Depends `libc6 (>= 2.39)` (Mint 22 = 2.39) + X11/Wayland/xkbcommon/EGL | ✅ |
+| PK2 | `apt-get install --simulate ./forgeterm_…deb`: afhankelijkheden lossen op (alleen `libxkbcommon-x11-0` + `libxcb-xkb1` extra in kale WSL) | ✅ |
+| PK3 | Uitgepakt pakket (`dpkg -x`) starten met `WAYLAND_DEBUG=1`: `xdg_toplevel.set_app_id("forgeterm")` (= naam van het `.desktop`-bestand); daarvoor was het leeg | ✅ |
+| PK4 | Echt installeren met `sudo apt install` op een Mint-desktop (menu-item, icoon in taakbalk) | ⬜ niet getest |
+| PK5 | `scripts/package-windows.ps1` zonder NSIS: zip gemaakt, installer netjes overgeslagen met melding | ✅ |
+| PK6 | Windows-installer bouwen en installeren/upgraden/verwijderen (instellingen blijven) | ⬜ NSIS niet aanwezig |
+
 ### Beveiliging en sneltoetsen (2026-11-10, Windows 11)
 
 | # | Scenario | Resultaat |
