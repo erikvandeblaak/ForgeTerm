@@ -49,6 +49,7 @@ pub enum CommandId {
     ToggleViewer,
     ViewSelectedFile,
     ToggleMonitor,
+    KeyboardShortcuts,
     ExplorerToggleHidden,
     ExplorerToggleFollow,
     ExplorerRefresh,
@@ -103,6 +104,7 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::ToggleViewer,
     CommandId::ViewSelectedFile,
     CommandId::ToggleMonitor,
+    CommandId::KeyboardShortcuts,
     CommandId::ExplorerToggleHidden,
     CommandId::ExplorerToggleFollow,
     CommandId::ExplorerRefresh,
@@ -149,9 +151,103 @@ impl CommandId {
                 "AI"
             }
             ToggleGitPanel | GitRefresh | GitShowHistory => "Git",
-            About => "Help",
+            About | KeyboardShortcuts => "Help",
             Quit => "App",
         }
+    }
+
+    /// Stable name for settings.toml `[keys]` (and shown in Help → Keyboard
+    /// Shortcuts). Parameterised commands carry their number / agent in the name.
+    pub fn config_name(self) -> String {
+        use CommandId::*;
+        let fixed = match self {
+            NewTabWithShell(i) => return format!("new_tab_with_shell_{}", i + 1),
+            SelectTab(i) => return format!("select_tab_{}", i + 1),
+            FocusPane(d) => {
+                return format!(
+                    "focus_pane_{}",
+                    match d {
+                        Dir::Left => "left",
+                        Dir::Right => "right",
+                        Dir::Up => "up",
+                        Dir::Down => "down",
+                    }
+                );
+            }
+            StartAgent(kind, split) => {
+                let agent = match kind {
+                    AgentKind::ClaudeCode => "claude_code",
+                    AgentKind::Codex => "codex",
+                };
+                return format!("start_{agent}{}", if split { "_split" } else { "" });
+            }
+            CommandPalette => "command_palette",
+            NewTab => "new_tab",
+            CloseTab => "close_tab",
+            ClosePane => "close_pane",
+            NextTab => "next_tab",
+            PreviousTab => "previous_tab",
+            SplitRight => "split_right",
+            SplitDown => "split_down",
+            TogglePaneZoom => "toggle_pane_zoom",
+            RestartShell => "restart_shell",
+            ClearScrollback => "clear_scrollback",
+            ScrollToTop => "scroll_to_top",
+            ScrollToBottom => "scroll_to_bottom",
+            ScrollPageUp => "scroll_page_up",
+            ScrollPageDown => "scroll_page_down",
+            Copy => "copy",
+            Paste => "paste",
+            FindInTerminal => "find_in_terminal",
+            ZoomIn => "zoom_in",
+            ZoomOut => "zoom_out",
+            ZoomReset => "zoom_reset",
+            ToggleExplorer => "toggle_explorer",
+            ExplorerToggleHidden => "explorer_toggle_hidden",
+            ExplorerToggleFollow => "explorer_toggle_follow",
+            ExplorerRefresh => "explorer_refresh",
+            ExplorerParent => "explorer_parent",
+            ExplorerOpenSelected => "explorer_open_selected",
+            InsertSelectedPath => "insert_selected_path",
+            CopySelectedPath => "copy_selected_path",
+            NewTabInSelectedFolder => "new_tab_in_selected_folder",
+            OpenSettings => "open_settings",
+            ReloadSettings => "reload_settings",
+            ToggleAiPanel => "toggle_ai_panel",
+            AiRefresh => "ai_refresh",
+            OpenPromptStudio => "prompt_studio",
+            OpenPromptsFolder => "open_prompts_folder",
+            ToggleGitPanel => "toggle_git_panel",
+            GitRefresh => "git_refresh",
+            GitShowHistory => "git_history",
+            ToggleViewer => "toggle_viewer",
+            ViewSelectedFile => "view_selected_file",
+            ToggleMonitor => "toggle_monitor",
+            KeyboardShortcuts => "keyboard_shortcuts",
+            About => "about",
+            Quit => "quit",
+        };
+        fixed.to_owned()
+    }
+
+    /// Inverse of [`Self::config_name`] (case-insensitive).
+    pub fn from_config_name(name: &str) -> Option<CommandId> {
+        let name = name.trim().to_ascii_lowercase();
+        let parametrised = (0..9)
+            .flat_map(|i| [CommandId::NewTabWithShell(i), CommandId::SelectTab(i)])
+            .chain(AgentKind::ALL.iter().flat_map(|k| {
+                [
+                    CommandId::StartAgent(*k, false),
+                    CommandId::StartAgent(*k, true),
+                ]
+            }));
+        // The palette itself is not in STATIC_COMMANDS (it does not list itself).
+        STATIC_COMMANDS
+            .iter()
+            .copied()
+            .chain(std::iter::once(CommandId::CommandPalette))
+            .chain(parametrised)
+            .find(|id| id.config_name() == name)
     }
 
     /// Title for commands that need no runtime data. Parameterised commands get their
@@ -205,6 +301,7 @@ impl CommandId {
             ToggleViewer => "Toggle Code Viewer",
             ViewSelectedFile => "View Selected File",
             ToggleMonitor => "Toggle Monitor (CPU / Memory)",
+            KeyboardShortcuts => "Keyboard Shortcuts",
             GitRefresh => "Refresh Git Status",
             GitShowHistory => "Show History and Activity",
             ReloadSettings => "Reload Settings",
@@ -228,6 +325,8 @@ pub enum KeyCode {
     Right,
     Up,
     Down,
+    /// F1–F12.
+    F(u8),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -271,7 +370,62 @@ impl fmt::Display for KeyBinding {
             KeyCode::Right => f.write_str("→"),
             KeyCode::Up => f.write_str("↑"),
             KeyCode::Down => f.write_str("↓"),
+            KeyCode::F(n) => write!(f, "F{n}"),
         }
+    }
+}
+
+impl KeyBinding {
+    /// Parses `"Ctrl+Shift+P"`, `"Alt+Left"`, `"F5"`, `"Ctrl+="` (case-insensitive;
+    /// `Control`, `PgUp`/`PageUp` and arrow names are accepted).
+    pub fn parse(text: &str) -> Result<KeyBinding, String> {
+        let parts: Vec<&str> = text.split('+').map(str::trim).collect();
+        // "Ctrl++" ends in an empty part followed by nothing: the key is "+".
+        let (mods, key) = match parts.as_slice() {
+            [.., "", ""] => (&parts[..parts.len() - 2], "+"),
+            [mods @ .., key] => (mods, *key),
+            [] => return Err("empty key".into()),
+        };
+        let mut b = KeyBinding::new(false, false, false, KeyCode::Tab);
+        for m in mods {
+            match m.to_ascii_lowercase().as_str() {
+                "ctrl" | "control" => b.ctrl = true,
+                "shift" => b.shift = true,
+                "alt" => b.alt = true,
+                other => return Err(format!("unknown modifier '{other}' in '{text}'")),
+            }
+        }
+        let lower = key.to_ascii_lowercase();
+        b.key = match lower.as_str() {
+            "tab" => KeyCode::Tab,
+            "enter" | "return" => KeyCode::Enter,
+            "insert" | "ins" => KeyCode::Insert,
+            "pageup" | "pgup" => KeyCode::PageUp,
+            "pagedown" | "pgdn" => KeyCode::PageDown,
+            "left" => KeyCode::Left,
+            "right" => KeyCode::Right,
+            "up" => KeyCode::Up,
+            "down" => KeyCode::Down,
+            f if f.len() >= 2
+                && f.starts_with('f')
+                && f[1..].parse::<u8>().is_ok_and(|n| (1..=12).contains(&n)) =>
+            {
+                KeyCode::F(f[1..].parse().unwrap_or(1))
+            }
+            _ => {
+                let mut chars = lower.chars();
+                match (chars.next(), chars.next()) {
+                    (Some(c), None) if !c.is_whitespace() => KeyCode::Char(c),
+                    _ => return Err(format!("unknown key '{key}' in '{text}'")),
+                }
+            }
+        };
+        Ok(b)
+    }
+
+    /// A plain Ctrl+letter (or Ctrl+symbol) is a control code programs use.
+    pub fn takes_terminal_key(&self) -> bool {
+        self.ctrl && !self.shift && !self.alt && matches!(self.key, KeyCode::Char(_))
     }
 }
 
@@ -344,6 +498,51 @@ impl Default for Keymap {
 }
 
 impl Keymap {
+    /// The defaults plus the user's `[keys]` entries (key text, command name or
+    /// `"none"`). A user binding replaces whatever the key did before. Returns the
+    /// problems found, as text for the settings banner.
+    pub fn with_overrides(overrides: &[(String, String)]) -> (Keymap, Vec<String>) {
+        let mut map = Keymap::default();
+        let mut problems = Vec::new();
+        for (key_text, command) in overrides {
+            let key = match KeyBinding::parse(key_text) {
+                Ok(k) => k,
+                Err(e) => {
+                    problems.push(format!("keys: {e}"));
+                    continue;
+                }
+            };
+            let command = command.trim();
+            map.bindings.retain(|(b, _)| *b != key);
+            if command.eq_ignore_ascii_case("none") {
+                continue;
+            }
+            let Some(id) = CommandId::from_config_name(command) else {
+                problems.push(format!(
+                    "keys: unknown command '{command}' for {key} (see Help → Keyboard Shortcuts)"
+                ));
+                continue;
+            };
+            // First, so menus and the palette show the user's choice.
+            map.bindings.insert(0, (key, id));
+            if key.takes_terminal_key() {
+                problems.push(format!(
+                    "keys: {key} now runs '{command}' and no longer reaches programs in the terminal"
+                ));
+            }
+        }
+        (map, problems)
+    }
+
+    /// All bindings of a command, in display order.
+    pub fn bindings_for(&self, id: CommandId) -> Vec<KeyBinding> {
+        self.bindings
+            .iter()
+            .filter(|(_, c)| *c == id)
+            .map(|(b, _)| *b)
+            .collect()
+    }
+
     pub fn lookup(&self, pressed: KeyBinding) -> Option<CommandId> {
         self.bindings
             .iter()
@@ -448,6 +647,114 @@ mod tests {
             km.lookup(key(false, true, false, KeyCode::Insert)),
             Some(CommandId::Paste)
         );
+    }
+
+    #[test]
+    fn parses_key_text() {
+        let p = |s: &str| KeyBinding::parse(s).unwrap();
+        assert_eq!(
+            p("Ctrl+Shift+P"),
+            key(true, true, false, KeyCode::Char('p'))
+        );
+        assert_eq!(
+            p("control + k"),
+            key(true, false, false, KeyCode::Char('k'))
+        );
+        assert_eq!(p("Alt+Left"), key(false, false, true, KeyCode::Left));
+        assert_eq!(p("F5"), key(false, false, false, KeyCode::F(5)));
+        assert_eq!(p("Shift+F12"), key(false, true, false, KeyCode::F(12)));
+        assert_eq!(p("Ctrl+="), key(true, false, false, KeyCode::Char('=')));
+        assert_eq!(p("Ctrl++"), key(true, false, false, KeyCode::Char('+')));
+        assert_eq!(p("Ctrl+PgDn"), key(true, false, false, KeyCode::PageDown));
+        for bad in [
+            "",
+            "Ctrl+",
+            "Hyper+K",
+            "Ctrl+Shift+Banana",
+            "F13",
+            "Ctrl+ab",
+        ] {
+            assert!(KeyBinding::parse(bad).is_err(), "{bad}");
+        }
+        // Round trip through the display text.
+        assert_eq!(p(&p("Ctrl+Alt+F3").to_string()), p("Ctrl+Alt+F3"));
+    }
+
+    #[test]
+    fn config_names_are_unique_and_round_trip() {
+        let mut all: Vec<CommandId> = STATIC_COMMANDS.to_vec();
+        all.push(CommandId::CommandPalette);
+        all.extend((0..9).map(CommandId::NewTabWithShell));
+        all.extend((0..9).map(CommandId::SelectTab));
+        for k in AgentKind::ALL {
+            all.push(CommandId::StartAgent(k, false));
+            all.push(CommandId::StartAgent(k, true));
+        }
+        let mut seen = std::collections::HashSet::new();
+        for id in all {
+            let name = id.config_name();
+            assert!(seen.insert(name.clone()), "duplicate {name}");
+            assert!(
+                name.chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+            );
+            assert_eq!(CommandId::from_config_name(&name), Some(id), "{name}");
+        }
+        assert_eq!(
+            CommandId::from_config_name(" Command_Palette "),
+            Some(CommandId::CommandPalette)
+        );
+        assert_eq!(CommandId::from_config_name("nope"), None);
+    }
+
+    #[test]
+    fn user_keys_add_replace_and_remove() {
+        let o = |pairs: &[(&str, &str)]| {
+            pairs
+                .iter()
+                .map(|(k, c)| ((*k).to_owned(), (*c).to_owned()))
+                .collect::<Vec<_>>()
+        };
+        let (km, problems) = Keymap::with_overrides(&o(&[
+            ("Ctrl+K", "command_palette"),
+            ("Ctrl+Shift+G", "none"),
+            ("F5", "restart_shell"),
+            ("Alt+Shift+=", "split_down"),
+        ]));
+        // Ctrl+K is a terminal control code: allowed, but reported honestly.
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(problems[0].contains("no longer reaches programs"));
+        assert_eq!(
+            km.lookup(key(true, false, false, KeyCode::Char('k'))),
+            Some(CommandId::CommandPalette)
+        );
+        // The user's binding is shown first; the default still works.
+        assert_eq!(
+            km.binding_for(CommandId::CommandPalette)
+                .unwrap()
+                .to_string(),
+            "Ctrl+K"
+        );
+        assert_eq!(
+            km.lookup(key(true, true, false, KeyCode::Char('p'))),
+            Some(CommandId::CommandPalette)
+        );
+        assert_eq!(km.lookup(key(true, true, false, KeyCode::Char('g'))), None);
+        assert_eq!(
+            km.lookup(key(false, false, false, KeyCode::F(5))),
+            Some(CommandId::RestartShell)
+        );
+        assert_eq!(
+            km.lookup(key(false, true, true, KeyCode::Char('='))),
+            Some(CommandId::SplitDown)
+        );
+        assert!(km.conflicts().is_empty());
+
+        let (_, problems) =
+            Keymap::with_overrides(&o(&[("Ctrl+Q", "fly_away"), ("Hyper+X", "copy")]));
+        assert_eq!(problems.len(), 2, "{problems:?}");
+        assert!(problems[0].contains("unknown command 'fly_away'"));
+        assert!(problems[1].contains("unknown modifier"));
     }
 
     #[test]

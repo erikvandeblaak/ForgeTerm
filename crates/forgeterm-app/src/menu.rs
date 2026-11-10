@@ -132,7 +132,7 @@ pub fn menus(shell_count: usize) -> Vec<Menu> {
         },
         Menu {
             title: "Help",
-            items: vec![C(About)],
+            items: vec![C(KeyboardShortcuts), Sep, C(About)],
         },
     ]
 }

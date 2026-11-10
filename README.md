@@ -107,6 +107,7 @@ ForgeTerm leest `%APPDATA%\ForgeTerm\settings.toml` (Linux: `$XDG_CONFIG_HOME/fo
 | `terminal.start_directory` | startmap van ForgeTerm | map van de eerste tab |
 | `terminal.shell_integration` | true | shells melden hun map (geen profielwijzigingen) |
 | `explorer.visible` / `follow_terminal` / `show_hidden` | false / true / false | verkenner |
+| `[keys]` | (leeg) | eigen sneltoetsen: `"Ctrl+K" = "command_palette"`, `= "none"` haalt een standaardtoets weg; namen staan in Help → Keyboard Shortcuts |
 | `workspace.restore_session` | true | bij het starten de tabs, splits (met hun map) en viewer-bestanden van de vorige keer terugzetten |
 
 Fouten (typefout, onbekende sleutel, waarde buiten bereik) verschijnen in een balk bovenin; die instelling valt terug op de standaard. Een syntaxfout tijdens het bewerken laat de huidige instellingen staan. ForgeTerm schrijft nooit in een bestaand instellingenbestand.

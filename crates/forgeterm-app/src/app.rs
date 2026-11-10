@@ -83,6 +83,7 @@ pub enum Message {
     MenuRun(usize),
     MenuClose,
     AboutClose,
+    ShortcutsClose,
     ExplorerListed(PathBuf, Result<Listing, String>),
     ExplorerSelect(PathBuf),
     /// Chevron click: expand / collapse a folder.
@@ -247,6 +248,7 @@ pub struct App {
     /// The session file text last written, to save only on changes.
     saved_session: Option<String>,
     monitor: Monitor,
+    shortcuts_open: bool,
 }
 
 impl App {
@@ -293,6 +295,7 @@ impl App {
             notice: None,
             saved_session: None,
             monitor: Monitor::default(),
+            shortcuts_open: false,
         };
         app.menus = menu::menus(app.shells.len());
         app.load_settings(true);
@@ -421,6 +424,11 @@ impl App {
         if startup && self.explorer.root() != self.start_dir {
             self.explorer.set_root(self.start_dir.clone());
         }
+        // Shortcuts: defaults plus [keys]; rebuilt on every load (cheap).
+        let (keymap, key_problems) = Keymap::with_overrides(&new.keys);
+        self.keymap = keymap;
+        problems.extend(key_problems);
+
         for p in &problems {
             tracing::warn!("settings: {p}");
         }
@@ -856,6 +864,7 @@ impl App {
             }
             Message::MenuClose => self.menu = None,
             Message::AboutClose => self.about_open = false,
+            Message::ShortcutsClose => self.shortcuts_open = false,
             Message::ExplorerListed(path, result) => self.explorer.set_listing(path, result),
             Message::ExplorerSelect(path) => self.explorer.select(Some(path)),
             Message::ExplorerToggle(path) => {
@@ -1127,6 +1136,12 @@ impl App {
         }
 
         // Modal overlays own the keyboard while open.
+        if self.shortcuts_open {
+            if matches!(key, keyboard::Key::Named(Named::Escape | Named::Enter)) {
+                self.shortcuts_open = false;
+            }
+            return Task::none();
+        }
         if self.about_open {
             if matches!(key, keyboard::Key::Named(Named::Escape | Named::Enter)) {
                 self.about_open = false;
@@ -1630,6 +1645,7 @@ impl App {
                 }
             }
             CommandId::About => self.about_open = true,
+            CommandId::KeyboardShortcuts => self.shortcuts_open = true,
             // Same as closing the window: sessions are dropped, shells are shut down.
             CommandId::Quit => return self.request_close(CloseTarget::Quit),
         }
@@ -1662,7 +1678,9 @@ impl App {
             CommandId::SelectTab(i) => i < self.workspace.tabs.len() && i != self.workspace.active,
             CommandId::OpenPromptsFolder => self.prompts_dir().is_some(),
             CommandId::GitShowHistory => self.git.root().is_some(),
-            CommandId::ToggleViewer | CommandId::ToggleMonitor => true,
+            CommandId::ToggleViewer | CommandId::ToggleMonitor | CommandId::KeyboardShortcuts => {
+                true
+            }
             CommandId::ViewSelectedFile => self.explorer.selected().is_some_and(|e| !e.is_dir),
             CommandId::CommandPalette
             | CommandId::OpenPromptStudio
@@ -1730,6 +1748,117 @@ impl App {
         let outcome = t.session()?.search(query, older);
         t.refresh(&self.palette);
         Some(outcome)
+    }
+
+    /// Help → Keyboard Shortcuts: every command with its keys (from the live
+    /// keymap, so [keys] changes show) and its name for settings.toml.
+    fn view_shortcuts(&self) -> Element<'_, Message> {
+        let mut ids: Vec<CommandId> = STATIC_COMMANDS.to_vec();
+        ids.push(CommandId::CommandPalette);
+        ids.extend((0..self.shells.len().min(9)).map(CommandId::NewTabWithShell));
+        for k in AgentKind::ALL {
+            ids.push(CommandId::StartAgent(k, false));
+            ids.push(CommandId::StartAgent(k, true));
+        }
+        ids.sort_by_key(|id| id.category());
+        let mut list = column![].spacing(2);
+        let mut last_category = "";
+        for id in ids {
+            if id.category() != last_category {
+                last_category = id.category();
+                list = list.push(
+                    container(text(last_category).size(11).color(theme::TEXT_MUTED)).padding(
+                        iced::Padding {
+                            top: 8.0,
+                            right: 0.0,
+                            bottom: 2.0,
+                            left: 0.0,
+                        },
+                    ),
+                );
+            }
+            let keys: Vec<String> = self
+                .keymap
+                .bindings_for(id)
+                .iter()
+                .map(ToString::to_string)
+                .collect();
+            list = list.push(
+                row![
+                    text(self.command_title(id))
+                        .size(13)
+                        .color(theme::TEXT)
+                        .width(Length::FillPortion(5)),
+                    text(if keys.is_empty() {
+                        "—".to_owned()
+                    } else {
+                        keys.join("  ")
+                    })
+                    .size(12)
+                    .color(if keys.is_empty() {
+                        theme::DISABLED
+                    } else {
+                        theme::CYAN
+                    })
+                    .width(Length::FillPortion(4)),
+                    text(id.config_name())
+                        .size(11)
+                        .font(crate::terminal_view::TERMINAL_FONT)
+                        .color(theme::TEXT_MUTED)
+                        .width(Length::FillPortion(4)),
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
+            );
+        }
+        let alt_n = text("Alt+1…9 switch tabs · Ctrl+Shift+1…9 new tab with shell n")
+            .size(12)
+            .color(theme::TEXT_MUTED);
+        let card = container(
+            column![
+                row![
+                    text("Keyboard Shortcuts").size(18).color(theme::TEXT),
+                    space::horizontal(),
+                    button(text("Close (Esc)").size(12))
+                        .on_press(Message::ShortcutsClose)
+                        .padding([5, 12])
+                        .style(|_, status| ghost_button(status, theme::CYAN)),
+                ]
+                .align_y(iced::Alignment::Center),
+                text("Change them in settings.toml under [keys]: \"Ctrl+K\" = \"command_palette\", or \"none\" to remove one.")
+                    .size(12)
+                    .color(theme::TEXT_MUTED),
+                alt_n,
+                scrollable(list).height(Length::Fill),
+            ]
+            .spacing(8),
+        )
+        .padding(18)
+        .width(Length::Fixed(760.0))
+        .height(Length::Fill)
+        .max_height(680.0)
+        .style(|_| container::Style {
+            background: Some(theme::SURFACE.into()),
+            border: Border {
+                color: theme::BORDER,
+                width: 1.0,
+                radius: 10.0.into(),
+            },
+            shadow: Shadow {
+                color: Color::from_rgba(0.0, 0.0, 0.0, 0.55),
+                offset: Vector::new(0.0, 12.0),
+                blur_radius: 32.0,
+            },
+            ..Default::default()
+        });
+        let backdrop = container(opaque(card))
+            .center(Length::Fill)
+            .padding(24)
+            .style(|_| container::Style {
+                background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.35).into()),
+                ..Default::default()
+            });
+        opaque(mouse_area(backdrop).on_press(Message::ShortcutsClose))
     }
 
     // ---- monitor --------------------------------------------------------------------
@@ -2534,6 +2663,9 @@ impl App {
         }
         if self.about_open {
             layers = layers.push(view_about());
+        }
+        if self.shortcuts_open {
+            layers = layers.push(self.view_shortcuts());
         }
         if let Some((target, programs)) = &self.pending_close {
             layers = layers.push(view_close_confirm(target, programs));

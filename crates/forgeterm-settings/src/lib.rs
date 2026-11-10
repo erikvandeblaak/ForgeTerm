@@ -49,6 +49,9 @@ pub struct Settings {
     pub terminal: Terminal,
     pub explorer: Explorer,
     pub workspace: Workspace,
+    /// `[keys]`: (key text, command name or "none"), in file order. Checked by the
+    /// app, which knows the keys and commands.
+    pub keys: Vec<(String, String)>,
 }
 
 impl Default for Settings {
@@ -69,6 +72,7 @@ impl Default for Settings {
             workspace: Workspace {
                 restore_session: true,
             },
+            keys: Vec::new(),
         }
     }
 }
@@ -122,6 +126,13 @@ show_hidden = false
 # startup. Stored in session.toml next to this file: folders and shell names only,
 # never terminal output or commands. Agents come back as plain shells.
 restore_session = true
+
+[keys]
+# Your own shortcuts: "key" = "command". The command names are listed in
+# Help -> Keyboard Shortcuts. "none" removes a default shortcut. Examples:
+# "Ctrl+K" = "command_palette"
+# "F5" = "restart_shell"
+# "Ctrl+Shift+G" = "none"
 "#;
 
 /// Where the settings file lives: `%APPDATA%\ForgeTerm` on Windows,
@@ -203,7 +214,21 @@ pub fn parse(text: &str) -> Loaded {
             ("workspace", Value::Table(t)) => {
                 parse_workspace(t, &mut settings.workspace, &mut problems)
             }
-            ("terminal" | "explorer" | "workspace", _) => {
+            ("keys", Value::Table(t)) => {
+                for (key, value) in t {
+                    match value {
+                        Value::String(command) => {
+                            settings.keys.push((key.clone(), command.clone()))
+                        }
+                        other => problems.push(wrong_type(
+                            &format!("keys.\"{key}\""),
+                            "a command name in quotes",
+                            other,
+                        )),
+                    }
+                }
+            }
+            ("terminal" | "explorer" | "workspace" | "keys", _) => {
                 problems.push(format!("[{key}] must be a section"))
             }
             _ => problems.push(format!("unknown setting '{key}' (ignored)")),
@@ -382,10 +407,20 @@ mod tests {
             show_hidden = true
             [workspace]
             restore_session = false
+            [keys]
+            "Ctrl+K" = "command_palette"
+            "F5" = "none"
             "#,
         );
         assert!(s.problems.is_empty(), "{:?}", s.problems);
         assert!(!s.settings.workspace.restore_session);
+        assert_eq!(
+            s.settings.keys,
+            [
+                ("Ctrl+K".to_owned(), "command_palette".to_owned()),
+                ("F5".to_owned(), "none".to_owned())
+            ]
+        );
         let t = &s.settings.terminal;
         assert_eq!(t.font_size, 16.5);
         assert_eq!(t.scrollback, 0);
