@@ -28,7 +28,8 @@ Legenda: ✅ klaar en getest · 🟡 deels · ⬜ open. "Getest" betekent: daadw
 | File Explorer (zijpaneel, lazy boom, verborgen bestanden, refresh, map omhoog / als root, nieuwe tab in map) | ✅ Windows (2026-11-10) |
 | Werkmap volgen: nieuwe tab/split/herstart in de map van de shell, verkenner volgt, map in statusbalk | ✅ Windows (2026-11-10): pwsh, Windows PowerShell, cmd, Git Bash |
 | Drag-and-drop bestanden → terminal (shell-specifieke escaping) | ✅ Windows: vanuit Windows Verkenner; quoting getest in pwsh, Windows PowerShell, cmd, Git Bash. Slepen vanuit het eigen explorer-paneel ⬜ (nu dubbelklik / *Insert path*) |
-| Instellingen (TOML) + workspace-opslag (SQLite) | ⬜ |
+| Instellingen (`settings.toml`, live herladen, foutmeldingen) | ✅ Windows (2026-11-10) — zie TEST_PLAN T1–T8 |
+| Workspace-opslag (tabs/splits bewaren, SQLite) | ⬜ |
 
 ## Fase 3 — Premium UI
 
@@ -64,6 +65,7 @@ Linux Mint-validatie ⬜ · installers (MSI/winget, .deb/AppImage) ⬜ · benchm
 - **Explorer:** geen toetsenbordnavigatie in de boom, geen automatische verversing bij wijzigingen (knop Refresh), geen bestandsbewerkingen (bewust: alleen lezen), root start in de map van ForgeTerm (geen mapkiezer). Paneelbreedte vast (270 px).
 - **cmd en `%VAR%`:** in interactieve cmd wordt `%NAAM%` ook binnen quotes uitgebreid als die variabele bestaat; dat is in cmd niet te escapen.
 - **WSL-quoting** (`/mnt/c/…`) is unit-getest maar niet in een echte WSL-shell uitgevoerd.
+- **Instellingen** worden niet vanuit de UI geschreven (zoom/verkenner-toggles gelden voor de sessie). Geen instellingen-UI; het bestand is de bron. Nog geen thema-, lettertype-familie- of sneltoetsinstellingen.
 - **Afsluiten vraagt geen bevestiging** (menu Quit en venster-×), ook niet als er nog processen lopen.
 - **Geen Alt-mnemonics in de menubalk** (Alt+F enz. horen bij de shell); menu's openen met de muis of via de Command Palette.
 - **Tab-sneltoets Alt+1…9** i.p.v. Ctrl+Alt+N: Ctrl+Alt is AltGr op Windows en typt tekens op veel layouts.

@@ -24,6 +24,8 @@ Kwaliteitspoort vóór "klaar": fmt-check, clippy zonder warnings, alle tests gr
 - **Geen `unsafe`** (workspace-lint `deny`). Twee gedocumenteerde uitzonderingen: `set_var` vóór threads in `main.rs`, en `ScanPty::register` in `session.rs` (pure doorgifte van alacritty's `unsafe fn` trait-methode, zelfde contract).
 - **Platformcode** achter `#[cfg]` in een duidelijk afgebakende module; geen hardcoded shellpaden buiten `shell.rs`.
 - Nieuwe crate pas aanmaken als er echte code in komt.
+- Nieuwe instelling = veld + parser + regel in `TEMPLATE` (de test eist dat de template exact de defaults geeft) + toepassen in `App::load_settings` (alleen bij wijziging) + README-tabel. Alleen instellingen die echt iets doen.
+- Test de GUI met `FORGETERM_SETTINGS=<scratchpad-pad>`, nooit met het echte `%APPDATA%\ForgeTerm\settings.toml` van de gebruiker.
 - Claim geen Linux-validatie zonder test op Linux. Wél verplicht: `cargo clippy --workspace --all-targets --target x86_64-unknown-linux-gnu -- -D warnings` (compile-check van de Unix-paden).
 - Shell-integratie wijzigt nooit profiel-/rc-bestanden van de gebruiker; alleen argumenten/omgeving van de gestarte sessie.
 
@@ -34,6 +36,7 @@ Start de app vanuit een omgeving **zonder** `NO_COLOR` (Claude Code zet die; Pow
 ## Structuur
 
 - `crates/forgeterm-terminal` — Session (PTY + emulator), input-encoding, palet, snapshots, shelldetectie, pad-quoting per shell
+- `crates/forgeterm-settings` — `settings.toml` laden (tolerant, problemen als tekst), template, pad
 - `crates/forgeterm-explorer` — bestandsboom (lezen, sorteren, verborgen, lazy uitklappen); wijzigt nooit het bestandssysteem
 - `crates/forgeterm-app` — iced-applicatie, canvas-renderer, thema-tokens
 - `assets/` — fonts (OFL), branding

@@ -17,6 +17,7 @@
 | `tests/quote_real_shells.rs` | 6 bestanden met lastige namen; elke geïnstalleerde shell leest ze via het gequote pad: PowerShell 7, Windows PowerShell, cmd, Git Bash (WSL overgeslagen). Mutatiecheck: zonder typografische-quote-regel faalt pwsh | ✅ |
 | `cwd::tests` (6) + `integration::tests` (4) | OSC 7 (percent-decoding, UTF-8) en OSC 9;9 (met/zonder quotes), gesplitst over reads, laatste melding wint, andere OSC's genegeerd, misvormd/te lang/CAN genegeerd en herstel daarna, Windows/MSYS-padconversie; integratie per shell, bestaande PROMPT/PROMPT_COMMAND behouden | ✅ |
 | `tests/cwd_tracking.rs` | Elke geïnstalleerde shell in echte ConPTY met integratie: startmap gemeld, `cd` naar `it's a dir` gemeld. Geslaagd: PowerShell 7, Windows PowerShell, cmd, Git Bash (eerste poging faalde voor Git Bash: `/tmp/…` → opgelost met `pwd -W`) | ✅ |
+| `forgeterm-settings` (7) | Template = exact de defaults, leeg = defaults, alle waarden toegepast, 7 fouten → 7 meldingen met fallback, syntaxfout (één regel, `unreadable`), sectie geen tabel, `ensure_file` maakt één keer aan en overschrijft nooit | ✅ |
 | `forgeterm-explorer` (6) | Sortering, verborgen, ontbrekende map = fout, lazy uitklappen/inklappen, verouderde resultaten genegeerd, fouten + selectie | ✅ |
 | `terminal_pane::tests` (3) | Tabtitels: exe-pad → shellnaam, `cmd.exe - ping …` → `ping …`, programmatitels blijven | ✅ |
 
@@ -141,6 +142,24 @@ Testvalkuil: de OLE-drag-simulatie (`dragdrop.ps1`: eigen bronvenster, knop indr
 | W9 | Alt+F4 met 4 tabs: alle 9 childprocessen weg | ✅ |
 
 Gevonden en opgelost: Git Bash meldde MSYS-paden (`/tmp/…`); "Erik van de Blaak Edition" werd bij 3+ tabs afgekapt; actieve tab buiten beeld.
+
+### Instellingen (2026-11-10, Windows 11, met FORGETERM_SETTINGS naar een testbestand)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| T1 | Geen bestand: defaults, geen balk | ✅ |
+| T2 | Ctrl+, maakt het bestand aan (inhoud = template) en opent het in Kladblok | ✅ |
+| T3 | Live: font 18, verkenner zichtbaar, default_shell Git Bash → binnen 4 s toegepast; Ctrl+Shift+T opent Git Bash | ✅ |
+| T4 | Ongeldig font, scrollback te groot, onbekende sleutel → balk met 3 meldingen, fallback; Dismiss sluit | ✅ |
+| T5 | Font 20, daarna syntaxfout → font blijft 20, melding "(current settings kept)" | ✅ |
+| T6 | start_directory = docs → eerste tab en verkenner starten in docs | ✅ |
+| T7 | scrollback = 0 → wiel scrolt niet terug na 200 regels | ✅ |
+| T8 | Niet-bestaande startmap + onbekende shell → 2 meldingen (met beschikbare shells), fallback | ✅ |
+| T9 | Alt+F4: geen weesprocessen; echte `%APPDATA%\ForgeTerm` niet aangemaakt | ✅ |
+
+Gevonden en aangepast: een syntaxfout tijdens het bewerken zette alles terug naar defaults → huidige instellingen blijven; `.toml` heeft op Windows meestal geen koppeling (alleen een keuzedialoog) → Kladblok; kopregel van de balk was misleidend bij een syntaxfout.
+
+Let op: Kladblok in Windows 11 opent het bestand als tabblad in een al geopend Kladblok-venster van de gebruiker; sluit tijdens tests nooit Kladblok-processen.
 
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)
 

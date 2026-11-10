@@ -3,8 +3,10 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime};
 
 use forgeterm_explorer::{Listing, Tree, list_dir};
+use forgeterm_settings::Settings;
 use forgeterm_terminal::{
     Palette, SessionEvent, ShellSpec, detect_shells, encode_key, paste_needs_confirmation,
     quote_path,
@@ -24,13 +26,12 @@ use iced::{
 use crate::commands::{CommandId, Dir, Keymap, STATIC_COMMANDS};
 use crate::menu::{self, Menu, MenuState};
 use crate::palette::{self as command_palette, CommandPalette, Entry};
-use crate::terminal_pane::{Outcome, Status, TermId, TermMsg, TerminalPane};
+use crate::terminal_pane::{Outcome, SessionOptions, Status, TermId, TermMsg, TerminalPane};
 use crate::terminal_view::{Metrics, TerminalCanvas};
 use crate::workspace::Workspace;
 use crate::{explorer_view, keys, theme};
 
 const LOGO: &[u8] = include_bytes!("../../../assets/branding/forgeterm-logo.svg");
-const DEFAULT_FONT_SIZE: f32 = 14.0;
 const MAX_TAB_TITLE: usize = 28;
 /// The horizontally scrolling tab strip.
 const TABS_ID: &str = "forgeterm-tabs";
@@ -86,6 +87,9 @@ pub enum Message {
     FileHovered,
     FilesHoveredLeft,
     FileDropped(PathBuf),
+    /// Periodic check whether settings.toml changed on disk.
+    SettingsTick,
+    DismissSettingsProblems,
 }
 
 /// Entry of the "new tab with shell…" dropdown.
@@ -130,6 +134,15 @@ pub struct App {
     revealed_tab: (usize, usize),
     /// Files from the OS are being dragged over the window.
     drop_hover: bool,
+    settings: Settings,
+    /// `None` when no config directory could be determined.
+    settings_path: Option<PathBuf>,
+    /// Modification time of the settings file when it was last loaded.
+    settings_mtime: Option<SystemTime>,
+    /// Problems from the last load, shown until dismissed.
+    settings_problems: Vec<String>,
+    /// Where the first tab starts and the fallback for unknown shell directories.
+    start_dir: PathBuf,
 }
 
 impl App {
@@ -140,7 +153,7 @@ impl App {
             next_id: 1,
             shells: detect_shells(),
             palette: Palette::default(),
-            metrics: Metrics::new(DEFAULT_FONT_SIZE),
+            metrics: Metrics::new(Settings::default().terminal.font_size),
             pending_paste: None,
             error: None,
             keymap: Keymap::default(),
@@ -149,14 +162,20 @@ impl App {
             menus: Vec::new(),
             menu: None,
             about_open: false,
-            explorer: Tree::new(start_dir()),
+            explorer: Tree::new(launch_dir()),
             explorer_visible: false,
             explorer_follow: true,
             explorer_synced: None,
             revealed_tab: (0, 0),
             drop_hover: false,
+            settings: Settings::default(),
+            settings_path: forgeterm_settings::default_path(),
+            settings_mtime: None,
+            settings_problems: Vec::new(),
+            start_dir: launch_dir(),
         };
         app.menus = menu::menus(app.shells.len());
+        app.load_settings(true);
         let terminal = app.new_tab(None, None);
         let root = app.explorer.root().to_path_buf();
         (app, Task::batch([terminal, load_dir(root)]))
@@ -172,8 +191,12 @@ impl App {
     ) -> (TermId, Task<Message>) {
         let id = self.next_id;
         self.next_id += 1;
-        let cwd = cwd.or_else(|| std::env::current_dir().ok());
-        let (pane, task) = TerminalPane::new(id, shell, cwd, self.metrics, &self.palette);
+        let cwd = Some(cwd.unwrap_or_else(|| self.start_dir.clone()));
+        let options = SessionOptions {
+            scrollback: self.settings.terminal.scrollback,
+            shell_integration: self.settings.terminal.shell_integration,
+        };
+        let (pane, task) = TerminalPane::new(id, shell, cwd, options, self.metrics, &self.palette);
         self.terminals.insert(id, pane);
         (id, task)
     }
@@ -181,8 +204,102 @@ impl App {
     fn shell_at(&self, index: Option<usize>) -> Option<ShellSpec> {
         match index {
             Some(i) => self.shells.get(i).cloned(),
-            None => self.shells.first().cloned(),
+            None => self
+                .default_shell_index()
+                .and_then(|i| self.shells.get(i).cloned()),
         }
+    }
+
+    /// The configured default shell, or the first detected one.
+    fn default_shell_index(&self) -> Option<usize> {
+        let wanted = self.settings.terminal.default_shell.as_deref();
+        wanted
+            .and_then(|name| {
+                self.shells
+                    .iter()
+                    .position(|s| s.name.eq_ignore_ascii_case(name))
+            })
+            .or_else(|| (!self.shells.is_empty()).then_some(0))
+    }
+
+    // ---- settings -------------------------------------------------------------------
+
+    /// (Re)loads settings.toml and applies what changed. At startup everything is
+    /// applied; on reload only settings whose value in the file changed, so runtime
+    /// toggles (zoom, explorer) are not reset by unrelated edits.
+    fn load_settings(&mut self, startup: bool) {
+        let Some(path) = self.settings_path.clone() else {
+            return;
+        };
+        self.settings_mtime = file_mtime(&path);
+        let loaded = forgeterm_settings::load(&path);
+        // A half-edited file with a syntax error must not reset a running app to
+        // defaults: keep the current settings and only report the error.
+        if loaded.unreadable && !startup {
+            self.settings_problems = loaded
+                .problems
+                .into_iter()
+                .map(|p| format!("{p} (current settings kept)"))
+                .collect();
+            return;
+        }
+        let mut problems = loaded.problems;
+        let new = loaded.settings;
+        let old = std::mem::replace(&mut self.settings, new.clone());
+
+        if let Some(name) = &new.terminal.default_shell
+            && !self
+                .shells
+                .iter()
+                .any(|s| s.name.eq_ignore_ascii_case(name))
+        {
+            let available: Vec<&str> = self.shells.iter().map(|s| s.name.as_str()).collect();
+            problems.push(format!(
+                "terminal.default_shell = \"{name}\" is not installed; available: {}",
+                available.join(", ")
+            ));
+        }
+        self.start_dir = match &new.terminal.start_directory {
+            Some(dir) if dir.is_dir() => dir.clone(),
+            Some(dir) => {
+                problems.push(format!(
+                    "terminal.start_directory = \"{}\" is not a folder; using {}",
+                    dir.display(),
+                    launch_dir().display()
+                ));
+                launch_dir()
+            }
+            None => launch_dir(),
+        };
+
+        let (t_old, t_new) = (&old.terminal, &new.terminal);
+        if startup || t_old.font_size != t_new.font_size {
+            self.set_font_size(t_new.font_size);
+        }
+        let (e_old, e_new) = (&old.explorer, &new.explorer);
+        if startup || e_old.visible != e_new.visible {
+            self.explorer_visible = e_new.visible;
+        }
+        if startup || e_old.follow_terminal != e_new.follow_terminal {
+            self.explorer_follow = e_new.follow_terminal;
+            self.explorer_synced = None;
+        }
+        if startup || e_old.show_hidden != e_new.show_hidden {
+            self.explorer.set_show_hidden(e_new.show_hidden);
+        }
+        if startup && self.explorer.root() != self.start_dir {
+            self.explorer.set_root(self.start_dir.clone());
+        }
+        for p in &problems {
+            tracing::warn!("settings: {p}");
+        }
+        self.settings_problems = problems;
+    }
+
+    fn settings_changed_on_disk(&self) -> bool {
+        self.settings_path
+            .as_deref()
+            .is_some_and(|p| file_mtime(p) != self.settings_mtime)
     }
 
     fn new_tab(&mut self, shell_index: Option<usize>, cwd: Option<PathBuf>) -> Task<Message> {
@@ -323,7 +440,9 @@ impl App {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        event::listen_with(|event, status, _window| match event {
+        // A cheap stat every 2 s picks up saved edits to settings.toml.
+        let settings = iced::time::every(Duration::from_secs(2)).map(|_| Message::SettingsTick);
+        let events = event::listen_with(|event, status, _window| match event {
             // Keys a widget already handled (e.g. Enter submitting the palette's text
             // input) must not also reach the terminal.
             Event::Keyboard(keyboard::Event::KeyPressed {
@@ -342,7 +461,8 @@ impl App {
             Event::Window(window::Event::FilesHoveredLeft) => Some(Message::FilesHoveredLeft),
             Event::Window(window::Event::FileDropped(path)) => Some(Message::FileDropped(path)),
             _ => None,
-        })
+        });
+        Subscription::batch([events, settings])
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -515,6 +635,12 @@ impl App {
             Message::ExplorerActivate(path, false) => self.insert_paths(&[path]),
             Message::FileHovered => self.drop_hover = true,
             Message::FilesHoveredLeft => self.drop_hover = false,
+            Message::SettingsTick => {
+                if self.settings_changed_on_disk() {
+                    self.load_settings(false);
+                }
+            }
+            Message::DismissSettingsProblems => self.settings_problems.clear(),
             Message::FileDropped(path) => {
                 self.drop_hover = false;
                 self.insert_paths(&[path]);
@@ -839,7 +965,18 @@ impl App {
             CommandId::Paste => return Task::done(Message::Paste),
             CommandId::ZoomIn => self.set_font_size(self.metrics.font_size + 1.0),
             CommandId::ZoomOut => self.set_font_size(self.metrics.font_size - 1.0),
-            CommandId::ZoomReset => self.set_font_size(DEFAULT_FONT_SIZE),
+            CommandId::ZoomReset => self.set_font_size(self.settings.terminal.font_size),
+            CommandId::OpenSettings => {
+                if let Some(path) = self.settings_path.clone() {
+                    let opened = forgeterm_settings::ensure_file(&path)
+                        .map_err(|e| format!("could not create {}: {e}", path.display()))
+                        .and_then(|()| open_in_editor(&path));
+                    if let Err(e) = opened {
+                        self.settings_problems = vec![e];
+                    }
+                }
+            }
+            CommandId::ReloadSettings => self.load_settings(false),
             CommandId::ToggleExplorer => self.explorer_visible = !self.explorer_visible,
             CommandId::ExplorerToggleFollow => {
                 self.explorer_follow = !self.explorer_follow;
@@ -930,6 +1067,7 @@ impl App {
             | CommandId::About
             | CommandId::Quit
             | CommandId::ToggleExplorer => true,
+            CommandId::OpenSettings | CommandId::ReloadSettings => self.settings_path.is_some(),
             CommandId::ExplorerToggleHidden
             | CommandId::ExplorerRefresh
             | CommandId::ExplorerToggleFollow => self.explorer_visible,
@@ -1058,6 +1196,9 @@ impl App {
 
     pub fn view(&self) -> Element<'_, Message> {
         let mut layout = column![self.view_top_bar()];
+        if !self.settings_problems.is_empty() {
+            layout = layout.push(settings_banner(&self.settings_problems));
+        }
         if let Some((_, pending)) = &self.pending_paste {
             layout = layout.push(paste_banner(pending));
         }
@@ -1550,9 +1691,88 @@ fn view_about<'a>() -> Element<'a, Message> {
     opaque(mouse_area(backdrop).on_press(Message::AboutClose))
 }
 
-/// The folder the explorer starts in: where new terminals start.
-fn start_dir() -> PathBuf {
+/// The folder ForgeTerm was started from.
+fn launch_dir() -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
+fn file_mtime(path: &Path) -> Option<SystemTime> {
+    std::fs::metadata(path).and_then(|m| m.modified()).ok()
+}
+
+/// Opens a text file for editing (detached). Windows: Notepad, which is always
+/// present (`.toml` usually has no file association, which would only show the
+/// "How do you want to open this file?" dialog). Elsewhere: the desktop's default.
+fn open_in_editor(path: &Path) -> Result<(), String> {
+    let program = if cfg!(windows) {
+        "notepad.exe"
+    } else if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    std::process::Command::new(program)
+        .arg(path)
+        .spawn()
+        .map(drop)
+        .map_err(|e| format!("could not open {} with {program}: {e}", path.display()))
+}
+
+/// Problems found in settings.toml (each setting fell back to its default).
+fn settings_banner(problems: &[String]) -> Element<'_, Message> {
+    const SHOWN: usize = 3;
+    let mut lines = column![
+        text(format!(
+            "settings.toml: {} problem{}",
+            problems.len(),
+            if problems.len() == 1 { "" } else { "s" }
+        ))
+        .size(13)
+        .color(theme::TEXT)
+    ]
+    .spacing(2);
+    for p in problems.iter().take(SHOWN) {
+        lines = lines.push(text(format!("• {p}")).size(12).color(theme::TEXT_MUTED));
+    }
+    if problems.len() > SHOWN {
+        lines = lines.push(
+            text(format!(
+                "… and {} more (see the log)",
+                problems.len() - SHOWN
+            ))
+            .size(12)
+            .color(theme::TEXT_MUTED),
+        );
+    }
+    let action = |label: &'static str, msg: Message| {
+        button(text(label).size(12))
+            .on_press(msg)
+            .padding([5, 10])
+            .style(|_, status| ghost_button(status, theme::CYAN))
+    };
+    container(
+        row![
+            text("⚙").size(16).color(theme::AMBER),
+            lines,
+            space::horizontal(),
+            action("Open settings", Message::Command(CommandId::OpenSettings)),
+            action("Dismiss", Message::DismissSettingsProblems),
+        ]
+        .spacing(12)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([8, 14])
+    .width(Length::Fill)
+    .style(|_| container::Style {
+        background: Some(theme::SURFACE.into()),
+        border: Border {
+            color: theme::AMBER,
+            width: 1.0,
+            radius: 0.0.into(),
+        },
+        ..Default::default()
+    })
+    .into()
 }
 
 /// Lists a directory on a background thread (slow or network drives must never

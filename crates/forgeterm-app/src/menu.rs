@@ -47,6 +47,9 @@ pub fn menus(shell_count: usize) -> Vec<Menu> {
         C(ClosePane),
         C(CloseTab),
         Sep,
+        C(OpenSettings),
+        C(ReloadSettings),
+        Sep,
         C(Quit),
     ]);
 

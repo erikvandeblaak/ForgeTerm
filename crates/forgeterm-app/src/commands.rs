@@ -51,6 +51,8 @@ pub enum CommandId {
     InsertSelectedPath,
     CopySelectedPath,
     NewTabInSelectedFolder,
+    OpenSettings,
+    ReloadSettings,
     About,
     Quit,
 }
@@ -90,6 +92,8 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::InsertSelectedPath,
     CommandId::CopySelectedPath,
     CommandId::NewTabInSelectedFolder,
+    CommandId::OpenSettings,
+    CommandId::ReloadSettings,
     CommandId::About,
     CommandId::Quit,
 ];
@@ -113,6 +117,7 @@ impl CommandId {
             | InsertSelectedPath
             | CopySelectedPath
             | NewTabInSelectedFolder => "Explorer",
+            OpenSettings | ReloadSettings => "Settings",
             About => "Help",
             Quit => "App",
         }
@@ -158,6 +163,8 @@ impl CommandId {
             InsertSelectedPath => "Insert Selected Path into Terminal",
             CopySelectedPath => "Copy Selected Path",
             NewTabInSelectedFolder => "New Tab in Selected Folder",
+            OpenSettings => "Open Settings File",
+            ReloadSettings => "Reload Settings",
             About => "About ForgeTerm",
             Quit => "Quit ForgeTerm",
         }
@@ -247,6 +254,7 @@ impl Default for Keymap {
             (b(CS, Char('t')), NewTab),
             (b(CS, Char('w')), ClosePane),
             (b(CS, Char('e')), ToggleExplorer),
+            (b(C, Char(',')), OpenSettings),
             (b(C, Tab), NextTab),
             (b(CS, Tab), PreviousTab),
             (b(AS, Char('=')), SplitRight),

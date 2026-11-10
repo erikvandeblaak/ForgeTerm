@@ -58,10 +58,18 @@ pub enum Outcome {
     CwdChanged,
 }
 
+/// Session settings fixed when a terminal is created (from settings.toml).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionOptions {
+    pub scrollback: usize,
+    pub shell_integration: bool,
+}
+
 pub struct TerminalPane {
     pub id: TermId,
     pub shell: ShellSpec,
     working_directory: Option<PathBuf>,
+    options: SessionOptions,
     session: Option<Session>,
     /// Incremented on every (re)start so events of a previous session are ignored.
     generation: u64,
@@ -82,6 +90,7 @@ impl TerminalPane {
         id: TermId,
         shell: ShellSpec,
         working_directory: Option<PathBuf>,
+        options: SessionOptions,
         metrics: Metrics,
         palette: &Palette,
     ) -> (Self, Task<Message>) {
@@ -89,6 +98,7 @@ impl TerminalPane {
             id,
             shell,
             working_directory,
+            options,
             session: None,
             generation: 0,
             status: Status::Running,
@@ -131,6 +141,8 @@ impl TerminalPane {
             working_directory: self.working_directory.clone(),
             size: self.grid_size(metrics),
             palette: palette.clone(),
+            scrollback: self.options.scrollback,
+            shell_integration: self.options.shell_integration,
             ..Default::default()
         };
         match Session::spawn(config, move |e| {

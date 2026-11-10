@@ -46,6 +46,7 @@ ForgeTerm/
 │   │   ├── tests/cwd_tracking.rs # elke geïnstalleerde shell in PTY: cd → juiste map gemeld
 │   │   └── examples/probe.rs     # diagnose: dump gestylede cellen van een programma
 │   ├── forgeterm-explorer/       # bestandsboom-model, GUI-vrij, unit-getest
+│   ├── forgeterm-settings/       # settings.toml: tolerant laden, template, pad; unit-getest
 │   └── forgeterm-app/            # GUI (binary `forgeterm`)
 │       ├── src/app.rs            # state, messages, update, layout, sneltoetsen
 │       ├── src/workspace.rs      # tabs + split-layout (pane_grid-state), unit-getest
@@ -121,6 +122,14 @@ Belangrijke details:
 - **Integratie zonder profielwijzigingen** (`integration.rs`): PowerShell krijgt na het laden van het profiel `-NoExit -Command` dat de bestaande `prompt` omwikkelt (OSC 9;9 met `ProviderPath`, alleen voor FileSystem). cmd: `PROMPT=$e]9;9;$P$e\…` vóór een bestaande PROMPT. Git Bash: `PROMPT_COMMAND` met de builtin `pwd -W` (Windows-pad; MSYS-paden als `/tmp` zijn anders niet te vertalen). Linux-bash: OSC 7 met `$PWD`. zsh/fish/WSL: geen injectie (zie ROADMAP).
 - **Veiligheid:** een melding is een hint die elk programma kan printen. Ze bepaalt alleen waar nieuwe tabs/splits starten en wat de verkenner toont; nooit uitgevoerd.
 - **App:** `TerminalPane.cwd`; nieuwe tab/split start in de map van de gefocuste shell, Restart Shell in de laatst gemelde map. `App::update` = `handle` + `sync_explorer` + `reveal_active_tab`: de verkenner volgt de gefocuste shell alleen als diens map veranderde sinds de vorige sync, zodat handmatig navigeren in de verkenner blijft staan tot de volgende `cd`. Volgen is uit te zetten (`cd`-knop, *Follow Terminal Folder*).
+
+## 4f. Instellingen
+
+- `forgeterm-settings::load` faalt nooit: ontbrekend bestand = defaults; syntaxfout, onbekende sleutel, verkeerd type of waarde buiten bereik → tekstuele melding in `problems`, die instelling houdt haar default. `unreadable` markeert een onleesbaar bestand.
+- Geen serde: de TOML-tabel wordt met de hand uitgelezen, zodat elke afwijking een precieze melding krijgt in plaats van één harde fout.
+- `App::load_settings(startup)`: bij start alles toepassen; bij herladen (mtime-check elke 2 s via `iced::time::every`, of *Reload Settings*) alleen wat in het bestand veranderde, zodat runtime-toggles (zoom, verkenner) niet door een ongerelateerde wijziging worden teruggezet. Een onleesbaar bestand tijdens het draaien houdt de huidige instellingen.
+- Sessie-instellingen (scrollback, shell-integratie) worden per terminal bij aanmaken vastgelegd (`SessionOptions`); ze gelden voor nieuwe terminals.
+- *Open Settings File* maakt het bestand alleen aan als het ontbreekt (`create_new`) en opent het in Kladblok (Windows; `.toml` heeft meestal geen koppeling) of via `xdg-open`.
 
 ## 5. Rendering
 
