@@ -276,7 +276,10 @@ Rust 1.99.1 per gebruiker (rustup, geen sudo); verse clone in het Linux-bestands
 | PK3 | Uitgepakt pakket (`dpkg -x`) starten met `WAYLAND_DEBUG=1`: `xdg_toplevel.set_app_id("forgeterm")` (= naam van het `.desktop`-bestand); daarvoor was het leeg | ✅ |
 | PK4 | Echt installeren met `sudo apt install` op een Mint-desktop (menu-item, icoon in taakbalk) | ⬜ niet getest |
 | PK5 | `scripts/package-windows.ps1` zonder NSIS: zip gemaakt, installer netjes overgeslagen met melding | ✅ |
-| PK6 | Windows-installer bouwen en installeren/upgraden/verwijderen (instellingen blijven) | ⬜ NSIS niet aanwezig |
+| PK6 | NSIS 3.13 (portable zip, MD5 gecontroleerd tegen SourceForge) → `ForgeTerm-0.1.0-setup-x64.exe` (6,9 MB). Stil installeren (`/S`): 5 bestanden in `%LOCALAPPDATA%\Programs\ForgeTerm`, exe identiek aan de build, Startmenu-snelkoppeling, geen bureaubladsnelkoppeling (standaard uit), Apps-vermelding (naam, versie, uitgever, icoon, grootte) | ✅ |
+| PK7 | ForgeTerm draait uit de installatiemap: installer stopt (exitcode 2), verwijderaar stopt; niets gewijzigd. Na sluiten: opnieuw installeren over bestaande installatie | ✅ |
+| PK8 | Verwijderen (`uninstall.exe /S`): map, snelkoppeling en Apps-vermelding weg; `%APPDATA%\ForgeTerm` per bestand (SHA-256) ongewijzigd | ✅ |
+| PK9 | Welkomstpagina met ForgeTerm-zijbalk (logo, editie, handtekening; `scripts/installer-art.ps1`) | ✅ (screenshot) |
 
 ### Beveiliging en sneltoetsen (2026-11-10, Windows 11)
 

@@ -69,9 +69,11 @@ if (-not $makensis) {
 $ico = Get-ChildItem target\release\build\forgeterm-app-*\out\forgeterm.ico |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if (-not $ico) { throw "forgeterm.ico not found under target\release\build" }
+$sidebar = Join-Path $dist "installer-sidebar.bmp"
+& (Join-Path $PSScriptRoot "installer-art.ps1") -Out $sidebar
 $setup = Join-Path $dist "ForgeTerm-$version-setup-x64.exe"
 & $makensis /V2 /INPUTCHARSET UTF8 "/DVERSION=$version" "/DSTAGE=$stage" "/DICON=$($ico.FullName)" `
-    "/DOUTFILE=$setup" packaging\windows\forgeterm.nsi
+    "/DSIDEBAR=$sidebar" "/DOUTFILE=$setup" packaging\windows\forgeterm.nsi
 if ($LASTEXITCODE -ne 0) { throw "makensis failed" }
 $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLower()
 Set-Content -Path "$setup.sha256" -Value "$hash  $(Split-Path -Leaf $setup)" -Encoding ascii

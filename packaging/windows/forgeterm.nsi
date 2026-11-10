@@ -6,7 +6,7 @@
 ; the user's settings and saved session in %APPDATA%\ForgeTerm.
 ;
 ; Defines passed by the build script: VERSION (x.y.z), STAGE (folder with the files),
-; ICON (forgeterm.ico), OUTFILE.
+; ICON (forgeterm.ico), SIDEBAR (welcome/finish image, scripts\installer-art.ps1), OUTFILE.
 
 Unicode true
 SetCompressor /SOLID lzma
@@ -36,6 +36,8 @@ VIAddVersionKey "FileDescription" "${APP} installer"
 
 !define MUI_ICON "${ICON}"
 !define MUI_UNICON "${ICON}"
+!define MUI_WELCOMEFINISHPAGE_BITMAP "${SIDEBAR}"
+!define MUI_WELCOMEFINISHPAGE_BITMAP_STRETCH AspectFitHeight
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TEXT "This installs ${APP} ${VERSION} for your Windows account only. No administrator rights are needed.$\r$\n$\r$\nYour settings in %APPDATA%\${APP} are kept, also when you uninstall."
 !define MUI_FINISHPAGE_RUN "$INSTDIR\forgeterm.exe"
