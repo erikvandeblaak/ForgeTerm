@@ -5,6 +5,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
+use forgeterm_agents::{Agent, AgentKind, ProjectContext};
 use forgeterm_explorer::{Listing, Tree, list_dir};
 use forgeterm_settings::Settings;
 use forgeterm_terminal::{
@@ -23,6 +24,7 @@ use iced::{
     window,
 };
 
+use crate::ai_view::{self, AgentState};
 use crate::commands::{CommandId, Dir, Keymap, STATIC_COMMANDS};
 use crate::menu::{self, Menu, MenuState};
 use crate::palette::{self as command_palette, CommandPalette, Entry};
@@ -90,6 +92,11 @@ pub enum Message {
     /// Periodic check whether settings.toml changed on disk.
     SettingsTick,
     DismissSettingsProblems,
+    AgentsDetected(Vec<(AgentKind, Option<Agent>)>),
+    /// Project context scanned for the given start folder.
+    ContextScanned(PathBuf, ProjectContext),
+    /// Insert a project file into the focused terminal (agent: `@path`).
+    AiInsert(PathBuf),
 }
 
 /// Entry of the "new tab with shell…" dropdown.
@@ -143,6 +150,11 @@ pub struct App {
     settings_problems: Vec<String>,
     /// Where the first tab starts and the fallback for unknown shell directories.
     start_dir: PathBuf,
+    ai_visible: bool,
+    agents: Vec<(AgentKind, AgentState)>,
+    ai_context: Option<ProjectContext>,
+    /// Folder the context was (or is being) scanned for.
+    ai_context_for: Option<PathBuf>,
 }
 
 impl App {
@@ -173,12 +185,22 @@ impl App {
             settings_mtime: None,
             settings_problems: Vec::new(),
             start_dir: launch_dir(),
+            ai_visible: false,
+            agents: AgentKind::ALL
+                .iter()
+                .map(|k| (*k, AgentState::Detecting))
+                .collect(),
+            ai_context: None,
+            ai_context_for: None,
         };
         app.menus = menu::menus(app.shells.len());
         app.load_settings(true);
         let terminal = app.new_tab(None, None);
         let root = app.explorer.root().to_path_buf();
-        (app, Task::batch([terminal, load_dir(root)]))
+        (
+            app,
+            Task::batch([terminal, load_dir(root), detect_agents()]),
+        )
     }
 
     // ---- terminal lifecycle -------------------------------------------------------
@@ -189,14 +211,26 @@ impl App {
         shell: ShellSpec,
         cwd: Option<PathBuf>,
     ) -> (TermId, Task<Message>) {
+        self.spawn_terminal_for(shell, cwd, None)
+    }
+
+    /// Like [`Self::spawn_terminal`]; agents run without shell integration.
+    fn spawn_terminal_for(
+        &mut self,
+        shell: ShellSpec,
+        cwd: Option<PathBuf>,
+        agent: Option<AgentKind>,
+    ) -> (TermId, Task<Message>) {
         let id = self.next_id;
         self.next_id += 1;
         let cwd = Some(cwd.unwrap_or_else(|| self.start_dir.clone()));
         let options = SessionOptions {
             scrollback: self.settings.terminal.scrollback,
-            shell_integration: self.settings.terminal.shell_integration,
+            shell_integration: agent.is_none() && self.settings.terminal.shell_integration,
         };
-        let (pane, task) = TerminalPane::new(id, shell, cwd, options, self.metrics, &self.palette);
+        let (mut pane, task) =
+            TerminalPane::new(id, shell, cwd, options, self.metrics, &self.palette);
+        pane.agent = agent;
         self.terminals.insert(id, pane);
         (id, task)
     }
@@ -319,6 +353,7 @@ impl App {
             .workspace
             .focused()
             .and_then(|id| self.terminals.get(&id))
+            .filter(|t| t.agent.is_none())
             .map(|t| t.shell.clone())
             .or_else(|| self.shell_at(None));
         let Some(shell) = shell else {
@@ -467,15 +502,70 @@ impl App {
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         let task = self.handle(message);
-        let follow_ups: Vec<Task<Message>> = [self.sync_explorer(), self.reveal_active_tab()]
-            .into_iter()
-            .flatten()
-            .collect();
+        let follow_ups: Vec<Task<Message>> = [
+            self.sync_explorer(),
+            self.reveal_active_tab(),
+            self.sync_ai_context(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
         if follow_ups.is_empty() {
             task
         } else {
             Task::batch(std::iter::once(task).chain(follow_ups))
         }
+    }
+
+    /// Rescans the project context when the AI panel is visible and the focused
+    /// shell's folder changed.
+    fn sync_ai_context(&mut self) -> Option<Task<Message>> {
+        if !self.ai_visible {
+            return None;
+        }
+        let dir = self.focused_cwd().unwrap_or_else(|| self.start_dir.clone());
+        if self.ai_context_for.as_ref() == Some(&dir) {
+            return None;
+        }
+        self.ai_context_for = Some(dir.clone());
+        Some(scan_context(dir))
+    }
+
+    fn found_agent(&self, kind: AgentKind) -> Option<&Agent> {
+        self.agents.iter().find_map(|(k, s)| match s {
+            AgentState::Found(a) if *k == kind => Some(a),
+            _ => None,
+        })
+    }
+
+    /// Starts an agent in the focused shell's project root, as a new tab or split.
+    fn start_agent(&mut self, kind: AgentKind, split: bool) -> Task<Message> {
+        let Some(agent) = self.found_agent(kind) else {
+            return Task::none();
+        };
+        let launch = forgeterm_agents::launch_command(&agent.path);
+        let shell = ShellSpec::new(kind.name(), launch.program, launch.args);
+        let here = self.focused_cwd().unwrap_or_else(|| self.start_dir.clone());
+        let root = forgeterm_agents::project_root(&here).0;
+        if split {
+            self.restore_zoom();
+        }
+        let (id, task) = self.spawn_terminal_for(shell, Some(root), Some(kind));
+        if split {
+            let ok = self
+                .workspace
+                .active_tab_mut()
+                .and_then(|tab| tab.split(Axis::Vertical, id))
+                .is_some();
+            if !ok {
+                self.terminals.remove(&id);
+                return Task::none();
+            }
+            self.refresh_visible();
+        } else {
+            self.workspace.push_tab(id);
+        }
+        task
     }
 
     /// Scrolls the tab strip so the active tab is visible after it changed.
@@ -641,6 +731,18 @@ impl App {
                 }
             }
             Message::DismissSettingsProblems => self.settings_problems.clear(),
+            Message::AgentsDetected(found) => {
+                self.agents = found
+                    .into_iter()
+                    .map(|(k, a)| (k, a.map_or(AgentState::Missing, AgentState::Found)))
+                    .collect();
+            }
+            Message::ContextScanned(dir, ctx) => {
+                if self.ai_context_for.as_ref() == Some(&dir) {
+                    self.ai_context = Some(ctx);
+                }
+            }
+            Message::AiInsert(path) => self.insert_context_file(&path),
             Message::FileDropped(path) => {
                 self.drop_hover = false;
                 self.insert_paths(&[path]);
@@ -977,7 +1079,27 @@ impl App {
                 }
             }
             CommandId::ReloadSettings => self.load_settings(false),
-            CommandId::ToggleExplorer => self.explorer_visible = !self.explorer_visible,
+            CommandId::ToggleExplorer => {
+                self.explorer_visible = !self.explorer_visible;
+                if self.explorer_visible {
+                    self.ai_visible = false;
+                }
+            }
+            CommandId::ToggleAiPanel => {
+                self.ai_visible = !self.ai_visible;
+                if self.ai_visible {
+                    self.explorer_visible = false;
+                }
+            }
+            CommandId::AiRefresh => {
+                self.agents = AgentKind::ALL
+                    .iter()
+                    .map(|k| (*k, AgentState::Detecting))
+                    .collect();
+                self.ai_context_for = None;
+                return detect_agents();
+            }
+            CommandId::StartAgent(kind, split) => return self.start_agent(kind, split),
             CommandId::ExplorerToggleFollow => {
                 self.explorer_follow = !self.explorer_follow;
                 // Turning it on jumps to the shell's directory right away.
@@ -1066,7 +1188,10 @@ impl App {
             | CommandId::ZoomReset
             | CommandId::About
             | CommandId::Quit
-            | CommandId::ToggleExplorer => true,
+            | CommandId::ToggleExplorer
+            | CommandId::ToggleAiPanel
+            | CommandId::AiRefresh => true,
+            CommandId::StartAgent(kind, _) => self.found_agent(kind).is_some(),
             CommandId::OpenSettings | CommandId::ReloadSettings => self.settings_path.is_some(),
             CommandId::ExplorerToggleHidden
             | CommandId::ExplorerRefresh
@@ -1100,6 +1225,31 @@ impl App {
     }
 
     /// Inserts paths quoted for the focused terminal's shell, followed by a space.
+    /// Inserts a project file into the focused terminal: as an `@path` file
+    /// reference (relative to the project root) when it runs Claude Code, otherwise
+    /// as a path quoted for the shell. Never followed by Enter.
+    fn insert_context_file(&mut self, path: &Path) {
+        let agent = self.focused().and_then(|t| t.agent);
+        match agent {
+            Some(AgentKind::ClaudeCode) => {
+                let root = self.ai_context.as_ref().map(|c| c.root.clone());
+                let rel = root
+                    .as_deref()
+                    .and_then(|r| path.strip_prefix(r).ok())
+                    .map_or_else(|| path.to_path_buf(), Path::to_path_buf);
+                let text = rel.to_string_lossy().replace('\\', "/");
+                // A reference with spaces would end at the first space.
+                if text.contains(char::is_whitespace) {
+                    self.insert_text(format!("{} ", path.display()));
+                } else {
+                    self.insert_text(format!("@{text} "));
+                }
+            }
+            Some(AgentKind::Codex) => self.insert_text(format!("{} ", path.display())),
+            None => self.insert_paths(&[path.to_path_buf()]),
+        }
+    }
+
     fn insert_paths(&mut self, paths: &[PathBuf]) {
         let Some(kind) = self.focused().map(|t| t.shell.kind) else {
             return;
@@ -1119,6 +1269,8 @@ impl App {
                 || id.static_title().to_owned(),
                 |s| format!("New Tab with {}", s.name),
             ),
+            CommandId::StartAgent(kind, false) => format!("Start {kind} in Project"),
+            CommandId::StartAgent(kind, true) => format!("Start {kind} in Split"),
             _ => id.static_title().to_owned(),
         }
     }
@@ -1155,6 +1307,12 @@ impl App {
         for i in 0..self.shells.len() {
             let id = CommandId::NewTabWithShell(i);
             entries.push(entry(id, self.command_title(id)));
+        }
+        for kind in AgentKind::ALL {
+            for split in [false, true] {
+                let id = CommandId::StartAgent(kind, split);
+                entries.push(entry(id, self.command_title(id)));
+            }
         }
         for (i, tab) in self.workspace.tabs.iter().enumerate() {
             let title = tab
@@ -1215,6 +1373,8 @@ impl App {
                 body
             ]
             .into()
+        } else if self.ai_visible {
+            row![ai_view::view(&self.agents, self.ai_context.as_ref()), body].into()
         } else {
             body
         };
@@ -1777,6 +1937,59 @@ fn settings_banner(problems: &[String]) -> Element<'_, Message> {
 
 /// Lists a directory on a background thread (slow or network drives must never
 /// block the UI) and reports the result.
+/// Runs `f` on a background thread and maps its result to a message.
+fn background<T: Send + 'static>(
+    f: impl FnOnce() -> T + Send + 'static,
+    to_message: impl Fn(T) -> Message + Send + 'static,
+) -> Task<Message> {
+    Task::perform(
+        async move {
+            let (tx, rx) = iced::futures::channel::oneshot::channel();
+            std::thread::spawn(move || {
+                let _ = tx.send(f());
+            });
+            rx.await
+        },
+        move |result| match result {
+            Ok(v) => to_message(v),
+            // The worker thread panicked; nothing to report beyond the log.
+            Err(_) => Message::DismissSettingsProblems,
+        },
+    )
+}
+
+/// Locates the agents and asks each for its version (off the UI thread; a slow
+/// virus scan of the executable must not freeze the window).
+fn detect_agents() -> Task<Message> {
+    background(
+        || {
+            AgentKind::ALL
+                .iter()
+                .map(|&kind| {
+                    let agent = forgeterm_agents::locate(kind).map(|path| Agent {
+                        kind,
+                        version: forgeterm_agents::query_version(
+                            &path,
+                            std::time::Duration::from_secs(20),
+                        ),
+                        path,
+                    });
+                    (kind, agent)
+                })
+                .collect()
+        },
+        Message::AgentsDetected,
+    )
+}
+
+fn scan_context(dir: PathBuf) -> Task<Message> {
+    let key = dir.clone();
+    background(
+        move || forgeterm_agents::scan_context(&dir),
+        move |ctx| Message::ContextScanned(key.clone(), ctx),
+    )
+}
+
 fn load_dir(path: PathBuf) -> Task<Message> {
     let target = path.clone();
     Task::perform(

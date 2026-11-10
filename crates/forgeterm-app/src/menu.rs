@@ -103,6 +103,19 @@ pub fn menus(shell_count: usize) -> Vec<Menu> {
             ],
         },
         Menu {
+            title: "AI",
+            items: {
+                let mut ai = vec![C(ToggleAiPanel), C(AiRefresh), Sep];
+                for kind in forgeterm_agents::AgentKind::ALL {
+                    ai.push(C(StartAgent(kind, false)));
+                }
+                for kind in forgeterm_agents::AgentKind::ALL {
+                    ai.push(C(StartAgent(kind, true)));
+                }
+                ai
+            },
+        },
+        Menu {
             title: "Help",
             items: vec![C(About)],
         },

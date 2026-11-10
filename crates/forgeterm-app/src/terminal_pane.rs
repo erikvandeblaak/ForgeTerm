@@ -81,6 +81,8 @@ pub struct TerminalPane {
     pub title: Option<String>,
     /// Last directory the shell reported (shell integration); `None` until it does.
     pub cwd: Option<PathBuf>,
+    /// Set when this terminal runs an AI agent instead of a shell.
+    pub agent: Option<forgeterm_agents::AgentKind>,
     /// New output arrived while the terminal was not visible.
     dirty: bool,
 }
@@ -108,6 +110,7 @@ impl TerminalPane {
             grid: (80, 24),
             title: None,
             cwd: None,
+            agent: None,
             dirty: false,
         };
         let task = pane.start(metrics, palette);

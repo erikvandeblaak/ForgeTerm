@@ -15,6 +15,7 @@ path = "src/main.rs"
 forgeterm-terminal.workspace = true
 forgeterm-explorer.workspace = true
 forgeterm-settings.workspace = true
+forgeterm-agents.workspace = true
 iced.workspace = true
 anyhow.workspace = true
 tracing.workspace = true

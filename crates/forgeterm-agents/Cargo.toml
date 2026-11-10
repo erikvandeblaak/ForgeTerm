@@ -1,0 +1,13 @@
+[package]
+name = "forgeterm-agents"
+description = "ForgeTerm AI agent adapters: detect CLI agents (Claude Code, Codex), versions and project context. UI-agnostic, read-only."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

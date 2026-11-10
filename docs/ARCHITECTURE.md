@@ -46,6 +46,7 @@ ForgeTerm/
 │   │   ├── tests/cwd_tracking.rs # elke geïnstalleerde shell in PTY: cd → juiste map gemeld
 │   │   └── examples/probe.rs     # diagnose: dump gestylede cellen van een programma
 │   ├── forgeterm-explorer/       # bestandsboom-model, GUI-vrij, unit-getest
+│   ├── forgeterm-agents/         # AI-agents: detectie, versie, start-commando, projectcontext; unit-getest
 │   ├── forgeterm-settings/       # settings.toml: tolerant laden, template, pad; unit-getest
 │   └── forgeterm-app/            # GUI (binary `forgeterm`)
 │       ├── src/app.rs            # state, messages, update, layout, sneltoetsen
@@ -130,6 +131,16 @@ Belangrijke details:
 - `App::load_settings(startup)`: bij start alles toepassen; bij herladen (mtime-check elke 2 s via `iced::time::every`, of *Reload Settings*) alleen wat in het bestand veranderde, zodat runtime-toggles (zoom, verkenner) niet door een ongerelateerde wijziging worden teruggezet. Een onleesbaar bestand tijdens het draaien houdt de huidige instellingen.
 - Sessie-instellingen (scrollback, shell-integratie) worden per terminal bij aanmaken vastgelegd (`SessionOptions`); ze gelden voor nieuwe terminals.
 - *Open Settings File* maakt het bestand alleen aan als het ontbreekt (`create_new`) en opent het in Kladblok (Windows; `.toml` heeft meestal geen koppeling) of via `xdg-open`.
+
+## 4g. AI-werkplek (agent-adapters)
+
+Alleen gedocumenteerde interfaces (Claude Code-documentatie op code.claude.com, geraadpleegd 2026-11-10: setup, cli-reference, memory, claude-directory, skills, sub-agents, settings, hooks, mcp, env-vars, terminal-config):
+
+- **Detectie** (`forgeterm-agents::locate`): `claude` / `codex` op PATH (Windows: `.exe`, `.cmd`, `.bat`; `.ps1` overgeslagen), daarna `~/.local/bin` (native installer van Claude Code). `query_version`: `--version`, stdin dicht, eerste regel, timeout 20 s (virusscanners kunnen de eerste start vertragen), proces wordt bij timeout beëindigd. Alles op een achtergrondthread.
+- **Starten** gebeurt alleen op een expliciete klik/command: `Start <agent> in Project` (tab of split) in de projectroot (dichtstbijzijnde map met `.git`, vanaf de map van de gefocuste shell). npm-shims (`.cmd`) via `cmd.exe /d /c`. Agent-terminals krijgen geen shell-integratie; een split vanuit een agent-pane opent een gewone shell.
+- **Projectcontext** (alleen lezen): `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `.claude/rules/*.md`, `AGENTS.md`, `.claude/skills/*/SKILL.md`, `.claude/commands/**/*.md`, `.claude/agents/*.md`, `.claude/settings(.local).json`, `.mcp.json`; `name`/`description` uit de front matter.
+- **Invoegen**: klik op een contextbestand → in een Claude Code-terminal `@pad` (relatief aan de projectroot; met spaties het volledige pad), in Codex het volledige pad, in een shell het gequote pad. Nooit een Enter.
+- **Niet gedaan / bewust niet:** ForgeTerm verstuurt geen prompts, leest geen sessies of tokens en toont geen kosten (geen gedocumenteerde bron). Hooks worden niet geïnterpreteerd (alleen het settings-bestand wordt getoond).
 
 ## 5. Rendering
 

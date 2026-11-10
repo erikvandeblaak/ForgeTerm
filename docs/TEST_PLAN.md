@@ -17,6 +17,7 @@
 | `tests/quote_real_shells.rs` | 6 bestanden met lastige namen; elke geïnstalleerde shell leest ze via het gequote pad: PowerShell 7, Windows PowerShell, cmd, Git Bash (WSL overgeslagen). Mutatiecheck: zonder typografische-quote-regel faalt pwsh | ✅ |
 | `cwd::tests` (6) + `integration::tests` (4) | OSC 7 (percent-decoding, UTF-8) en OSC 9;9 (met/zonder quotes), gesplitst over reads, laatste melding wint, andere OSC's genegeerd, misvormd/te lang/CAN genegeerd en herstel daarna, Windows/MSYS-padconversie; integratie per shell, bestaande PROMPT/PROMPT_COMMAND behouden | ✅ |
 | `tests/cwd_tracking.rs` | Elke geïnstalleerde shell in echte ConPTY met integratie: startmap gemeld, `cd` naar `it's a dir` gemeld. Geslaagd: PowerShell 7, Windows PowerShell, cmd, Git Bash (eerste poging faalde voor Git Bash: `/tmp/…` → opgelost met `pwd -W`) | ✅ |
+| `forgeterm-agents` (7) | PATH-zoeken (Windows: `.exe` vóór `.cmd`, `.ps1` overgeslagen; ontbrekend = None), `.cmd` → `cmd.exe /d /c`, `--version` van een echt script (lege regel overgeslagen), falend script = fout, hangend script → timeout en beëindigd; front matter; projectscan vanuit submap (git-root, rules, skills, commands in submappen, subagents, settings, MCP); zonder git = startmap | ✅ |
 | `forgeterm-settings` (7) | Template = exact de defaults, leeg = defaults, alle waarden toegepast, 7 fouten → 7 meldingen met fallback, syntaxfout (één regel, `unreadable`), sectie geen tabel, `ensure_file` maakt één keer aan en overschrijft nooit | ✅ |
 | `forgeterm-explorer` (6) | Sortering, verborgen, ontbrekende map = fout, lazy uitklappen/inklappen, verouderde resultaten genegeerd, fouten + selectie | ✅ |
 | `terminal_pane::tests` (3) | Tabtitels: exe-pad → shellnaam, `cmd.exe - ping …` → `ping …`, programmatitels blijven | ✅ |
@@ -160,6 +161,15 @@ Gevonden en opgelost: Git Bash meldde MSYS-paden (`/tmp/…`); "Erik van de Blaa
 Gevonden en aangepast: een syntaxfout tijdens het bewerken zette alles terug naar defaults → huidige instellingen blijven; `.toml` heeft op Windows meestal geen koppeling (alleen een keuzedialoog) → Kladblok; kopregel van de balk was misleidend bij een syntaxfout.
 
 Let op: Kladblok in Windows 11 opent het bestand als tabblad in een al geopend Kladblok-venster van de gebruiker; sluit tijdens tests nooit Kladblok-processen.
+
+### AI-werkplek (2026-11-10, Windows 11)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| A1 | Ctrl+Shift+A: paneel met Claude Code 2.1.322 en codex-cli 0.167.0 (pad `C:\Tools\nvm\nodejs\*.cmd`), project ForgeTerm als git-root, CLAUDE.md | ✅ |
+| A2 | Start Claude Code in project (tab) / in split | ⬜ |
+| A3 | Klik op contextbestand in Claude Code-tab → `@CLAUDE.md ` zonder Enter | ⬜ |
+| A4 | Start Codex; afsluiten zonder weesprocessen | ⬜ |
 
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)
 

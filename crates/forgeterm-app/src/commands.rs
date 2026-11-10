@@ -7,6 +7,8 @@
 
 use std::fmt;
 
+use forgeterm_agents::AgentKind;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Dir {
     Left,
@@ -53,6 +55,10 @@ pub enum CommandId {
     NewTabInSelectedFolder,
     OpenSettings,
     ReloadSettings,
+    ToggleAiPanel,
+    AiRefresh,
+    /// Start an agent in the project root (`true` = in a split).
+    StartAgent(AgentKind, bool),
     About,
     Quit,
 }
@@ -94,6 +100,8 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::NewTabInSelectedFolder,
     CommandId::OpenSettings,
     CommandId::ReloadSettings,
+    CommandId::ToggleAiPanel,
+    CommandId::AiRefresh,
     CommandId::About,
     CommandId::Quit,
 ];
@@ -118,6 +126,7 @@ impl CommandId {
             | CopySelectedPath
             | NewTabInSelectedFolder => "Explorer",
             OpenSettings | ReloadSettings => "Settings",
+            ToggleAiPanel | AiRefresh | StartAgent(..) => "AI",
             About => "Help",
             Quit => "App",
         }
@@ -164,6 +173,9 @@ impl CommandId {
             CopySelectedPath => "Copy Selected Path",
             NewTabInSelectedFolder => "New Tab in Selected Folder",
             OpenSettings => "Open Settings File",
+            ToggleAiPanel => "Toggle AI Workspace",
+            AiRefresh => "Refresh Agents and Project Context",
+            StartAgent(..) => "Start Agent",
             ReloadSettings => "Reload Settings",
             About => "About ForgeTerm",
             Quit => "Quit ForgeTerm",
@@ -255,6 +267,7 @@ impl Default for Keymap {
             (b(CS, Char('w')), ClosePane),
             (b(CS, Char('e')), ToggleExplorer),
             (b(C, Char(',')), OpenSettings),
+            (b(CS, Char('a')), ToggleAiPanel),
             (b(C, Tab), NextTab),
             (b(CS, Tab), PreviousTab),
             (b(AS, Char('=')), SplitRight),

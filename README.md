@@ -31,6 +31,7 @@ Vereist: Rust (stable) en op Windows de Visual Studio C++ Build Tools + Windows 
 | Menubalk (File, Edit, View, Terminal, Help) | klik op een titel; daarna ←→ ↑↓ Enter Esc |
 | Bestandsverkenner tonen/verbergen | **Ctrl+Shift+E** |
 | Instellingen openen (`settings.toml`, wordt live toegepast) | **Ctrl+,** of File → Open Settings File |
+| AI-werkplek (Claude Code / Codex starten, projectcontext) | **Ctrl+Shift+A** of menu AI |
 | Pad in de terminal zetten (gequote voor de shell, níet uitgevoerd) | dubbelklik op bestand, knop *Insert path*, of sleep een bestand uit Windows Verkenner op het venster |
 | Kopiëren | Ctrl+Shift+C, of Ctrl+C als er een selectie is |
 | Plakken | Ctrl+Shift+V, Shift+Insert, rechtermuisklik |

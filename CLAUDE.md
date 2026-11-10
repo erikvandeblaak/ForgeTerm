@@ -26,6 +26,7 @@ Kwaliteitspoort vóór "klaar": fmt-check, clippy zonder warnings, alle tests gr
 - Nieuwe crate pas aanmaken als er echte code in komt.
 - Nieuwe instelling = veld + parser + regel in `TEMPLATE` (de test eist dat de template exact de defaults geeft) + toepassen in `App::load_settings` (alleen bij wijziging) + README-tabel. Alleen instellingen die echt iets doen.
 - Test de GUI met `FORGETERM_SETTINGS=<scratchpad-pad>`, nooit met het echte `%APPDATA%\ForgeTerm\settings.toml` van de gebruiker.
+- **Agents:** alleen gedocumenteerde interfaces (zie docs/ARCHITECTURE.md §4g met bronnen). ForgeTerm stuurt nooit zelf prompts naar een agent; invoegen gebeurt zonder Enter. Test agents zonder prompts te versturen.
 - Claim geen Linux-validatie zonder test op Linux. Wél verplicht: `cargo clippy --workspace --all-targets --target x86_64-unknown-linux-gnu -- -D warnings` (compile-check van de Unix-paden).
 - Shell-integratie wijzigt nooit profiel-/rc-bestanden van de gebruiker; alleen argumenten/omgeving van de gestarte sessie.
 
@@ -36,6 +37,7 @@ Start de app vanuit een omgeving **zonder** `NO_COLOR` (Claude Code zet die; Pow
 ## Structuur
 
 - `crates/forgeterm-terminal` — Session (PTY + emulator), input-encoding, palet, snapshots, shelldetectie, pad-quoting per shell
+- `crates/forgeterm-agents` — agents vinden (PATH, `~/.local/bin`), `--version` met timeout, `.cmd` via `cmd /d /c`, projectroot + contextbestanden (alleen lezen)
 - `crates/forgeterm-settings` — `settings.toml` laden (tolerant, problemen als tekst), template, pad
 - `crates/forgeterm-explorer` — bestandsboom (lezen, sorteren, verborgen, lazy uitklappen); wijzigt nooit het bestandssysteem
 - `crates/forgeterm-app` — iced-applicatie, canvas-renderer, thema-tokens
