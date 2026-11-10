@@ -138,6 +138,21 @@ pub enum Message {
     /// "Open in viewer" in the diff overlay (path relative to the repository root).
     GitOpenInViewer(String),
     Viewer(ViewerMsg),
+    /// The window's close button.
+    WindowCloseRequested,
+    /// Programs found running in the terminals about to be closed.
+    CloseChecked(CloseTarget, Vec<String>),
+    ConfirmClose,
+    CancelClose,
+}
+
+/// What a close action would end.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CloseTarget {
+    Quit,
+    /// All terminals of a tab (ids, so the index may change meanwhile).
+    Tab(Vec<TermId>),
+    Pane(TermId),
 }
 
 /// History overlay data for one repository root.
@@ -208,6 +223,8 @@ pub struct App {
     git_visible: bool,
     git: GitState,
     viewer: Viewer,
+    /// A close that waits for confirmation, with the programs it would end.
+    pending_close: Option<(CloseTarget, Vec<String>)>,
 }
 
 impl App {
@@ -249,6 +266,7 @@ impl App {
             git_visible: false,
             git: GitState::default(),
             viewer: Viewer::default(),
+            pending_close: None,
         };
         app.menus = menu::menus(app.shells.len());
         app.load_settings(true);
@@ -556,7 +574,8 @@ impl App {
         // git status is cheap but starts a process: every 4 s keeps the status bar
         // current after commands typed in the terminal.
         let git = iced::time::every(Duration::from_secs(4)).map(|_| Message::GitTick);
-        Subscription::batch([events, settings, git])
+        let close = iced::window::close_requests().map(|_| Message::WindowCloseRequested);
+        Subscription::batch([events, settings, git, close])
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -684,8 +703,27 @@ impl App {
             }
             Message::CloseTab(index) => {
                 self.menu = None;
-                return self.close_tab(index);
+                let ids = self
+                    .workspace
+                    .tabs
+                    .get(index)
+                    .map(|t| t.terminals().collect())
+                    .unwrap_or_default();
+                return self.request_close(CloseTarget::Tab(ids));
             }
+            Message::WindowCloseRequested => return self.request_close(CloseTarget::Quit),
+            Message::CloseChecked(target, programs) => {
+                if programs.is_empty() {
+                    return self.perform_close(target);
+                }
+                self.pending_close = Some((target, programs));
+            }
+            Message::ConfirmClose => {
+                if let Some((target, _)) = self.pending_close.take() {
+                    return self.perform_close(target);
+                }
+            }
+            Message::CancelClose => self.pending_close = None,
             Message::FocusPane(pane) => {
                 if let Some(tab) = self.workspace.active_tab_mut()
                     && tab.focus != pane
@@ -1015,6 +1053,14 @@ impl App {
         mods: keyboard::Modifiers,
         captured: bool,
     ) -> Task<Message> {
+        // A close confirmation answers Enter / Esc and swallows everything else.
+        if self.pending_close.is_some() {
+            return match key {
+                keyboard::Key::Named(Named::Enter) => self.update(Message::ConfirmClose),
+                keyboard::Key::Named(Named::Escape) => self.update(Message::CancelClose),
+                _ => Task::none(),
+            };
+        }
         // While a paste confirmation is open, the keyboard answers it and nothing else.
         if self.pending_paste.is_some() {
             return match key {
@@ -1258,10 +1304,17 @@ impl App {
                     return self.new_tab(Some(i), None);
                 }
             }
-            CommandId::CloseTab => return self.close_tab(self.workspace.active),
+            CommandId::CloseTab => {
+                let ids = self
+                    .workspace
+                    .active_tab()
+                    .map(|t| t.terminals().collect())
+                    .unwrap_or_default();
+                return self.request_close(CloseTarget::Tab(ids));
+            }
             CommandId::ClosePane => {
                 if let Some(id) = self.workspace.focused() {
-                    return self.close_terminal(id);
+                    return self.request_close(CloseTarget::Pane(id));
                 }
             }
             CommandId::NextTab | CommandId::PreviousTab => {
@@ -1477,7 +1530,7 @@ impl App {
             }
             CommandId::About => self.about_open = true,
             // Same as closing the window: sessions are dropped, shells are shut down.
-            CommandId::Quit => return iced::exit(),
+            CommandId::Quit => return self.request_close(CloseTarget::Quit),
         }
         Task::none()
     }
@@ -1558,6 +1611,63 @@ impl App {
             self.pending_paste = Some((id, text));
         } else if let Some(s) = t.session() {
             s.paste(&text);
+        }
+    }
+
+    // ---- closing ------------------------------------------------------------------
+
+    /// Closes at once when nothing runs in the affected terminals; otherwise asks
+    /// first, naming the programs (looked up off the UI thread).
+    fn request_close(&mut self, target: CloseTarget) -> Task<Message> {
+        let ids: Vec<TermId> = match &target {
+            CloseTarget::Quit => self.terminals.keys().copied().collect(),
+            CloseTarget::Tab(ids) => ids.clone(),
+            CloseTarget::Pane(id) => vec![*id],
+        };
+        let shells: Vec<(u32, String)> = ids
+            .iter()
+            .filter_map(|id| {
+                let t = self.terminals.get(id)?;
+                let pid = t.session()?.pid()?;
+                let tab = self.workspace.locate(*id).map_or(0, |(i, _)| i + 1);
+                Some((pid, format!("{} (tab {tab})", t.display_title())))
+            })
+            .collect();
+        if shells.is_empty() {
+            return self.perform_close(target);
+        }
+        background(
+            move || {
+                let pids: Vec<u32> = shells.iter().map(|(p, _)| *p).collect();
+                let running = forgeterm_system::running_programs(&pids);
+                let mut found = Vec::new();
+                for (pid, label) in &shells {
+                    if let Some(programs) = running.get(pid).filter(|p| !p.is_empty()) {
+                        let names: Vec<&str> = programs.iter().map(|p| p.name.as_str()).collect();
+                        found.push(format!("{} in {label}", names.join(", ")));
+                    }
+                }
+                (target, found)
+            },
+            |(target, found)| Message::CloseChecked(target, found),
+        )
+    }
+
+    fn perform_close(&mut self, target: CloseTarget) -> Task<Message> {
+        match target {
+            // Same as closing the window: sessions are dropped, shells are shut down.
+            CloseTarget::Quit => iced::exit(),
+            CloseTarget::Tab(ids) => {
+                let index = ids
+                    .first()
+                    .and_then(|id| self.workspace.locate(*id))
+                    .map(|(i, _)| i);
+                match index {
+                    Some(i) => self.close_tab(i),
+                    None => Task::none(),
+                }
+            }
+            CloseTarget::Pane(id) => self.close_terminal(id),
         }
     }
 
@@ -2106,6 +2216,9 @@ impl App {
         if self.about_open {
             layers = layers.push(view_about());
         }
+        if let Some((target, programs)) = &self.pending_close {
+            layers = layers.push(view_close_confirm(target, programs));
+        }
         if self.drop_hover {
             let shell = self
                 .focused()
@@ -2516,6 +2629,96 @@ fn drop_hint(shell: &str) -> Element<'_, Message> {
             ..Default::default()
         })
         .into()
+}
+
+/// "Programs are still running" confirmation for quit / close tab / close pane.
+fn view_close_confirm<'a>(target: &CloseTarget, programs: &'a [String]) -> Element<'a, Message> {
+    let (title, action) = match target {
+        CloseTarget::Quit => ("Quit ForgeTerm?", "Quit (Enter)"),
+        CloseTarget::Tab(_) => ("Close this tab?", "Close tab (Enter)"),
+        CloseTarget::Pane(_) => ("Close this pane?", "Close pane (Enter)"),
+    };
+    let mut list = column![].spacing(4);
+    for p in programs.iter().take(8) {
+        list = list.push(text(format!("• {p}")).size(13).color(theme::TEXT));
+    }
+    if programs.len() > 8 {
+        list = list.push(
+            text(format!("… and {} more", programs.len() - 8))
+                .size(12)
+                .color(theme::TEXT_MUTED),
+        );
+    }
+    let button_style = |accent: Color| {
+        move |_: &iced::Theme, status: button::Status| button::Style {
+            background: Some(
+                match status {
+                    button::Status::Hovered | button::Status::Pressed => accent,
+                    _ => theme::ELEVATED,
+                }
+                .into(),
+            ),
+            text_color: match status {
+                button::Status::Hovered | button::Status::Pressed => theme::OBSIDIAN,
+                _ => theme::TEXT,
+            },
+            border: Border {
+                color: accent,
+                width: 1.0,
+                radius: 6.0.into(),
+            },
+            ..Default::default()
+        }
+    };
+    let card = container(
+        column![
+            text(title).size(18).color(theme::TEXT),
+            text(if programs.len() == 1 {
+                "This program is still running and will be ended:"
+            } else {
+                "These programs are still running and will be ended:"
+            })
+            .size(13)
+            .color(theme::TEXT_MUTED),
+            list,
+            row![
+                space::horizontal(),
+                button(text("Cancel (Esc)").size(13))
+                    .on_press(Message::CancelClose)
+                    .padding([6, 14])
+                    .style(button_style(theme::CYAN)),
+                button(text(action).size(13))
+                    .on_press(Message::ConfirmClose)
+                    .padding([6, 14])
+                    .style(button_style(theme::CORAL)),
+            ]
+            .spacing(8),
+        ]
+        .spacing(12),
+    )
+    .padding(22)
+    .width(Length::Fixed(480.0))
+    .style(|_| container::Style {
+        background: Some(theme::SURFACE.into()),
+        border: Border {
+            color: theme::AMBER,
+            width: 1.0,
+            radius: 10.0.into(),
+        },
+        shadow: Shadow {
+            color: Color::from_rgba(0.0, 0.0, 0.0, 0.55),
+            offset: Vector::new(0.0, 12.0),
+            blur_radius: 32.0,
+        },
+        ..Default::default()
+    });
+    let backdrop = container(opaque(card))
+        .center(Length::Fill)
+        .style(|_| container::Style {
+            background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.45).into()),
+            ..Default::default()
+        });
+    opaque(mouse_area(backdrop).on_press(Message::CancelClose))
 }
 
 /// Help → About: version, creator and the open-source components ForgeTerm is built on.

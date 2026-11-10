@@ -50,6 +50,7 @@ ForgeTerm/
 │   ├── forgeterm-prompts/        # Prompt Studio-sjablonen: parsen, variabelen, invullen; unit-getest
 │   ├── forgeterm-git/            # Git via de CLI: status (porcelain v2), diff, log, stage/unstage, commit; tests tegen echte git
 │   ├── forgeterm-viewer/         # Code-viewer: laden, decoderen, kleuren (syntect, pure-Rust regex), zoeken; unit-getest
+│   ├── forgeterm-system/         # Procesinfo (sysinfo): programma's die een shell nog draait; tests met echte processen
 │   ├── forgeterm-settings/       # settings.toml: tolerant laden, template, pad; unit-getest
 │   └── forgeterm-app/            # GUI (binary `forgeterm`)
 │       ├── src/app.rs            # state, messages, update, layout, sneltoetsen
@@ -170,6 +171,10 @@ Alleen gedocumenteerde interfaces (Claude Code-documentatie op code.claude.com, 
 - **Kleuren** met syntect (standaard-syntaxen, `regex-fancy`: geen C-afhankelijkheid, bouwt gelijk op Linux) en een eigen thema uit de Forge-tokens; tot 2 MB / 50.000 regels, op een achtergrondthread (≈0,2 s voor 2.500 regels), daarna pas getoond (versie-check op mtime). Syntax op extensie, een paar aliassen (Makefile, Dockerfile, jsonc, mjs), daarna op de eerste regel (shebang).
 - **Weergave**: eigen canvas (zoals de terminal) met regelnummers, selectie per regel, zoektreffers en een minimap (2 px per regel; bij lange bestanden schuift de minimap proportioneel mee). Klik in de minimap centreert die regel, slepen werkt als scrollbalk (fractie, geen terugkoppeling). Wijzigingen op schijf: mtime-check elke 2 s, herladen houdt de positie.
 - **Toetsenbord**: alleen als de viewer de focus heeft (klik erin); app-sneltoetsen blijven werken, de terminal krijgt dan niets. Klikken in een terminal geeft de focus terug.
+
+## 4k. Veilig sluiten
+
+Quit (menu, venster-× via `exit_on_close_request: false` + `close_requests`), tab sluiten en pane sluiten gaan via `App::request_close`: van de betrokken shells (pid uit de PTY: ConPTY `child_watcher().pid()`, Unix `child().id()`) worden de kindprocessen opgezocht (`forgeterm-system`, achtergrondthread; `conhost`/`OpenConsole` genegeerd). Geen kinderen → direct sluiten; anders een bevestiging met de programmanamen per tab (Enter = sluiten, Esc/klik ernaast = annuleren). Een pane die zelf eindigt (exit 0) sluit zonder vraag.
 
 ## 5. Rendering
 

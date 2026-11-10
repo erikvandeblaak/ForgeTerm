@@ -68,6 +68,6 @@ Linux Mint-validatie ⬜ · installers (MSI/winget, .deb/AppImage) ⬜ · benchm
 - **cmd en `%VAR%`:** in interactieve cmd wordt `%NAAM%` ook binnen quotes uitgebreid als die variabele bestaat; dat is in cmd niet te escapen.
 - **WSL-quoting** (`/mnt/c/…`) is unit-getest maar niet in een echte WSL-shell uitgevoerd.
 - **Instellingen** worden niet vanuit de UI geschreven (zoom/verkenner-toggles gelden voor de sessie). Geen instellingen-UI; het bestand is de bron. Nog geen thema-, lettertype-familie- of sneltoetsinstellingen.
-- **Afsluiten vraagt geen bevestiging** (menu Quit en venster-×), ook niet als er nog processen lopen.
+- **Afsluiten** vraagt alleen bevestiging als er in een shell nog een programma draait (kindproces van de shell); een shell die alleen op de prompt wacht, sluit direct. Programma's die niet als kind van de shell lopen (bijv. losgekoppeld gestart), worden niet gezien.
 - **Geen Alt-mnemonics in de menubalk** (Alt+F enz. horen bij de shell); menu's openen met de muis of via de Command Palette.
 - **Tab-sneltoets Alt+1…9** i.p.v. Ctrl+Alt+N: Ctrl+Alt is AltGr op Windows en typt tekens op veel layouts.

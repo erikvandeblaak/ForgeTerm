@@ -21,6 +21,7 @@
 | `forgeterm-prompts` (8) | Front matter (BOM, CRLF, quotes, zonder afsluiting = body), variabelen in volgorde zonder dubbelingen (ongeldige `{{a b}}` / `{{}}` genegeerd, `{{{x}}}`), waarden letterlijk (geen herexpansie), leeg = ontbrekend, nooit een afsluitende newline, ingebouwde sjablonen geldig, eigen map: override, `.MD`, geen submappen/`.txt`, niet-UTF-8 gemeld, ontbrekende map = geen probleem | ✅ |
 | `forgeterm-git` (12) | Porcelain v2: branch-headers, rename met origineel pad, spaties in paden, conflicten, untracked, onbekende records genegeerd, initial/detached; log-records; tegen echte git: discover vanuit submap, unborn branch, niet-ASCII + spatie, stage/unstage zonder en met HEAD, lege commit-message geweigerd, commit + log, diff unstaged/staged/untracked, fout bij onbekend pad; echt merge-conflict + rename; **repository-fsmonitor wordt niet uitgevoerd** (controle: gewone `git status` voert hem wél uit); branches parsen (ahead/behind, gone, origin/HEAD weg); tegen echte git: branch maken (lege/`-x`/`bad..name` geweigerd), lijst, wisselen, wissel geweigerd bij lokale wijziging, clone met remote branches + upstream, `--track`, history + `show`, ongeldige hash geweigerd, activiteit van vandaag; `daily_counts` (venster, buiten venster genegeerd) | ✅ |
 | `forgeterm-viewer` (6) | UTF-8/BOM/UTF-16 LE+BE/binair/lossy, tabs en besturingstekens zichtbaar, afkappen, CRLF + slot-newline, kopiëren en zoeken, binair/map/te groot geweigerd, Rust-kleuren (comment/keyword/string uit het Forge-thema, spans binnen de regel), syntax per bestandstype + shebang | ✅ |
+| `forgeterm-system` (3) | Echte processen: een shell met `ping`/`sleep` → programma gevonden (conhost genegeerd), wachtende shell → leeg, verdwenen pid → afwezig; `.exe` weg uit namen | ✅ |
 | `forgeterm-settings` (7) | Template = exact de defaults, leeg = defaults, alle waarden toegepast, 7 fouten → 7 meldingen met fallback, syntaxfout (één regel, `unreadable`), sectie geen tabel, `ensure_file` maakt één keer aan en overschrijft nooit | ✅ |
 | `forgeterm-explorer` (6) | Sortering, verborgen, ontbrekende map = fout, lazy uitklappen/inklappen, verouderde resultaten genegeerd, fouten + selectie | ✅ |
 | `terminal_pane::tests` (3) | Tabtitels: exe-pad → shellnaam, `cmd.exe - ping …` → `ping …`, programmatitels blijven | ✅ |
@@ -216,6 +217,13 @@ Let op: Kladblok in Windows 11 opent het bestand als tabblad in een al geopend K
 | V4 | Ctrl+F `viewer_msg` → "1 of 6 lines", treffers in tekst en minimap; Enter → 2 of 6; Esc sluit | ✅ |
 | V5 | Tweede tab (Python), bestand buiten ForgeTerm gewijzigd → binnen 4 s herladen met nieuwe inhoud | ✅ |
 | V6 | Minimap-kader slepen tot 46 % van de hoogte → regel 1319 van 2864 (scrollbalk-gedrag, geen terugkoppeling); zoeken naar `fn load_document` → treffer 2740 in het midden; lang pad in de verkenner afgekapt bij de paneelrand | ✅ |
+
+### Veilig sluiten (2026-11-10, Windows 11)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| Q1 | Alleen een wachtende PowerShell: Alt+F4 sluit direct, zonder vraag | ✅ |
+| Q2 | `ping -n 120` loopt: Ctrl+Shift+W → "Close this pane? · PING in PowerShell 7 (tab 1)"; Esc → ping loopt door; Alt+F4 → "Quit ForgeTerm?"; Enter → venster dicht en ping beëindigd | ✅ |
 
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)
 

@@ -267,6 +267,8 @@ pub struct Session {
     listener: Listener,
     size: GridSize,
     shell: ShellSpec,
+    /// Process id of the shell (to see what runs inside it).
+    pid: Option<u32>,
 }
 
 impl Session {
@@ -320,6 +322,10 @@ impl Session {
 
         let pty = tty::new(&options, size.window_size(), 0)
             .with_context(|| format!("failed to start shell '{}'", shell.program))?;
+        #[cfg(windows)]
+        let pid = pty.child_watcher().pid().map(std::num::NonZeroU32::get);
+        #[cfg(unix)]
+        let pid = Some(pty.child().id());
         let pty = ScanPty {
             inner: pty,
             scanner: CwdScanner::default(),
@@ -352,7 +358,13 @@ impl Session {
             listener,
             size,
             shell,
+            pid,
         })
+    }
+
+    /// Process id of the shell, if the platform reports it.
+    pub fn pid(&self) -> Option<u32> {
+        self.pid
     }
 
     pub fn shell(&self) -> &ShellSpec {

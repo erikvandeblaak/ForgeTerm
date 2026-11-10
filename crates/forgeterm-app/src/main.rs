@@ -64,6 +64,8 @@ fn main() -> iced::Result {
         .window(iced::window::Settings {
             size: iced::Size::new(1200.0, 760.0),
             min_size: Some(iced::Size::new(480.0, 300.0)),
+            // The window's × asks first when programs still run (App::request_close).
+            exit_on_close_request: false,
             ..Default::default()
         })
         .antialiasing(false)

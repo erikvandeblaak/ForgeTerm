@@ -51,6 +51,7 @@ fn shell_executes_command_and_output_is_emulated() {
         let _ = tx.send(e);
     })
     .expect("spawn shell");
+    assert!(session.pid().is_some_and(|p| p > 0), "shell pid is known");
 
     session.input(command.as_bytes().to_vec());
     wait_for(&session, &rx, "1234000");

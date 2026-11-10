@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/forgeterm-terminal", "crates/forgeterm-explorer", "crates/forgeterm-settings", "crates/forgeterm-agents", "crates/forgeterm-prompts", "crates/forgeterm-git", "crates/forgeterm-viewer", "crates/forgeterm-app"]
+members = ["crates/forgeterm-terminal", "crates/forgeterm-explorer", "crates/forgeterm-settings", "crates/forgeterm-agents", "crates/forgeterm-prompts", "crates/forgeterm-git", "crates/forgeterm-viewer", "crates/forgeterm-system", "crates/forgeterm-app"]
 default-members = ["crates/forgeterm-app"]
 
 [workspace.package]
@@ -19,6 +19,7 @@ forgeterm-agents = { path = "crates/forgeterm-agents" }
 forgeterm-prompts = { path = "crates/forgeterm-prompts" }
 forgeterm-git = { path = "crates/forgeterm-git" }
 forgeterm-viewer = { path = "crates/forgeterm-viewer" }
+forgeterm-system = { path = "crates/forgeterm-system" }
 
 alacritty_terminal = "0.26"
 # x11 + wayland: winit's Linux backends (no effect on Windows). Without them the app
