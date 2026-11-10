@@ -8,7 +8,7 @@ Legenda: ✅ klaar en getest · 🟡 deels · ⬜ open. "Getest" betekent: daadw
 |---|---|---|
 | Rust-toolchain + MSVC Build Tools + Windows SDK | ✅ | rustc 1.99.1, VS 2022 Build Tools, SDK 10.0.26100 |
 | Library-onderzoek + architectuur | ✅ | docs/ARCHITECTURE.md |
-| Cross-platform PTY-prototype | 🟡 | Windows ConPTY ✅ (integratietest + handmatig). Linux: compileert + clippy schoon voor x86_64-unknown-linux-gnu, ⬜ niet uitgevoerd. |
+| Cross-platform PTY-prototype | ✅ | Windows ConPTY ✅. Linux (WSL Ubuntu 24.04, basis van Mint 22): build + clippy + 142 tests (echte PTY) ✅, GUI onder WSLg ✅. Echte Mint-desktop ⬜ |
 | Terminalemulatie valideren | ✅ | Kleuren 16/256/truecolor, attributen, CJK, combining, alt screen (vim), resize |
 | **Verticale slice: venster → PTY → rendering → shell → Claude Code** | ✅ Windows | Claude Code start, rendert, reageert op pijltjes/Esc |
 
@@ -51,11 +51,11 @@ Git Control Center: statusbalk (branch, ahead/behind, wijzigingen), paneel met d
 
 ## Fase 7 — Release
 
-App-icoon: venster (gerenderd uit het SVG-logo) en `forgeterm.exe` (ICO via build.rs + Windows SDK rc) ✅ Windows · Linux Mint-validatie ⬜ · draagbare Windows-zip met licentielijst en SHA-256 (`scripts/package-windows.ps1`) ✅ · installers (MSI/winget, .deb/AppImage) ⬜ · geheugenmeting release ✅ (163 MB idle, binnen budget) · geautomatiseerde benchmarks ⬜ · security review ✅ (2026-11-10, 5 bevindingen opgelost, zie ARCHITECTURE §6) · documentatie 🟡 (README als handleiding, ARCHITECTURE, TEST_PLAN; aparte gebruikershandleiding ⬜).
+App-icoon: venster (gerenderd uit het SVG-logo) en `forgeterm.exe` (ICO via build.rs + Windows SDK rc) ✅ Windows · Linux-validatie in WSL Ubuntu 24.04 ✅ (echte Mint-desktop ⬜) · draagbare Windows-zip met licentielijst en SHA-256 (`scripts/package-windows.ps1`) ✅ · installers (MSI/winget, .deb/AppImage) ⬜ · geheugenmeting release ✅ (163 MB idle, binnen budget) · geautomatiseerde benchmarks ⬜ · security review ✅ (2026-11-10, 5 bevindingen opgelost, zie ARCHITECTURE §6) · documentatie 🟡 (README als handleiding, ARCHITECTURE, TEST_PLAN; aparte gebruikershandleiding ⬜).
 
 ## Bekende beperkingen (eerlijk)
 
-- **Linux niet getest.** Code-paden bestaan, maar er is geen validatie op Linux Mint gedaan.
+- **Linux getest in WSL Ubuntu 24.04** (dezelfde basis als Linux Mint 22): build, alle tests en de GUI onder WSLg. Een echte Mint-desktop (Cinnamon/X11) is nog niet getest.
 - **Kitty keyboard protocol uit.** Legacy encoding: Shift+Enter is niet te onderscheiden van Enter. In Claude Code werkt `\` + Enter voor een nieuwe regel.
 - **Emoji monochroom** (fallback-font zonder kleur-glyphs).
 - **Geen IME-ondersteuning** (Chinees/Japans invoeren). Dode toetsen (US-International) werken wél.

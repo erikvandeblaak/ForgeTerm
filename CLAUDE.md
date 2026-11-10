@@ -27,7 +27,7 @@ Kwaliteitspoort vóór "klaar": fmt-check, clippy zonder warnings, alle tests gr
 - Nieuwe instelling = veld + parser + regel in `TEMPLATE` (de test eist dat de template exact de defaults geeft) + toepassen in `App::load_settings` (alleen bij wijziging) + README-tabel. Alleen instellingen die echt iets doen.
 - Test de GUI met `FORGETERM_SETTINGS=<scratchpad-pad>`, nooit met het echte `%APPDATA%\ForgeTerm\settings.toml` van de gebruiker.
 - **Agents:** alleen gedocumenteerde interfaces (zie docs/ARCHITECTURE.md §4g met bronnen). ForgeTerm stuurt nooit zelf prompts naar een agent; invoegen gebeurt zonder Enter. Test agents zonder prompts te versturen.
-- Claim geen Linux-validatie zonder test op Linux. Wél verplicht: `cargo clippy --workspace --all-targets --target x86_64-unknown-linux-gnu -- -D warnings` (compile-check van de Unix-paden).
+- Linux testen: WSL Ubuntu 24.04 (basis van Mint 22) met rustup per gebruiker; clone in ~ (niet via /mnt/c bouwen), `cargo test --workspace --no-fail-fast`. GUI onder WSLg is van buitenaf niet te fotograferen: gebruik `FORGETERM_SCREENSHOT=<pad.png>` (slaat het gerenderde frame elke 4 s op). Claim geen validatie op een echte Mint-desktop zonder die test. Wél altijd verplicht: `cargo clippy --workspace --all-targets --target x86_64-unknown-linux-gnu -- -D warnings` (compile-check van de Unix-paden).
 - Shell-integratie wijzigt nooit profiel-/rc-bestanden van de gebruiker; alleen argumenten/omgeving van de gestarte sessie.
 
 ## GUI testen (Windows)

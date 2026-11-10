@@ -246,6 +246,18 @@ Let op: Kladblok in Windows 11 opent het bestand als tabblad in een al geopend K
 | M5 | Na `ping`: "1 process · waiting at the prompt"; ForgeTerm hard beëindigd → geen achtergebleven ping | ✅ |
 | I1 | Venstericoon (titelbalk) = logo; `forgeterm.exe` bevat het icoon (ExtractAssociatedIcon toont het F-logo) | ✅ |
 
+### Linux: WSL Ubuntu 24.04 (basis van Linux Mint 22), 2026-11-10
+
+Rust 1.99.1 per gebruiker (rustup, geen sudo); verse clone in het Linux-bestandssysteem. Geen `-dev`-pakketten nodig: iced laadt X11/Wayland/xkbcommon via dlopen, alleen gcc als linker.
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| LX1 | `cargo fmt --check`, `cargo build`, `cargo clippy --all-targets -D warnings` op Linux | ✅ |
+| LX2 | `cargo test --workspace --no-fail-fast`: 142 tests, incl. echte PTY met `/bin/sh`, cwd-tracking en quoting in echte shells. Eerste run vond 2 tests met Windows-verwachtingen (OSC 9;9 met `C:\\…`, `//host/share`); platformbewust gemaakt | ✅ |
+| LX3 | GUI onder WSLg (Wayland, geen GPU-doorvoer voor Mesa: wgpu valt terug op GLES via EGL): venster, menu, tabs, bash-prompt in kleur, statusbalk met `bash`, map (bash-integratie) en git-status `master ↑2 · clean` (klopt met de clone). Vastgelegd met de testhaak `FORGETERM_SCREENSHOT` (het WSLg-venster zelf is van buitenaf niet te fotograferen: zwart of doorzichtig) | ✅ |
+| LX4 | Invoer via het WSLg-venster: `touch /tmp/ft_input_ok; cd crates; ls --color=auto` + Enter → bestand bestaat in Linux, gekleurde uitvoer, statusbalk volgt direct naar `~/forgeterm-linux-test/crates` | ✅ |
+| LX5 | Echte Linux Mint-desktop (Cinnamon, X11) | ⬜ niet getest — WSL is dezelfde Ubuntu-basis maar een andere desktop/compositor |
+
 ### Beveiliging en sneltoetsen (2026-11-10, Windows 11)
 
 | # | Scenario | Resultaat |
