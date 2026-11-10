@@ -41,7 +41,7 @@ Design system ✅ (tokens), thema's ⬜ (alleen Forge Dark), Theme Editor ⬜, a
 
 ## Fase 5 — AI Workspace
 
-Agent Adapter System: detectie + versie ✅ Windows (GUI: Claude Code 2.1.322, codex-cli 0.167.0 gevonden); starten in projectroot als tab/split 🟡 gebouwd en unit-getest, GUI-test open · Claude Code-adapter: projectcontext (CLAUDE.md, rules, skills, commands, subagents, settings, MCP) ✅ Windows (GUI), `@pad` invoegen 🟡 GUI-test open · Codex-adapter (detectie ✅, start 🟡, AGENTS.md ✅) · Prompt Studio met presets en variabelen ⬜ (volgende stap) · Hooks/MCP-details tonen ⬜ · Sessie-/tokeninformatie ⬜ (alleen met gedocumenteerde bron).
+Agent Adapter System: detectie + versie ✅ Windows (GUI: Claude Code 2.1.322, codex-cli 0.167.0 gevonden); starten in projectroot als tab/split ✅ Windows · Claude Code-adapter: projectcontext (CLAUDE.md, rules, skills, commands, subagents, settings, MCP) ✅ Windows (GUI), `@pad` invoegen ✅ Windows · Codex-adapter (detectie ✅, start ✅ Windows, AGENTS.md ✅) · Prompt Studio met presets en variabelen ⬜ (volgende stap) · Hooks/MCP-details tonen ⬜ · Sessie-/tokeninformatie ⬜ (alleen met gedocumenteerde bron).
 
 ## Fase 6 — Git en Advanced
 

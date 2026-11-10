@@ -430,9 +430,11 @@ impl App {
             .and_then(|id| self.terminals.get(&id))
     }
 
-    /// Directory the focused shell last reported.
+    /// Directory of the focused terminal (see [`TerminalPane::directory`]).
     fn focused_cwd(&self) -> Option<PathBuf> {
-        self.focused().and_then(|t| t.cwd.clone())
+        self.focused()
+            .and_then(TerminalPane::directory)
+            .map(Path::to_path_buf)
     }
 
     /// Moves the explorer to the focused shell's directory when that directory (or
@@ -1592,7 +1594,7 @@ impl App {
         let shell = focused.map_or_else(|| "—".to_owned(), |t| t.shell.name.clone());
         let grid = focused.map_or_else(String::new, |t| format!("{}×{}", t.grid.0, t.grid.1));
         let cwd = focused
-            .and_then(|t| t.cwd.as_deref())
+            .and_then(TerminalPane::directory)
             .map_or_else(String::new, short_path);
         let scrolled = focused
             .filter(|t| t.snapshot.display_offset > 0)

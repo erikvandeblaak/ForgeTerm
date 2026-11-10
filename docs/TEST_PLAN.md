@@ -167,9 +167,9 @@ Let op: Kladblok in Windows 11 opent het bestand als tabblad in een al geopend K
 | # | Scenario | Resultaat |
 |---|---|---|
 | A1 | Ctrl+Shift+A: paneel met Claude Code 2.1.322 en codex-cli 0.167.0 (pad `C:\Tools\nvm\nodejs\*.cmd`), project ForgeTerm als git-root, CLAUDE.md | ✅ |
-| A2 | Start Claude Code in project (tab) / in split | ⬜ |
-| A3 | Klik op contextbestand in Claude Code-tab → `@CLAUDE.md ` zonder Enter | ⬜ |
-| A4 | Start Codex; afsluiten zonder weesprocessen | ⬜ |
+| A2 | Start Claude Code in project als tab en als split: start in de git-root (ook vanuit een submap), vertrouwensvraag van Claude Code verschijnt; Esc / dubbel Ctrl+C sluit af, tab/pane gaat dicht, geen weesprocessen; Alt+Shift+- vanuit de agent-pane opent PowerShell in de projectroot; venster sluiten met draaiende agent laat niets achter | ✅ |
+| A3 | In een (vertrouwde, lege) testrepo: klik CLAUDE.md en `.claude/rules/style.md` in de Claude Code-tab → prompt `@CLAUDE.md @.claude/rules/style.md ` zonder Enter; in PowerShell → pad zonder Enter. Gevonden en opgelost: in een agent-tab toonde het paneel de context van de app-startmap (agents melden geen map) → panes vallen nu terug op hun startmap | ✅ |
+| A4 | Start Codex in project: vertrouwensvraag verschijnt; Ctrl+C (2×) sluit af zonder weesprocessen van ForgeTerm. Codex laat bewust zijn eigen achtergronddienst draaien (`codex app-server --managed-daemon`, eigen ontwerp van Codex, ook buiten ForgeTerm) | ✅ |
 
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)
 

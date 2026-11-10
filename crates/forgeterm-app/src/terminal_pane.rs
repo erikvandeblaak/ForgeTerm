@@ -1,6 +1,6 @@
 //! One terminal inside a tab: its session, render state and lifecycle.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use forgeterm_terminal::{
     GridSize, Modes, Palette, Session, SessionConfig, SessionEvent, ShellSpec, Snapshot,
@@ -119,6 +119,12 @@ impl TerminalPane {
 
     pub fn session(&self) -> Option<&Session> {
         self.session.as_ref()
+    }
+
+    /// Where this terminal is: the directory the shell last reported, else the one
+    /// it was started in (agents and shells without integration never report one).
+    pub fn directory(&self) -> Option<&Path> {
+        self.cwd.as_deref().or(self.working_directory.as_deref())
     }
 
     pub fn is_running(&self) -> bool {
