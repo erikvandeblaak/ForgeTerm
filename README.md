@@ -33,8 +33,9 @@ Vereist: Rust (stable) en op Windows de Visual Studio C++ Build Tools + Windows 
 | Instellingen openen (`settings.toml`, wordt live toegepast) | **Ctrl+,** of File → Open Settings File |
 | AI-werkplek (Claude Code / Codex starten, projectcontext) | **Ctrl+Shift+A** of menu AI |
 | Pad in de terminal zetten (gequote voor de shell, níet uitgevoerd) | dubbelklik op bestand, knop *Insert path*, of sleep een bestand uit Windows Verkenner op het venster |
-| Kopiëren | Ctrl+Shift+C, of Ctrl+C als er een selectie is |
-| Plakken | Ctrl+Shift+V, Shift+Insert, rechtermuisklik |
+| Kopiëren | **Ctrl+C** als er een selectie is (zonder selectie gaat Ctrl+C als onderbreking naar het programma), Ctrl+Shift+C |
+| Plakken | **Ctrl+V** (Windows), Ctrl+Shift+V, Shift+Insert, rechtermuisklik. Meerdere regels zonder bracketed paste vragen eerst bevestiging. Op Linux blijft Ctrl+V van het programma (zoals in andere Linux-terminals) |
+| Knippen | Niet in de terminal: terminaltekst is uitvoer en kan niet worden weggeknipt. In tekstvelden (palette) werken Ctrl+X/C/V gewoon |
 | Scrollback | Muiswiel, Shift+PageUp / Shift+PageDown |
 | Lettergrootte | Ctrl+= / Ctrl+- / Ctrl+0 |
 | Shell herstarten na een fout-exit | Enter (een schone `exit` sluit de pane) |

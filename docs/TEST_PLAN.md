@@ -51,6 +51,7 @@ Uitgevoerd 2026-11-10 op Windows 11 (26300), PowerShell 7, met screenshots en ge
 | G10 | Scrollwiel | Scrollback, indicator `↑ n / total` | ✅ |
 | G11 | Sleep-selectie + Ctrl+Shift+C | Markering, klembord bevat tekst | ✅ (nu met CRLF) |
 | G12 | Plak 2 regels (Ctrl+Shift+V) | Bevestigingsbalk, Esc = niets uitgevoerd | ✅ |
+| G13 | (2026-11-10) Sleep-selectie + **Ctrl+C** → klembord `COPYTEST-4711`, selectie weg, geen `^C` naar de shell; **Ctrl+V** plakt zonder Enter; Ctrl+C zonder selectie → `^C` (regel afgebroken); Ctrl+V met 2 regels → bevestigingsbalk, Esc = niets uitgevoerd | Zoals beschreven | ✅ Windows |
 | G13 | Plak 1 regel + newline | Ingevoegd, níet uitgevoerd | ✅ |
 | G14 | `exit` → Enter | "Exited (0)", Enter herstart shell | ✅ |
 | G15 | Venster sluiten | Geen weesprocessen (pwsh/conhost) | ✅ |

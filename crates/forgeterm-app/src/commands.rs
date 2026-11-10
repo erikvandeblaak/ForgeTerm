@@ -261,7 +261,14 @@ impl Default for Keymap {
         const S: (bool, bool, bool) = (false, true, false);
         let b = |(c, s, a): (bool, bool, bool), key| KeyBinding::new(c, s, a, key);
 
-        let mut bindings = vec![
+        let mut bindings = Vec::new();
+        // Windows: Ctrl+V pastes, like Windows Terminal (listed first, so menus show
+        // it). Elsewhere Ctrl+V belongs to the program (bash quoted-insert, image
+        // paste in Claude Code); Linux terminals paste with Ctrl+Shift+V.
+        if cfg!(windows) {
+            bindings.push((b(C, Char('v')), Paste));
+        }
+        bindings.extend([
             (b(CS, Char('p')), CommandPalette),
             (b(CS, Char('t')), NewTab),
             (b(CS, Char('w')), ClosePane),
@@ -288,7 +295,7 @@ impl Default for Keymap {
             (b(C, Char('+')), ZoomIn),
             (b(C, Char('-')), ZoomOut),
             (b(C, Char('0')), ZoomReset),
-        ];
+        ]);
         for n in 1..=9u8 {
             let digit = char::from(b'0' + n);
             let index = usize::from(n - 1);
@@ -370,7 +377,6 @@ mod tests {
         for pressed in [
             key(false, false, false, KeyCode::Char('p')),
             key(true, false, false, KeyCode::Char('c')),
-            key(true, false, false, KeyCode::Char('v')),
             key(true, false, true, KeyCode::Char('1')),
             key(false, false, false, KeyCode::Tab),
             key(false, false, false, KeyCode::Enter),
@@ -382,6 +388,30 @@ mod tests {
                 "{pressed} must go to the terminal"
             );
         }
+    }
+
+    #[test]
+    fn ctrl_v_pastes_on_windows_only() {
+        let km = Keymap::default();
+        let ctrl_v = km.lookup(key(true, false, false, KeyCode::Char('v')));
+        if cfg!(windows) {
+            assert_eq!(ctrl_v, Some(CommandId::Paste));
+            assert_eq!(
+                km.binding_for(CommandId::Paste).unwrap().to_string(),
+                "Ctrl+V"
+            );
+        } else {
+            assert_eq!(ctrl_v, None, "Ctrl+V must reach the program on Unix");
+        }
+        // Available everywhere.
+        assert_eq!(
+            km.lookup(key(true, true, false, KeyCode::Char('v'))),
+            Some(CommandId::Paste)
+        );
+        assert_eq!(
+            km.lookup(key(false, true, false, KeyCode::Insert)),
+            Some(CommandId::Paste)
+        );
     }
 
     #[test]
