@@ -60,7 +60,7 @@ App-icoon: venster (gerenderd uit het SVG-logo) en `forgeterm.exe` (ICO via buil
 - **Emoji monochroom** (fallback-font zonder kleur-glyphs).
 - **Geen IME-ondersteuning** (Chinees/Japans invoeren). Dode toetsen (US-International) werken wél.
 - **Celbreedte afgeleid van JetBrains Mono** (0,6 em). Een andere font vereist meting van de advance — gepland bij font-instellingen.
-- **Muismodifiers** (Shift/Ctrl bij muisrapportage) worden nog niet meegestuurd.
+- **Muismodifiers** (Shift/Alt/Ctrl bij muisrapportage) worden meegestuurd (unit-getest). Op Windows zet ConPTY VT-muisinvoer om, waardoor programma's onder ConPTY de rapportage niet als bytes zien; een GUI-validatie op Linux staat nog open.
 - **Geen cursor-knipperen.** Zoeken in de output vindt één treffer per keer (geen totaal aantal). Links worden per schermregel herkend: een link die over twee regels doorloopt, wordt niet als geheel gezien. Alleen http(s)-links (bewust).
 - **Werkmap volgen** werkt in PowerShell 7, Windows PowerShell, cmd en Git Bash (getest). Niet voor zsh (vereist een hook in de eigen config), WSL (Windows-omgeving gaat niet mee) en fish (alleen als fish zelf OSC 7 stuurt). Een eigen rc die `PROMPT_COMMAND` overschrijft, schakelt het voor bash uit. Wat een programma tijdens het draaien als map meldt, wordt overgenomen als het een bestaande map is.
 - **Tabbalk** scrolt horizontaal bij veel tabs; de positie van de actieve tab is een benadering (tabs verschillen in breedte).
