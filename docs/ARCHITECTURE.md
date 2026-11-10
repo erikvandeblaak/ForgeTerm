@@ -176,6 +176,10 @@ Alleen gedocumenteerde interfaces (Claude Code-documentatie op code.claude.com, 
 
 `Session::search` gebruikt alacritty's regex-zoeker (scherm + scrollback, loopt rond aan de randen, smart case) met een letterlijk geëscapete zoektekst (`search::escape`: elke ASCII-leesteken krijgt een backslash). Start naast de vorige treffer (de huidige selectie) of bij de cursor; de treffer wordt de selectie (dus Ctrl+C kopieert hem) en de weergave scrollt ernaartoe. Zoekbalk Ctrl+Shift+F: typen zoekt vanaf de cursor omhoog (nieuwste eerst), Enter/F3 ouder, Shift+F3 nieuwer; Esc, F3 en Ctrl+C werken ook terwijl het invoerveld de focus heeft.
 
+## 4j3. Links in de terminal
+
+`forgeterm-terminal::links`: alleen `http://` en `https://` (andere schema's zoals `file:` of eigen protocol-handlers kunnen programma's starten; terminaluitvoer is niet te vertrouwen). Een link stopt bij spaties, quotes, `<>`, backtick, `{}|\^` en besturingstekens; leestekens aan het eind en een niet-geopende `)`/`]` vallen weg. Met Ctrl ingedrukt onderstreept de canvas de link onder de muis (kolommen rekening houdend met brede tekens) en toont een handcursor. Ctrl+klik → `is_openable` (http(s), host aanwezig, niet met `-`, geen spatie/quote/besturingsteken, ≤ 2048 tekens) → de standaardbrowser via `explorer.exe`/`xdg-open`/`open` met de link als één argument, nooit via een shell. Een geweigerde link geeft een melding.
+
 ## 4k. Veilig sluiten
 
 Quit (menu, venster-× via `exit_on_close_request: false` + `close_requests`), tab sluiten en pane sluiten gaan via `App::request_close`: van de betrokken shells (pid uit de PTY: ConPTY `child_watcher().pid()`, Unix `child().id()`) worden de kindprocessen opgezocht (`forgeterm-system`, achtergrondthread; `conhost`/`OpenConsole` genegeerd). Geen kinderen → direct sluiten; anders een bevestiging met de programmanamen per tab (Enter = sluiten, Esc/klik ernaast = annuleren). Een pane die zelf eindigt (exit 0) sluit zonder vraag.

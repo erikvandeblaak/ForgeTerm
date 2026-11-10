@@ -63,6 +63,31 @@ pub struct Interaction {
     selecting: bool,
     reported_button: Option<MouseButton>,
     last_cell: Option<(usize, usize)>,
+    ctrl: bool,
+    /// Link under the pointer while Ctrl is held: (row, first col, end col, url).
+    hover_link: Option<(usize, usize, usize, String)>,
+}
+
+/// The link at a viewport cell, as (first column, end column, url). Columns and
+/// chars differ around wide characters, hence the mapping.
+fn link_at_cell(snapshot: &Snapshot, col: usize, row: usize) -> Option<(usize, usize, String)> {
+    if row >= snapshot.rows {
+        return None;
+    }
+    let mut text = String::new();
+    let mut cols = Vec::new();
+    for (c, cell) in snapshot.row(row).iter().enumerate() {
+        if cell.flags.wide_spacer {
+            continue;
+        }
+        text.push(cell.c);
+        cols.push((c, if cell.flags.wide { 2 } else { 1 }));
+    }
+    let at = cols.iter().position(|&(c, w)| c <= col && col < c + w)?;
+    let link = forgeterm_terminal::link_at(&text, at)?;
+    let first = cols[link.start].0;
+    let (last, width) = cols[link.end - 1];
+    Some((first, last + width, link.url))
 }
 
 impl TerminalCanvas<'_> {
@@ -115,6 +140,13 @@ impl canvas::Program<Message> for TerminalCanvas<'_> {
         cursor: Cursor,
     ) -> Option<Action<Message>> {
         match event {
+            Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) => {
+                state.ctrl = mods.control();
+                if !state.ctrl && state.hover_link.take().is_some() {
+                    return Some(Action::request_redraw());
+                }
+                None
+            }
             // Every redraw: make sure the PTY size matches the real widget size.
             Event::Window(window::Event::RedrawRequested(_) | window::Event::Resized(_)) => {
                 let grid = self.metrics.grid_for(bounds.size());
@@ -168,6 +200,16 @@ impl canvas::Program<Message> for TerminalCanvas<'_> {
                     }
                     mouse::Event::ButtonPressed(button) => {
                         let (col, row, right) = self.cell_at(bounds, cursor)?;
+                        // Ctrl+click on a link opens it (before mouse reporting and
+                        // selection: the user explicitly asked for the link).
+                        if *button == mouse::Button::Left
+                            && state.ctrl
+                            && let Some((_, _, url)) = link_at_cell(self.snapshot, col, row)
+                        {
+                            return Some(
+                                Action::publish(self.msg(TermMsg::OpenUrl(url))).and_capture(),
+                            );
+                        }
                         let tb = match button {
                             mouse::Button::Left => MouseButton::Left,
                             mouse::Button::Middle => MouseButton::Middle,
@@ -198,7 +240,17 @@ impl canvas::Program<Message> for TerminalCanvas<'_> {
                         }
                     }
                     mouse::Event::CursorMoved { .. } => {
-                        let (col, row, right) = self.cell_at(bounds, cursor)?;
+                        let Some((col, row, right)) = self.cell_at(bounds, cursor) else {
+                            return state.hover_link.take().map(|_| Action::request_redraw());
+                        };
+                        if state.ctrl && !state.selecting {
+                            let hover = link_at_cell(self.snapshot, col, row)
+                                .map(|(a, b, url)| (row, a, b, url));
+                            if hover != state.hover_link {
+                                state.hover_link = hover;
+                                return Some(Action::request_redraw());
+                            }
+                        }
                         if state.selecting {
                             return Some(
                                 Action::publish(self.msg(TermMsg::SelectUpdate(col, row, right)))
@@ -241,7 +293,7 @@ impl canvas::Program<Message> for TerminalCanvas<'_> {
 
     fn draw(
         &self,
-        _state: &Interaction,
+        state: &Interaction,
         renderer: &Renderer,
         _theme: &Theme,
         bounds: Rectangle,
@@ -256,15 +308,35 @@ impl canvas::Program<Message> for TerminalCanvas<'_> {
                 self.focused,
             );
         });
-        vec![geometry]
+        let mut layers = vec![geometry];
+        // Link under the pointer while Ctrl is held: underline (not cached).
+        if let Some((row, first, end, _)) = &state.hover_link
+            && state.ctrl
+        {
+            let mut frame = Frame::new(renderer, bounds.size());
+            let m = self.metrics;
+            frame.fill_rectangle(
+                Point::new(
+                    PADDING + *first as f32 * m.cell_width,
+                    PADDING + (*row as f32 + 1.0) * m.cell_height - 2.0,
+                ),
+                Size::new((end - first) as f32 * m.cell_width, 1.5),
+                crate::theme::CYAN,
+            );
+            layers.push(frame.into_geometry());
+        }
+        layers
     }
 
     fn mouse_interaction(
         &self,
-        _state: &Interaction,
+        state: &Interaction,
         bounds: Rectangle,
         cursor: Cursor,
     ) -> mouse::Interaction {
+        if state.ctrl && state.hover_link.is_some() && cursor.is_over(bounds) {
+            return mouse::Interaction::Pointer;
+        }
         if cursor.is_over(bounds) && !self.modes.mouse_reporting {
             mouse::Interaction::Text
         } else {

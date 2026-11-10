@@ -14,6 +14,7 @@ mod search;
 mod session;
 mod shell;
 mod snapshot;
+mod url;
 
 pub use input::{
     Key, Modifiers, MouseButton, encode_key, encode_mouse, encode_paste, paste_needs_confirmation,
@@ -23,3 +24,4 @@ pub use quote::{quote_path, quote_paths};
 pub use session::{GridSize, Modes, SearchOutcome, Session, SessionConfig, SessionEvent};
 pub use shell::{ShellKind, ShellSpec, default_shell, detect_shells};
 pub use snapshot::{CellFlags, CellView, CursorShape, CursorView, Snapshot};
+pub use url::{Link, is_openable, link_at, links};

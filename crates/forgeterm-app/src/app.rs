@@ -148,6 +148,7 @@ pub enum Message {
     /// Search again: `true` = older output (up), `false` = newer (down).
     TermFindStep(bool),
     TermFindClose,
+    DismissNotice,
 }
 
 const TERM_FIND_ID: &str = "forgeterm-terminal-find";
@@ -239,6 +240,8 @@ pub struct App {
     /// A close that waits for confirmation, with the programs it would end.
     pending_close: Option<(CloseTarget, Vec<String>)>,
     term_find: Option<TermFind>,
+    /// A one-line problem report (e.g. a link that could not be opened).
+    notice: Option<String>,
 }
 
 impl App {
@@ -282,6 +285,7 @@ impl App {
             viewer: Viewer::default(),
             pending_close: None,
             term_find: None,
+            notice: None,
         };
         app.menus = menu::menus(app.shells.len());
         app.load_settings(true);
@@ -760,6 +764,7 @@ impl App {
                 }
             }
             Message::TermFindClose => self.term_find = None,
+            Message::DismissNotice => self.notice = None,
             Message::FocusPane(pane) => {
                 if let Some(tab) = self.workspace.active_tab_mut()
                     && tab.focus != pane
@@ -1071,6 +1076,11 @@ impl App {
                 }
             }
             TermMsg::Paste => return Task::done(Message::Paste),
+            TermMsg::OpenUrl(url) => {
+                if let Err(e) = open_url(&url) {
+                    self.notice = Some(e);
+                }
+            }
         }
         Task::none()
     }
@@ -1543,7 +1553,7 @@ impl App {
                 if let Some(dir) = self.prompts_dir()
                     && let Err(e) = open_prompts_folder(&dir)
                 {
-                    self.settings_problems = vec![e];
+                    self.notice = Some(e);
                 }
             }
             CommandId::ExplorerToggleFollow => {
@@ -2247,6 +2257,9 @@ impl App {
         if let Some((_, pending)) = &self.pending_paste {
             layout = layout.push(paste_banner(pending));
         }
+        if let Some(n) = &self.notice {
+            layout = layout.push(notice_banner(n));
+        }
         if let Some(f) = &self.term_find {
             layout = layout.push(term_find_bar(f));
         }
@@ -2720,6 +2733,35 @@ fn drop_hint(shell: &str) -> Element<'_, Message> {
         .into()
 }
 
+/// A dismissible one-line problem report.
+fn notice_banner(message: &str) -> Element<'_, Message> {
+    container(
+        row![
+            text("!").size(15).color(theme::AMBER),
+            text(message).size(12).color(theme::TEXT),
+            space::horizontal(),
+            button(text("Dismiss").size(12))
+                .on_press(Message::DismissNotice)
+                .padding([4, 10])
+                .style(|_, status| ghost_button(status, theme::CYAN)),
+        ]
+        .spacing(10)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([6, 14])
+    .width(Length::Fill)
+    .style(|_| container::Style {
+        background: Some(theme::SURFACE.into()),
+        border: Border {
+            color: theme::AMBER,
+            width: 1.0,
+            radius: 0.0.into(),
+        },
+        ..Default::default()
+    })
+    .into()
+}
+
 /// Find bar above the terminals (Ctrl+Shift+F).
 fn term_find_bar(f: &TermFind) -> Element<'_, Message> {
     let status = match (f.query.is_empty(), f.outcome) {
@@ -3099,6 +3141,27 @@ fn viewer_key(key: &keyboard::Key, mods: keyboard::Modifiers, v: &Viewer) -> Opt
         }
         _ => return None,
     })
+}
+
+/// Opens a web link from terminal output in the default browser, only after a
+/// Ctrl+click and only for http(s) links that pass `is_openable` (terminal output
+/// is untrusted). The link is passed as one argument, never through a shell.
+fn open_url(url: &str) -> Result<(), String> {
+    if !forgeterm_terminal::is_openable(url) {
+        return Err(format!("not opened: {url} is not a plain http(s) link"));
+    }
+    let program = if cfg!(windows) {
+        "explorer.exe"
+    } else if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    std::process::Command::new(program)
+        .arg(url)
+        .spawn()
+        .map(drop)
+        .map_err(|e| format!("could not open the link with {program}: {e}"))
 }
 
 fn load_document(path: PathBuf) -> Task<Message> {

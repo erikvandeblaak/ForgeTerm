@@ -29,6 +29,8 @@ pub enum TermMsg {
         focus: bool,
     },
     Paste,
+    /// Ctrl+click on a link.
+    OpenUrl(String),
 }
 
 impl TermMsg {

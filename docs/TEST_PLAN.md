@@ -227,6 +227,14 @@ Let op: Kladblok in Windows 11 opent het bestand als tabblad in een al geopend K
 | S4 | 25× Enter → oudere treffers, weergave schuift het scrollback in (`↑ 19 / 131`), treffer bovenaan | ✅ |
 | S5 | Ctrl+C terwijl het zoekveld de focus heeft: eerst kopieerde het níet (veld ving de toets); opgelost en hertest: klembord = treffer `77-fo` | ✅ |
 
+### Links (2026-11-10, Windows 11)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| L1 | Unit: links vinden + leestekens/haakjes, geen file/ftp/javascript, niet aan een woord vastgeplakt, kolomposities, `is_openable` weigert spaties/quotes/ESC/te lang/`-host` | ✅ |
+| L2 | `https://example.com/forgeterm-test` in de uitvoer, Ctrl ingedrukt + muis erover → onderstreept; Ctrl los → weg | ✅ |
+| L3 | Ctrl+klik opent de browser | ⬜ bewust niet in de GUI uitgevoerd (zou de browser van de gebruiker openen en een externe site bezoeken); pad = `is_openable` (unit-getest) + `explorer.exe <url>` |
+
 ### Veilig sluiten (2026-11-10, Windows 11)
 
 | # | Scenario | Resultaat |
