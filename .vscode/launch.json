@@ -1,8 +1,35 @@
 {
+    // F5 = the first configuration. On Windows the MSVC debugger (cppvsdbg) is the most
+    // reliable for Rust; LLDB works on Linux/WSL and for tests via the cargo integration.
+    // RUST_LOG: debug for all forgeterm* crates, keep wgpu/iced noise down (same as main.rs).
     "version": "0.2.0",
+    "inputs": [
+        {
+            "id": "crate",
+            "type": "pickString",
+            "description": "Welke library-crate wil je testen/debuggen?",
+            "options": [
+                "forgeterm-terminal",
+                "forgeterm-agents",
+                "forgeterm-prompts",
+                "forgeterm-git",
+                "forgeterm-viewer",
+                "forgeterm-system",
+                "forgeterm-settings",
+                "forgeterm-explorer"
+            ],
+            "default": "forgeterm-terminal"
+        },
+        {
+            "id": "testFilter",
+            "type": "promptString",
+            "description": "Testnaam-filter (leeg = alle tests van de crate)",
+            "default": ""
+        }
+    ],
     "configurations": [
         {
-            "name": "ForgeTerm — Debug (MSVC, aanbevolen op Windows)",
+            "name": "ForgeTerm — Debug (testinstellingen)",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/target/debug/forgeterm.exe",
@@ -10,13 +37,42 @@
             "cwd": "${workspaceFolder}",
             "environment": [
                 { "name": "RUST_BACKTRACE", "value": "1" },
-                { "name": "RUST_LOG", "value": "forgeterm=debug,forgeterm_terminal=debug" }
+                { "name": "RUST_LOG", "value": "info,forgeterm=debug,wgpu_hal=error,wgpu_core=warn,iced_wgpu=warn,iced_winit=warn" },
+                { "name": "FORGETERM_SETTINGS", "value": "${workspaceFolder}/target/dev/settings.toml" }
             ],
             "console": "integratedTerminal",
-            "preLaunchTask": "cargo build"
+            "preLaunchTask": "cargo build (app)"
         },
         {
-            "name": "ForgeTerm — Debug (LLDB, ook Linux)",
+            "name": "ForgeTerm — Debug (eigen instellingen)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/forgeterm.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                { "name": "RUST_BACKTRACE", "value": "1" },
+                { "name": "RUST_LOG", "value": "info,forgeterm=debug,wgpu_hal=error,wgpu_core=warn,iced_wgpu=warn,iced_winit=warn" }
+            ],
+            "console": "integratedTerminal",
+            "preLaunchTask": "cargo build (app)"
+        },
+        {
+            "name": "ForgeTerm — Release (testinstellingen)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/release/forgeterm.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                { "name": "FORGETERM_SETTINGS", "value": "${workspaceFolder}/target/dev/settings.toml" },
+                { "name": "FORGETERM_LOG_FILE", "value": "${workspaceFolder}/target/forgeterm-release.log" }
+            ],
+            "console": "integratedTerminal",
+            "preLaunchTask": "cargo build --release (app)"
+        },
+        {
+            "name": "ForgeTerm — Debug (LLDB, Linux/WSL)",
             "type": "lldb",
             "request": "launch",
             "cargo": {
@@ -25,18 +81,35 @@
             },
             "args": [],
             "cwd": "${workspaceFolder}",
-            "env": { "RUST_BACKTRACE": "1", "RUST_LOG": "forgeterm=debug,forgeterm_terminal=debug" }
+            "env": {
+                "RUST_BACKTRACE": "1",
+                "RUST_LOG": "info,forgeterm=debug,wgpu_hal=error,wgpu_core=warn,iced_wgpu=warn,iced_winit=warn",
+                "FORGETERM_SETTINGS": "${workspaceFolder}/target/dev/settings.toml"
+            }
         },
         {
-            "name": "Terminal-engine tests debuggen (LLDB)",
+            "name": "Tests debuggen: library-crate kiezen",
             "type": "lldb",
             "request": "launch",
             "cargo": {
-                "args": ["test", "--no-run", "--package=forgeterm-terminal"],
+                "args": ["test", "--no-run", "--lib", "--package=${input:crate}"],
                 "filter": { "kind": "lib" }
             },
-            "args": [],
-            "cwd": "${workspaceFolder}"
+            "args": ["${input:testFilter}"],
+            "cwd": "${workspaceFolder}",
+            "env": { "RUST_BACKTRACE": "1" }
+        },
+        {
+            "name": "Tests debuggen: app (forgeterm)",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": ["test", "--no-run", "--bin=forgeterm", "--package=forgeterm-app"],
+                "filter": { "name": "forgeterm", "kind": "bin" }
+            },
+            "args": ["${input:testFilter}"],
+            "cwd": "${workspaceFolder}",
+            "env": { "RUST_BACKTRACE": "1" }
         }
     ]
 }

@@ -1,35 +1,118 @@
 {
+    // Ctrl+Shift+B = build, "Tasks: Run Test Task" = tests,
+    // "Tasks: Run Task" → "Kwaliteitspoort" = everything CLAUDE.md requires before "done".
     "version": "2.0.0",
+    "inputs": [
+        {
+            "id": "probeCommand",
+            "type": "promptString",
+            "description": "Programma + argumenten voor de probe",
+            "default": "cmd /c dir"
+        }
+    ],
     "tasks": [
+        // --- Build / run --------------------------------------------------------
         {
             "label": "cargo build",
             "type": "cargo",
             "command": "build",
-            "args": ["--workspace"],
+            "args": ["--workspace", "--all-targets"],
             "problemMatcher": ["$rustc"],
             "group": { "kind": "build", "isDefault": true }
         },
         {
-            "label": "cargo run (ForgeTerm)",
+            "label": "cargo build (app)",
+            "type": "cargo",
+            "command": "build",
+            "args": ["--bin", "forgeterm"],
+            "problemMatcher": ["$rustc"],
+            "group": "build"
+        },
+        {
+            "label": "cargo build --release (app)",
+            "type": "cargo",
+            "command": "build",
+            "args": ["--release", "--bin", "forgeterm"],
+            "problemMatcher": ["$rustc"],
+            "group": "build"
+        },
+        {
+            "label": "ForgeTerm starten",
+            "detail": "cargo run, met je echte instellingen",
             "type": "cargo",
             "command": "run",
             "args": ["--bin", "forgeterm"],
             "problemMatcher": ["$rustc"]
         },
         {
-            "label": "cargo test (workspace)",
+            "label": "ForgeTerm starten (testinstellingen)",
+            "detail": "FORGETERM_SETTINGS=target/dev/settings.toml; je echte settings.toml blijft onaangeroerd",
             "type": "cargo",
-            "command": "test",
-            "args": ["--workspace"],
-            "problemMatcher": ["$rustc"],
-            "group": { "kind": "test", "isDefault": true }
+            "command": "run",
+            "args": ["--bin", "forgeterm"],
+            "options": {
+                "env": {
+                    "FORGETERM_SETTINGS": "${workspaceFolder}/target/dev/settings.toml"
+                }
+            },
+            "problemMatcher": ["$rustc"]
+        },
+
+        // --- Quality gate (CLAUDE.md) -----------------------------------------
+        {
+            "label": "fmt-check",
+            "type": "cargo",
+            "command": "fmt",
+            "args": ["--all", "--check"],
+            "problemMatcher": [],
+            "presentation": { "group": "gate" }
         },
         {
-            "label": "cargo clippy (workspace)",
+            "label": "clippy (workspace)",
             "type": "cargo",
             "command": "clippy",
             "args": ["--workspace", "--all-targets", "--", "-D", "warnings"],
-            "problemMatcher": ["$rustc"]
+            "problemMatcher": ["$rustc"],
+            "presentation": { "group": "gate" }
+        },
+        {
+            "label": "clippy (Linux-target)",
+            "detail": "Compile-check van de #[cfg(unix)]-paden (verplicht volgens CLAUDE.md)",
+            "type": "cargo",
+            "command": "clippy",
+            "args": [
+                "--workspace",
+                "--all-targets",
+                "--target",
+                "x86_64-unknown-linux-gnu",
+                "--",
+                "-D",
+                "warnings"
+            ],
+            "problemMatcher": ["$rustc"],
+            "presentation": { "group": "gate" }
+        },
+        {
+            "label": "cargo test (workspace)",
+            "type": "cargo",
+            "command": "test",
+            "args": ["--workspace", "--no-fail-fast"],
+            "options": { "env": { "RUST_BACKTRACE": "1" } },
+            "problemMatcher": ["$rustc"],
+            "group": { "kind": "test", "isDefault": true },
+            "presentation": { "group": "gate" }
+        },
+        {
+            "label": "Kwaliteitspoort",
+            "detail": "fmt-check → clippy → clippy Linux → alle tests",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "fmt-check",
+                "clippy (workspace)",
+                "clippy (Linux-target)",
+                "cargo test (workspace)"
+            ],
+            "problemMatcher": []
         },
         {
             "label": "cargo fmt",
@@ -38,11 +121,26 @@
             "args": ["--all"],
             "problemMatcher": []
         },
+
+        // --- Tools ----------------------------------------------------------------
         {
-            "label": "cargo build --release",
+            "label": "Probe (gestylede cellen dumpen)",
+            "type": "shell",
+            "command": "cargo run -p forgeterm-terminal --example probe -- ${input:probeCommand}",
+            "problemMatcher": ["$rustc"]
+        },
+        {
+            "label": "cargo doc (openen)",
             "type": "cargo",
-            "command": "build",
-            "args": ["--release", "--bin", "forgeterm"],
+            "command": "doc",
+            "args": ["--workspace", "--no-deps", "--open"],
+            "problemMatcher": ["$rustc"]
+        },
+        {
+            "label": "Windows-pakket bouwen (zip + installer)",
+            "type": "shell",
+            "command": "pwsh",
+            "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/package-windows.ps1"],
             "problemMatcher": ["$rustc"]
         }
     ]

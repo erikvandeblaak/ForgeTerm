@@ -104,11 +104,15 @@ Open de map in VS Code; aanbevolen extensies worden voorgesteld (`.vscode/extens
 | Actie | Hoe |
 |---|---|
 | Bouwen | `Ctrl+Shift+B` |
-| Debuggen | `F5` → *ForgeTerm — Debug (MSVC)* |
-| Tests | *Tasks: Run Test Task*, of de ▶-lens boven een test |
-| Lint | Task *cargo clippy (workspace)* — rust-analyzer draait clippy ook bij opslaan |
+| Debuggen | `F5` → *ForgeTerm — Debug (testinstellingen)*: gebruikt `target/dev/settings.toml`, je echte instellingen blijven onaangeroerd. *Debug (eigen instellingen)* gebruikt je gewone `settings.toml` |
+| Release testen | `F5` → *ForgeTerm — Release (testinstellingen)*; log in `target/forgeterm-release.log` |
+| Starten zonder debugger | Task *ForgeTerm starten* / *ForgeTerm starten (testinstellingen)* |
+| Tests | *Tasks: Run Test Task*, de Testing-zijbalk, of de ▶ Run / Debug-lens boven een test |
+| Tests debuggen | `F5` → *Tests debuggen: library-crate kiezen* of *Tests debuggen: app* (vraagt crate + testfilter) |
+| Kwaliteitspoort | Task *Kwaliteitspoort*: fmt-check → clippy → clippy Linux-target → alle tests |
+| Overig | Tasks *Probe*, *cargo doc (openen)*, *Windows-pakket bouwen* |
 
-Opslaan formatteert automatisch (rustfmt). rust-analyzer gebruikt een eigen target-map, zodat het de build niet blokkeert.
+Tasks start je via `Ctrl+Shift+P` → *Tasks: Run Task*. Opslaan formatteert automatisch (rustfmt) en zet regeleindes op LF. rust-analyzer draait clippy bij opslaan en gebruikt een eigen target-map, zodat het de build niet blokkeert. Voor Linux-code (`#[cfg(unix)]`) met volledige IDE-hulp: zet tijdelijk `rust-analyzer.cargo.target` in `.vscode/settings.json`.
 
 ## Documentatie
 
