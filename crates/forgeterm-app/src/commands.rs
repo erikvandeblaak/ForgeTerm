@@ -65,6 +65,8 @@ pub enum CommandId {
     /// Start an agent in the project root (`true` = in a split).
     StartAgent(AgentKind, bool),
     OpenPromptStudio,
+    /// Prompt Studio as a panel beside the terminal, or as a floating window.
+    TogglePromptStudioDock,
     OpenPromptsFolder,
     ToggleGitPanel,
     GitRefresh,
@@ -118,6 +120,7 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::ToggleAiPanel,
     CommandId::AiRefresh,
     CommandId::OpenPromptStudio,
+    CommandId::TogglePromptStudioDock,
     CommandId::OpenPromptsFolder,
     CommandId::ToggleGitPanel,
     CommandId::GitRefresh,
@@ -147,9 +150,12 @@ impl CommandId {
             | NewTabInSelectedFolder => "Explorer",
             OpenSettings | ReloadSettings => "Settings",
             ToggleViewer | ViewSelectedFile => "Viewer",
-            ToggleAiPanel | AiRefresh | StartAgent(..) | OpenPromptStudio | OpenPromptsFolder => {
-                "AI"
-            }
+            ToggleAiPanel
+            | AiRefresh
+            | StartAgent(..)
+            | OpenPromptStudio
+            | TogglePromptStudioDock
+            | OpenPromptsFolder => "AI",
             ToggleGitPanel | GitRefresh | GitShowHistory => "Git",
             About | KeyboardShortcuts => "Help",
             Quit => "App",
@@ -216,6 +222,7 @@ impl CommandId {
             ToggleAiPanel => "toggle_ai_panel",
             AiRefresh => "ai_refresh",
             OpenPromptStudio => "prompt_studio",
+            TogglePromptStudioDock => "prompt_studio_dock",
             OpenPromptsFolder => "open_prompts_folder",
             ToggleGitPanel => "toggle_git_panel",
             GitRefresh => "git_refresh",
@@ -296,6 +303,7 @@ impl CommandId {
             AiRefresh => "Refresh Agents and Project Context",
             StartAgent(..) => "Start Agent",
             OpenPromptStudio => "Prompt Studio",
+            TogglePromptStudioDock => "Prompt Studio Beside Terminal / Floating",
             OpenPromptsFolder => "Open Prompts Folder",
             ToggleGitPanel => "Toggle Git Panel",
             ToggleViewer => "Toggle Code Viewer",

@@ -122,7 +122,12 @@ pub fn menus(shell_count: usize) -> Vec<Menu> {
                 for kind in forgeterm_agents::AgentKind::ALL {
                     ai.push(C(StartAgent(kind, true)));
                 }
-                ai.extend([Sep, C(OpenPromptStudio), C(OpenPromptsFolder)]);
+                ai.extend([
+                    Sep,
+                    C(OpenPromptStudio),
+                    C(TogglePromptStudioDock),
+                    C(OpenPromptsFolder),
+                ]);
                 ai
             },
         },

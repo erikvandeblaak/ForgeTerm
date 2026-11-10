@@ -186,6 +186,10 @@ Let op: Kladblok in Windows 11 opent het bestand als tabblad in een al geopend K
 | P4 | Plan a feature (`project` = aiproj automatisch, `feature` = Dark mode) in Claude Code → `[Pasted text #1 +4 lines]`, niet verstuurd; Ctrl+C wist, afsluiten zonder weesprocessen | ✅ |
 | P5 | Open Prompts Folder → `prompts/example.md` aangemaakt, Verkenner opent die map; eigen `review-file.md` + Reload → "Mijn review" (yours) vervangt het ingebouwde, selectie blijft; Copy → klembord bevat de tekst | ✅ |
 | P6 | Esc sluit; tijdens de studio getypte tekst kwam niet in de terminal | ✅ |
+| P7 | Palette → "beside" → studio als paneel rechts; typen gaat naar de terminal (`echo hallo`) | ✅ |
+| P8 | Klik in veld `file`, typ `main.rs` → in het veld, preview bijgewerkt, cyaan rand, cursor terminal hol; F5 lekt niet naar de terminal; Esc → ` wereld` komt in de terminal | ✅ |
+| P9 | Tab Tab naar `focus`, typ, klik Insert → tekst bij de prompt zonder Enter, paneel blijft open, toetsenbord terug naar de terminal (` #ok` in de terminal) | ✅ |
+| P10 | Float → zwevend venster met dezelfde waarden; Dock → weer paneel; Alt+F4 → `session.toml` bevat `prompt_studio = "docked"`; herstart → paneel weer naast de terminal, velden leeg | ✅ |
 | S1 | Opstarten en direct typen: shell start op de echte grootte (log: `cols=140 rows=35`, was 80×24), prompt niet overschreven | ✅ |
 
 ### Git (2026-11-10, Windows 11, testrepo + ForgeTerm-repo)
