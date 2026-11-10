@@ -6,6 +6,7 @@ mod app;
 mod commands;
 mod explorer_view;
 mod fuzzy;
+mod git_view;
 mod glyphs;
 mod keys;
 mod menu;

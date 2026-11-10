@@ -45,7 +45,7 @@ Agent Adapter System: detectie + versie ✅ Windows (GUI: Claude Code 2.1.322, c
 
 ## Fase 6 — Git en Advanced
 
-Git Control Center ⬜ · Git Activity Charts ⬜ · layouts ⬜ · sneltoetsbeheer ⬜.
+Git Control Center: statusbalk (branch, ahead/behind, wijzigingen), paneel met diff, stage/unstage, commit, recente commits ✅ Windows · push/pull/branches ⬜ (bewust terminal) · Git Activity Charts ⬜ · layouts ⬜ · sneltoetsbeheer ⬜.
 
 ## Fase 7 — Release
 

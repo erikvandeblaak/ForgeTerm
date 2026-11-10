@@ -61,6 +61,8 @@ pub enum CommandId {
     StartAgent(AgentKind, bool),
     OpenPromptStudio,
     OpenPromptsFolder,
+    ToggleGitPanel,
+    GitRefresh,
     About,
     Quit,
 }
@@ -106,6 +108,8 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::AiRefresh,
     CommandId::OpenPromptStudio,
     CommandId::OpenPromptsFolder,
+    CommandId::ToggleGitPanel,
+    CommandId::GitRefresh,
     CommandId::About,
     CommandId::Quit,
 ];
@@ -133,6 +137,7 @@ impl CommandId {
             ToggleAiPanel | AiRefresh | StartAgent(..) | OpenPromptStudio | OpenPromptsFolder => {
                 "AI"
             }
+            ToggleGitPanel | GitRefresh => "Git",
             About => "Help",
             Quit => "App",
         }
@@ -184,6 +189,8 @@ impl CommandId {
             StartAgent(..) => "Start Agent",
             OpenPromptStudio => "Prompt Studio",
             OpenPromptsFolder => "Open Prompts Folder",
+            ToggleGitPanel => "Toggle Git Panel",
+            GitRefresh => "Refresh Git Status",
             ReloadSettings => "Reload Settings",
             About => "About ForgeTerm",
             Quit => "Quit ForgeTerm",
@@ -284,6 +291,7 @@ impl Default for Keymap {
             (b(C, Char(',')), OpenSettings),
             (b(CS, Char('a')), ToggleAiPanel),
             (b(CS, Char('i')), OpenPromptStudio),
+            (b(CS, Char('g')), ToggleGitPanel),
             (b(C, Tab), NextTab),
             (b(CS, Tab), PreviousTab),
             (b(AS, Char('=')), SplitRight),

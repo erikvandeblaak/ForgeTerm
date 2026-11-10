@@ -26,6 +26,7 @@ use iced::{
 
 use crate::ai_view::{self, AgentState};
 use crate::commands::{CommandId, Dir, Keymap, STATIC_COMMANDS};
+use crate::git_view::{self, DiffView, GitState, Repo, Snapshot};
 use crate::menu::{self, Menu, MenuState};
 use crate::palette::{self as command_palette, CommandPalette, Entry};
 use crate::prompt_studio::PromptStudio;
@@ -105,6 +106,22 @@ pub enum Message {
     PromptCopy,
     PromptReload,
     PromptClose,
+    /// Periodic git status refresh.
+    GitTick,
+    GitRefreshed(Box<Snapshot>),
+    GitStage(Vec<String>),
+    GitUnstage(Vec<String>),
+    GitCommitEdit(iced::widget::text_editor::Action),
+    GitCommit,
+    /// Result of stage / unstage / commit (message for the panel).
+    GitActionDone(Result<String, String>),
+    GitShowDiff(String, forgeterm_git::DiffKind),
+    GitDiffLoaded(
+        String,
+        forgeterm_git::DiffKind,
+        Result<forgeterm_git::Diff, String>,
+    ),
+    GitDiffClose,
 }
 
 /// Entry of the "new tab with shell…" dropdown.
@@ -164,6 +181,8 @@ pub struct App {
     /// Folder the context was (or is being) scanned for.
     ai_context_for: Option<PathBuf>,
     prompt_studio: Option<PromptStudio>,
+    git_visible: bool,
+    git: GitState,
 }
 
 impl App {
@@ -202,6 +221,8 @@ impl App {
             ai_context: None,
             ai_context_for: None,
             prompt_studio: None,
+            git_visible: false,
+            git: GitState::default(),
         };
         app.menus = menu::menus(app.shells.len());
         app.load_settings(true);
@@ -505,7 +526,10 @@ impl App {
             Event::Window(window::Event::FileDropped(path)) => Some(Message::FileDropped(path)),
             _ => None,
         });
-        Subscription::batch([events, settings])
+        // git status is cheap but starts a process: every 4 s keeps the status bar
+        // current after commands typed in the terminal.
+        let git = iced::time::every(Duration::from_secs(4)).map(|_| Message::GitTick);
+        Subscription::batch([events, settings, git])
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -514,6 +538,7 @@ impl App {
             self.sync_explorer(),
             self.reveal_active_tab(),
             self.sync_ai_context(),
+            self.sync_git(),
         ]
         .into_iter()
         .flatten()
@@ -778,6 +803,58 @@ impl App {
                 }
             }
             Message::PromptClose => self.prompt_studio = None,
+            Message::GitTick => return self.refresh_git(false),
+            Message::GitRefreshed(snapshot) => {
+                if self.git.refreshing.as_ref() == Some(&snapshot.dir) {
+                    self.git.refreshing = None;
+                }
+                // A result for a folder the terminal has left is dropped; the
+                // follow-up sync starts a refresh for the new one.
+                if snapshot.dir == self.git_dir() {
+                    self.git.apply(*snapshot);
+                }
+            }
+            Message::GitStage(paths) => return self.git_action(GitAction::Stage(paths)),
+            Message::GitUnstage(paths) => return self.git_action(GitAction::Unstage(paths)),
+            Message::GitCommit => {
+                let message = self.git.commit_message.text();
+                return self.git_action(GitAction::Commit(message));
+            }
+            Message::GitCommitEdit(action) => self.git.commit_message.perform(action),
+            Message::GitActionDone(result) => {
+                self.git.action_running = false;
+                if result.is_ok() && self.git.last_action_was_commit {
+                    self.git.commit_message = iced::widget::text_editor::Content::new();
+                }
+                self.git.last_action = Some(result);
+                return self.refresh_git(true);
+            }
+            Message::GitShowDiff(path, kind) => {
+                let Some(root) = self.git.root().cloned() else {
+                    return Task::none();
+                };
+                self.git.diff = Some(DiffView {
+                    path: path.clone(),
+                    kind,
+                    result: None,
+                });
+                return background(
+                    {
+                        let path = path.clone();
+                        move || forgeterm_git::diff(&root, &path, kind)
+                    },
+                    move |result| Message::GitDiffLoaded(path.clone(), kind, result),
+                );
+            }
+            Message::GitDiffLoaded(path, kind, result) => {
+                if let Some(d) = &mut self.git.diff
+                    && d.path == path
+                    && d.kind == kind
+                {
+                    d.result = Some(result);
+                }
+            }
+            Message::GitDiffClose => self.git.diff = None,
             Message::FileDropped(path) => {
                 self.drop_hover = false;
                 self.insert_paths(&[path]);
@@ -863,6 +940,12 @@ impl App {
         }
         if self.prompt_studio.is_some() {
             return self.prompt_studio_key(&key, mods, captured);
+        }
+        if self.git.diff.is_some() {
+            if matches!(key, keyboard::Key::Named(Named::Escape)) {
+                self.git.diff = None;
+            }
+            return Task::none();
         }
         // Keys handled by a widget never reach the terminal.
         if captured {
@@ -1147,12 +1230,14 @@ impl App {
                 self.explorer_visible = !self.explorer_visible;
                 if self.explorer_visible {
                     self.ai_visible = false;
+                    self.git_visible = false;
                 }
             }
             CommandId::ToggleAiPanel => {
                 self.ai_visible = !self.ai_visible;
                 if self.ai_visible {
                     self.explorer_visible = false;
+                    self.git_visible = false;
                 }
             }
             CommandId::AiRefresh => {
@@ -1164,6 +1249,15 @@ impl App {
                 return detect_agents();
             }
             CommandId::StartAgent(kind, split) => return self.start_agent(kind, split),
+            CommandId::ToggleGitPanel => {
+                self.git_visible = !self.git_visible;
+                if self.git_visible {
+                    self.explorer_visible = false;
+                    self.ai_visible = false;
+                    return self.refresh_git(true);
+                }
+            }
+            CommandId::GitRefresh => return self.refresh_git(true),
             CommandId::OpenPromptStudio => {
                 if self.prompt_studio.take().is_none() {
                     return self.open_prompt_studio();
@@ -1260,6 +1354,8 @@ impl App {
             CommandId::OpenPromptsFolder => self.prompts_dir().is_some(),
             CommandId::CommandPalette
             | CommandId::OpenPromptStudio
+            | CommandId::ToggleGitPanel
+            | CommandId::GitRefresh
             | CommandId::NewTab
             | CommandId::ZoomIn
             | CommandId::ZoomOut
@@ -1306,6 +1402,69 @@ impl App {
         } else if let Some(s) = t.session() {
             s.paste(&text);
         }
+    }
+
+    // ---- git ----------------------------------------------------------------------
+
+    /// Folder git status is shown for: the focused terminal's.
+    fn git_dir(&self) -> PathBuf {
+        self.focused_cwd().unwrap_or_else(|| self.start_dir.clone())
+    }
+
+    /// Refreshes when the focused terminal moved to another folder.
+    fn sync_git(&mut self) -> Option<Task<Message>> {
+        let dir = self.git_dir();
+        if self.git.dir.as_ref() == Some(&dir) || self.git.refreshing.as_ref() == Some(&dir) {
+            return None;
+        }
+        Some(self.start_git_refresh(dir, None))
+    }
+
+    /// Refreshes the current folder. The periodic tick skips while a refresh is
+    /// running; `force` (user action, panel opened) does not.
+    fn refresh_git(&mut self, force: bool) -> Task<Message> {
+        if self.git.refreshing.is_some() && !force {
+            return Task::none();
+        }
+        let dir = self.git_dir();
+        // Same folder: reuse the known root (one git call instead of two).
+        let root = (self.git.dir.as_ref() == Some(&dir))
+            .then(|| self.git.root().cloned())
+            .flatten();
+        self.start_git_refresh(dir, root)
+    }
+
+    fn start_git_refresh(&mut self, dir: PathBuf, known_root: Option<PathBuf>) -> Task<Message> {
+        self.git.refreshing = Some(dir.clone());
+        let with_log = self.git_visible;
+        background(
+            move || git_snapshot(dir, known_root, with_log),
+            |s| Message::GitRefreshed(Box::new(s)),
+        )
+    }
+
+    fn git_action(&mut self, action: GitAction) -> Task<Message> {
+        let Some(root) = self.git.root().cloned() else {
+            return Task::none();
+        };
+        if self.git.action_running {
+            return Task::none();
+        }
+        let has_commits = self.git.status().is_some_and(|s| s.branch.has_commits());
+        self.git.action_running = true;
+        self.git.last_action_was_commit = matches!(action, GitAction::Commit(_));
+        background(
+            move || match action {
+                GitAction::Stage(paths) => forgeterm_git::stage(&root, &paths)
+                    .map(|()| format!("Staged {}", describe(&paths))),
+                GitAction::Unstage(paths) => forgeterm_git::unstage(&root, &paths, has_commits)
+                    .map(|()| format!("Unstaged {}", describe(&paths))),
+                GitAction::Commit(message) => {
+                    forgeterm_git::commit(&root, &message).map(|s| format!("Committed {s}"))
+                }
+            },
+            Message::GitActionDone,
+        )
     }
 
     // ---- prompt studio ------------------------------------------------------------
@@ -1533,6 +1692,8 @@ impl App {
             .into()
         } else if self.ai_visible {
             row![ai_view::view(&self.agents, self.ai_context.as_ref()), body].into()
+        } else if self.git_visible {
+            row![git_view::view(&self.git), body].into()
         } else {
             body
         };
@@ -1544,6 +1705,9 @@ impl App {
         }
         if let Some(p) = &self.command_palette {
             layers = layers.push(p.view());
+        }
+        if let Some(diff) = &self.git.diff {
+            layers = layers.push(git_view::view_diff(diff));
         }
         if let Some(studio) = &self.prompt_studio {
             layers = layers.push(studio.view());
@@ -1760,6 +1924,17 @@ impl App {
             .map_or_else(String::new, |t| {
                 format!("↑ {} / {}", t.snapshot.display_offset, t.snapshot.history)
             });
+        let git_summary: Element<'_, Message> = match self.git.summary() {
+            Some((summary, color)) => mouse_area(
+                text(summary)
+                    .size(12)
+                    .color(color)
+                    .wrapping(text::Wrapping::None),
+            )
+            .on_press(Message::Command(CommandId::ToggleGitPanel))
+            .into(),
+            None => space::horizontal().width(0).into(),
+        };
         let layout = self.workspace.active_tab().map_or_else(String::new, |tab| {
             format!(
                 "Tab {}/{} · {} pane{}{}",
@@ -1783,6 +1958,7 @@ impl App {
                     .size(12)
                     .color(theme::TEXT)
                     .wrapping(text::Wrapping::None),
+                git_summary,
                 text(grid).size(12).color(theme::TEXT_MUTED),
                 text(layout).size(12).color(theme::TEXT_MUTED),
                 text(scrolled).size(12).color(theme::VIOLET),
@@ -2141,6 +2317,40 @@ fn detect_agents() -> Task<Message> {
         },
         Message::AgentsDetected,
     )
+}
+
+enum GitAction {
+    Stage(Vec<String>),
+    Unstage(Vec<String>),
+    Commit(String),
+}
+
+fn describe(paths: &[String]) -> String {
+    match paths {
+        [one] => one.clone(),
+        many => format!("{} files", many.len()),
+    }
+}
+
+/// One refresh: find the repository (unless known) and read its status (and log).
+fn git_snapshot(dir: PathBuf, known_root: Option<PathBuf>, with_log: bool) -> Snapshot {
+    let root = match known_root.filter(|r| r.is_dir()) {
+        Some(r) => Ok(Some(r)),
+        None => forgeterm_git::discover(&dir),
+    };
+    let repo = match root {
+        Err(e) => Repo::Error(e),
+        Ok(None) => Repo::Outside,
+        Ok(Some(root)) => match forgeterm_git::status(&root) {
+            Ok(status) => Repo::Found { root, status },
+            Err(e) => Repo::Error(e),
+        },
+    };
+    let log = match (&repo, with_log) {
+        (Repo::Found { root, .. }, true) => Some(forgeterm_git::log(root, 15)),
+        _ => None,
+    };
+    Snapshot { dir, repo, log }
 }
 
 fn load_prompts(dir: Option<PathBuf>) -> Task<Message> {

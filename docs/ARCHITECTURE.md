@@ -48,6 +48,7 @@ ForgeTerm/
 │   ├── forgeterm-explorer/       # bestandsboom-model, GUI-vrij, unit-getest
 │   ├── forgeterm-agents/         # AI-agents: detectie, versie, start-commando, projectcontext; unit-getest
 │   ├── forgeterm-prompts/        # Prompt Studio-sjablonen: parsen, variabelen, invullen; unit-getest
+│   ├── forgeterm-git/            # Git via de CLI: status (porcelain v2), diff, log, stage/unstage, commit; tests tegen echte git
 │   ├── forgeterm-settings/       # settings.toml: tolerant laden, template, pad; unit-getest
 │   └── forgeterm-app/            # GUI (binary `forgeterm`)
 │       ├── src/app.rs            # state, messages, update, layout, sneltoetsen
@@ -151,6 +152,14 @@ Alleen gedocumenteerde interfaces (Claude Code-documentatie op code.claude.com, 
 - **Automatische waarden** alleen uit echte state: projectroot (`project_root` vanaf de map van de gefocuste terminal), die map, de terminalselectie en het in de verkenner geselecteerde bestand. Onbekend = niet ingevuld.
 - **Invoegen** gaat naar de terminal die gefocust was bij het openen, via hetzelfde pad als plakken (bracketed paste; zonder bracketed paste + meerdere regels → bevestiging). Is die terminal intussen gestopt, dan blijft de studio open met alleen Copy.
 - **Toetsenbord**: de studio is modaal; editors krijgen typen en Ctrl+C/V/X, Tab/Shift+Tab wisselt veld, Esc sluit. Niets bereikt de terminal.
+
+## 4i. Git
+
+- **Via de `git`-CLI** met documenteerde scriptformaten (`status --porcelain=v2 --branch -z`, `log --format`), geen libgit2: dezelfde config, hooks en credential helpers als de gebruiker.
+- **Vaste veiligheidsopties** (`forgeterm-git::run`): `--no-optional-locks`, `-c core.fsmonitor=false` (een kwaadaardige repo-config kan anders een programma laten draaien bij `status`; getest met een echte hook als controle), `-c color.ui=false`, `-c core.pager=cat`, diffs met `--no-ext-diff --no-textconv`; `GIT_TERMINAL_PROMPT=0`, stdin dicht, beide uitvoerstromen uitgelezen, timeout (15 s lezen, 120 s commit), `CREATE_NO_WINDOW` op Windows. `git` wordt via PATH gevonden; Rust zoekt op Windows niet in de huidige map, dus een `git.exe` in een repository wordt niet gestart.
+- **Verversen** op een achtergrondthread: bij elke mapwissel van de gefocuste terminal (`sync_git`, ontdekt de root opnieuw), elke 4 s voor dezelfde map (bekende root, één git-aanroep; overgeslagen als er nog een loopt), en na elke actie. Resultaten voor een map die de terminal intussen verliet worden weggegooid. Het log alleen als het paneel open is.
+- **Schrijvende acties** alleen op een klik: stage (`git add`), unstage (`git restore --staged`; vóór de eerste commit `git rm --cached`), commit (`git commit -m`, inclusief hooks). Conflicten worden niet via het paneel gestaged (dat markeert ze als opgelost). Geen discard, push, pull of branchwissel: die horen bewust in de terminal.
+- **Lijsten** max 150 rijen per sectie, diffs max 5000 regels (gemarkeerd als afgekapt).
 
 ## 5. Rendering
 

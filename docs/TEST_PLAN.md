@@ -19,6 +19,7 @@
 | `tests/cwd_tracking.rs` | Elke geïnstalleerde shell in echte ConPTY met integratie: startmap gemeld, `cd` naar `it's a dir` gemeld. Geslaagd: PowerShell 7, Windows PowerShell, cmd, Git Bash (eerste poging faalde voor Git Bash: `/tmp/…` → opgelost met `pwd -W`) | ✅ |
 | `forgeterm-agents` (7) | PATH-zoeken (Windows: `.exe` vóór `.cmd`, `.ps1` overgeslagen; ontbrekend = None), `.cmd` → `cmd.exe /d /c`, `--version` van een echt script (lege regel overgeslagen), falend script = fout, hangend script → timeout en beëindigd; front matter; projectscan vanuit submap (git-root, rules, skills, commands in submappen, subagents, settings, MCP); zonder git = startmap | ✅ |
 | `forgeterm-prompts` (8) | Front matter (BOM, CRLF, quotes, zonder afsluiting = body), variabelen in volgorde zonder dubbelingen (ongeldige `{{a b}}` / `{{}}` genegeerd, `{{{x}}}`), waarden letterlijk (geen herexpansie), leeg = ontbrekend, nooit een afsluitende newline, ingebouwde sjablonen geldig, eigen map: override, `.MD`, geen submappen/`.txt`, niet-UTF-8 gemeld, ontbrekende map = geen probleem | ✅ |
+| `forgeterm-git` (7) | Porcelain v2: branch-headers, rename met origineel pad, spaties in paden, conflicten, untracked, onbekende records genegeerd, initial/detached; log-records; tegen echte git: discover vanuit submap, unborn branch, niet-ASCII + spatie, stage/unstage zonder en met HEAD, lege commit-message geweigerd, commit + log, diff unstaged/staged/untracked, fout bij onbekend pad; echt merge-conflict + rename; **repository-fsmonitor wordt niet uitgevoerd** (controle: gewone `git status` voert hem wél uit) | ✅ |
 | `forgeterm-settings` (7) | Template = exact de defaults, leeg = defaults, alle waarden toegepast, 7 fouten → 7 meldingen met fallback, syntaxfout (één regel, `unreadable`), sectie geen tabel, `ensure_file` maakt één keer aan en overschrijft nooit | ✅ |
 | `forgeterm-explorer` (6) | Sortering, verborgen, ontbrekende map = fout, lazy uitklappen/inklappen, verouderde resultaten genegeerd, fouten + selectie | ✅ |
 | `terminal_pane::tests` (3) | Tabtitels: exe-pad → shellnaam, `cmd.exe - ping …` → `ping …`, programmatitels blijven | ✅ |
@@ -184,6 +185,19 @@ Let op: Kladblok in Windows 11 opent het bestand als tabblad in een al geopend K
 | P5 | Open Prompts Folder → `prompts/example.md` aangemaakt, Verkenner opent die map; eigen `review-file.md` + Reload → "Mijn review" (yours) vervangt het ingebouwde, selectie blijft; Copy → klembord bevat de tekst | ✅ |
 | P6 | Esc sluit; tijdens de studio getypte tekst kwam niet in de terminal | ✅ |
 | S1 | Opstarten en direct typen: shell start op de echte grootte (log: `cols=140 rows=35`, was 80×24), prompt niet overschreven | ✅ |
+
+### Git (2026-11-10, Windows 11, testrepo + ForgeTerm-repo)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| G1 | Statusbalk in testrepo: `main · 4 changed`; in ForgeTerm-repo `feature/git-integration · 13 changed` (8 gewijzigd + 5 untracked, per bestand) | ✅ |
+| G2 | Ctrl+Shift+G: staged (rename R), changes (M), untracked (U, ook `b c.txt` en `sub/s.txt`), commit-vak, recente commits | ✅ |
+| G3 | Klik op bestand → diff in kleur (`+a2` groen, hunk cyaan); Esc sluit | ✅ |
+| G4 | **+** op `b c.txt` → `git status`: `A  "b c.txt"`; **−** → weer untracked; melding in het paneel | ✅ |
+| G5 | Commit-bericht typen + Commit → `git log` toont de commit, bericht leeg, lijst bijgewerkt | ✅ |
+| G6 | `git add new.txt` in de terminal → paneel binnen 4 s bijgewerkt | ✅ |
+| G7 | `cd ..` uit de repo → "Not a Git repository", statusbalk zonder git; terug in een repo → nieuwe status, oude actiemelding weg | ✅ |
+| G8 | Scrollbalk naast de knoppen, één tooltip per element | ✅ |
 
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)
 

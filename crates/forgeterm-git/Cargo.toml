@@ -1,0 +1,13 @@
+[package]
+name = "forgeterm-git"
+description = "ForgeTerm Git integration: status, diff, log, stage/unstage and commit through the git CLI. UI-agnostic."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

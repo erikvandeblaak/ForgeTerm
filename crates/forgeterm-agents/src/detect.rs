@@ -97,13 +97,14 @@ pub fn launch_command(path: &Path) -> LaunchCommand {
 /// Runs `<path> --version` (stdin closed, output captured) and returns its first
 /// non-empty line. Gives up after `timeout` (the child is killed).
 pub fn query_version(path: &Path, timeout: Duration) -> Result<String, String> {
-    let mut child = Command::new(path)
-        .arg("--version")
+    let mut cmd = Command::new(path);
+    // stderr is not read: discard it, a full pipe would block the child.
+    cmd.arg("--version")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("could not run: {e}"))?;
+        .stderr(Stdio::null());
+    hide_console(&mut cmd);
+    let mut child = cmd.spawn().map_err(|e| format!("could not run: {e}"))?;
     let stdout = child.stdout.take();
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
@@ -134,6 +135,17 @@ pub fn query_version(path: &Path, timeout: Duration) -> Result<String, String> {
         }
     }
 }
+
+/// No console window flashes up (ForgeTerm has none in Windows release builds).
+#[cfg(windows)]
+fn hide_console(cmd: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    cmd.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn hide_console(_: &mut Command) {}
 
 #[cfg(test)]
 mod tests {

@@ -117,6 +117,10 @@ pub fn menus(shell_count: usize) -> Vec<Menu> {
             },
         },
         Menu {
+            title: "Git",
+            items: vec![C(ToggleGitPanel), C(GitRefresh)],
+        },
+        Menu {
             title: "Help",
             items: vec![C(About)],
         },
