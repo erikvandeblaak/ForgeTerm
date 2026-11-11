@@ -4,7 +4,7 @@ members = ["crates/forgeterm-terminal", "crates/forgeterm-explorer", "crates/for
 default-members = ["crates/forgeterm-app"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["Erik van de Blaak"]
 license = "LicenseRef-Proprietary"
