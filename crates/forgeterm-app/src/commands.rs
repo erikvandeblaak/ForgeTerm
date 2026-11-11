@@ -61,6 +61,8 @@ pub enum CommandId {
     ExplorerRefresh,
     ExplorerParent,
     ExplorerOpenSelected,
+    /// Type or paste a folder for the explorer.
+    ExplorerGoToFolder,
     InsertSelectedPath,
     CopySelectedPath,
     NewTabInSelectedFolder,
@@ -127,6 +129,7 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::ExplorerRefresh,
     CommandId::ExplorerParent,
     CommandId::ExplorerOpenSelected,
+    CommandId::ExplorerGoToFolder,
     CommandId::InsertSelectedPath,
     CommandId::CopySelectedPath,
     CommandId::NewTabInSelectedFolder,
@@ -168,6 +171,7 @@ impl CommandId {
             | ExplorerRefresh
             | ExplorerParent
             | ExplorerOpenSelected
+            | ExplorerGoToFolder
             | InsertSelectedPath
             | CopySelectedPath
             | NewTabInSelectedFolder => "Explorer",
@@ -242,6 +246,7 @@ impl CommandId {
             ExplorerRefresh => "explorer_refresh",
             ExplorerParent => "explorer_parent",
             ExplorerOpenSelected => "explorer_open_selected",
+            ExplorerGoToFolder => "explorer_go_to_folder",
             InsertSelectedPath => "insert_selected_path",
             CopySelectedPath => "copy_selected_path",
             NewTabInSelectedFolder => "new_tab_in_selected_folder",
@@ -322,12 +327,13 @@ impl CommandId {
             ZoomIn => "Increase Font Size",
             ZoomOut => "Decrease Font Size",
             ZoomReset => "Reset Font Size",
-            ToggleExplorer => "Toggle Explorer",
+            ToggleExplorer => "Show / Focus / Hide Explorer",
             ExplorerToggleHidden => "Show Hidden Files",
             ExplorerToggleFollow => "Follow Terminal Folder",
             ExplorerRefresh => "Refresh",
             ExplorerParent => "Go to Parent Folder",
             ExplorerOpenSelected => "Open Selected Folder as Root",
+            ExplorerGoToFolder => "Go to Folder…",
             InsertSelectedPath => "Insert Selected Path into Terminal",
             CopySelectedPath => "Copy Selected Path",
             NewTabInSelectedFolder => "New Tab in Selected Folder",

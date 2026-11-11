@@ -3,7 +3,9 @@
 use std::path::Path;
 
 use forgeterm_explorer::{Row, Tree};
-use iced::widget::{button, column, container, mouse_area, row, scrollable, space, text, tooltip};
+use iced::widget::{
+    button, column, container, mouse_area, row, scrollable, space, text, text_input, tooltip,
+};
 use iced::{Border, Element, Length};
 
 use crate::app::Message;
@@ -13,7 +15,14 @@ use crate::theme;
 pub const WIDTH: f32 = 270.0;
 const INDENT: f32 = 14.0;
 
-pub fn view(tree: &Tree, follow: bool) -> Element<'_, Message> {
+/// `focused`: the explorer has the keyboard (selection drawn with a cyan edge).
+/// `goto`: the "Go to Folder" field's text and problem, when open.
+pub fn view<'a>(
+    tree: &'a Tree,
+    follow: bool,
+    focused: bool,
+    goto: Option<&'a (String, Option<String>)>,
+) -> Element<'a, Message> {
     let root_name = folder_name(tree.root());
     let header = row![
         text("EXPLORER").size(11).color(theme::TEXT_MUTED),
@@ -33,6 +42,13 @@ pub fn view(tree: &Tree, follow: bool) -> Element<'_, Message> {
             follow
         ),
         icon_button("↻", "Refresh", CommandId::ExplorerRefresh, true, false),
+        icon_button(
+            "…",
+            "Go to Folder…",
+            CommandId::ExplorerGoToFolder,
+            true,
+            goto.is_some()
+        ),
         icon_button(
             ".*",
             "Show Hidden Files",
@@ -61,20 +77,38 @@ pub fn view(tree: &Tree, follow: bool) -> Element<'_, Message> {
     let selected = tree.selected().map(|e| e.path.as_path());
     let mut list = column![].spacing(0);
     for r in tree.rows() {
-        list = list.push(view_row(&r, selected));
+        list = list.push(view_row(&r, selected, focused));
     }
     let list = scrollable(container(list).padding([0, 4]))
+        .id(crate::app::EXPLORER_LIST_ID)
+        .on_scroll(Message::ExplorerScrolled)
         .direction(scrollable::Direction::Vertical(
             scrollable::Scrollbar::new().width(6).scroller_width(6),
         ))
         .height(Length::Fill)
         .width(Length::Fill);
 
-    let mut panel = column![
-        container(column![header, root].spacing(6)).padding([8, 10]),
-        list
-    ]
-    .spacing(2);
+    let mut top = column![header, root].spacing(6);
+    if let Some((value, problem)) = goto {
+        top = top.push(
+            text_input("Folder path (~ = home, relative = from here)", value)
+                .id(crate::app::EXPLORER_GOTO_ID)
+                .on_input(Message::ExplorerGoToInput)
+                .on_submit(Message::ExplorerGoToSubmit)
+                .size(12)
+                .padding([4, 6]),
+        );
+        let hint = problem
+            .clone()
+            .unwrap_or_else(|| "Enter opens the folder, Esc cancels.".into());
+        let color = if problem.is_some() {
+            theme::CORAL
+        } else {
+            theme::TEXT_MUTED
+        };
+        top = top.push(text(hint).size(11).color(color));
+    }
+    let mut panel = column![container(top).padding([8, 10]), list].spacing(2);
     if let Some(entry) = tree.selected() {
         panel = panel.push(footer(&entry.name, entry.is_dir));
     }
@@ -94,7 +128,7 @@ pub fn view(tree: &Tree, follow: bool) -> Element<'_, Message> {
         .into()
 }
 
-fn view_row<'a>(r: &Row<'a>, selected: Option<&Path>) -> Element<'a, Message> {
+fn view_row<'a>(r: &Row<'a>, selected: Option<&Path>, focused: bool) -> Element<'a, Message> {
     match r {
         Row::Note { depth, text: note } => row![
             space::horizontal().width(indent(*depth) + 16.0),
@@ -145,7 +179,9 @@ fn view_row<'a>(r: &Row<'a>, selected: Option<&Path>) -> Element<'a, Message> {
                     background: is_selected.then(|| theme::SELECTION.into()),
                     border: Border {
                         radius: 4.0.into(),
-                        ..Default::default()
+                        // The cyan edge shows that arrow keys move this selection.
+                        color: theme::CYAN,
+                        width: if is_selected && focused { 1.0 } else { 0.0 },
                     },
                     ..Default::default()
                 });

@@ -6,6 +6,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 /// At most this many entries of one directory are shown; the rest is reported as
 /// a count instead of silently dropped.
@@ -25,12 +26,18 @@ pub struct Listing {
     pub entries: Vec<Entry>,
     /// Entries beyond [`MAX_ENTRIES`] that are not included.
     pub truncated: usize,
+    /// The folder's modification time when it was read: it changes when an entry
+    /// is added, removed or renamed, which is how [`changed_dirs`] finds work.
+    pub modified: Option<SystemTime>,
 }
 
 /// Reads a directory: folders first, then files, each case-insensitively by name.
 /// Entries whose metadata cannot be read are still listed (as files), so nothing
 /// disappears silently.
 pub fn list_dir(path: &Path) -> Result<Listing, String> {
+    // Read before the entries: a change during the listing then shows up as a
+    // newer time on the next check instead of being missed.
+    let modified = fs::metadata(path).and_then(|m| m.modified()).ok();
     let read = fs::read_dir(path).map_err(|e| e.to_string())?;
     let mut entries: Vec<Entry> = read
         .filter_map(Result::ok)
@@ -52,7 +59,74 @@ pub fn list_dir(path: &Path) -> Result<Listing, String> {
     entries.sort_by_cached_key(|e| (!e.is_dir, e.name.to_lowercase(), e.name.clone()));
     let truncated = entries.len().saturating_sub(MAX_ENTRIES);
     entries.truncate(MAX_ENTRIES);
-    Ok(Listing { entries, truncated })
+    Ok(Listing {
+        entries,
+        truncated,
+        modified,
+    })
+}
+
+/// The folders among `shown` (path, time of the listing on screen) whose
+/// modification time differs now: they need a fresh [`list_dir`]. A folder that
+/// cannot be read anymore counts as changed, so its error becomes visible.
+pub fn changed_dirs(shown: &[(PathBuf, Option<SystemTime>)]) -> Vec<PathBuf> {
+    shown
+        .iter()
+        .filter(|(dir, seen)| fs::metadata(dir).and_then(|m| m.modified()).ok() != *seen)
+        .map(|(dir, _)| dir.clone())
+        .collect()
+}
+
+/// The folder typed into "Go to Folder": `~` / `~/x` from `home`, a relative
+/// path against `current`. Only the text is interpreted; the caller checks that
+/// it exists (off the UI thread) and that it is local.
+pub fn folder_from_input(
+    input: &str,
+    current: &Path,
+    home: Option<&Path>,
+) -> Result<PathBuf, String> {
+    let input = input.trim().trim_matches('"');
+    if input.is_empty() {
+        return Err("Type a folder path.".into());
+    }
+    let path = if input == "~" {
+        home.ok_or("Home folder unknown.")?.to_path_buf()
+    } else if let Some(rest) = input
+        .strip_prefix("~/")
+        .or_else(|| input.strip_prefix("~\\"))
+    {
+        home.ok_or("Home folder unknown.")?.join(rest)
+    } else {
+        current.join(input)
+    };
+    Ok(path)
+}
+
+/// Keyboard navigation in the tree (see [`Tree::navigate`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Nav {
+    Up,
+    Down,
+    PageUp,
+    PageDown,
+    Home,
+    End,
+    /// Collapse the folder, or go to the parent folder's row.
+    Left,
+    /// Expand the folder, or go to its first child.
+    Right,
+    /// Enter: open/close a folder, open a file.
+    Activate,
+}
+
+/// What the app must do after [`Tree::navigate`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NavOutcome {
+    None,
+    /// A folder was expanded and must be loaded.
+    Load(PathBuf),
+    /// Enter on a file.
+    Open(PathBuf),
 }
 
 /// Dot-files everywhere; additionally the hidden attribute on Windows.
@@ -204,6 +278,94 @@ impl Tree {
             State::Ready(l) => l.entries.iter().find(|e| &e.path == sel),
             _ => None,
         })
+    }
+
+    /// Folders on screen with the modification time of their listing (for
+    /// [`changed_dirs`]). Folders still loading or failed are left out.
+    pub fn shown_dirs(&self) -> Vec<(PathBuf, Option<SystemTime>)> {
+        self.refresh()
+            .into_iter()
+            .filter_map(|dir| match self.listings.get(&dir) {
+                Some(State::Ready(l)) => Some((dir, l.modified)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Index of the selected entry in [`Tree::rows`] (for scrolling it into view).
+    pub fn selected_row(&self) -> Option<usize> {
+        let sel = self.selected.as_deref()?;
+        self.rows().iter().position(|r| row_path(r) == Some(sel))
+    }
+
+    /// Moves the selection or opens/closes folders. `page` = rows per page.
+    pub fn navigate(&mut self, nav: Nav, page: usize) -> NavOutcome {
+        // (path, is_dir, expanded, depth) of every entry row, in order.
+        let entries: Vec<(PathBuf, bool, bool, usize)> = self
+            .rows()
+            .iter()
+            .filter_map(|r| match r {
+                Row::Entry {
+                    depth,
+                    entry,
+                    expanded,
+                } => Some((entry.path.clone(), entry.is_dir, *expanded, *depth)),
+                Row::Note { .. } => None,
+            })
+            .collect();
+        if entries.is_empty() {
+            return NavOutcome::None;
+        }
+        let current = self
+            .selected
+            .as_ref()
+            .and_then(|sel| entries.iter().position(|e| &e.0 == sel));
+        let Some(i) = current else {
+            // Nothing selected yet: any key starts at the top (End at the bottom).
+            let start = if nav == Nav::End {
+                entries.len() - 1
+            } else {
+                0
+            };
+            self.selected = Some(entries[start].0.clone());
+            return NavOutcome::None;
+        };
+        let last = entries.len() - 1;
+        let page = page.max(1);
+        let (path, is_dir, expanded, depth) = entries[i].clone();
+        let target = match nav {
+            Nav::Up => i.saturating_sub(1),
+            Nav::Down => (i + 1).min(last),
+            Nav::PageUp => i.saturating_sub(page),
+            Nav::PageDown => (i + page).min(last),
+            Nav::Home => 0,
+            Nav::End => last,
+            Nav::Left if is_dir && expanded => {
+                self.toggle(&path);
+                return NavOutcome::None;
+            }
+            Nav::Left => match entries[..i].iter().rposition(|e| e.3 + 1 == depth) {
+                Some(parent) => parent,
+                None => return NavOutcome::None,
+            },
+            Nav::Right if is_dir && !expanded => {
+                return self
+                    .toggle(&path)
+                    .map_or(NavOutcome::None, NavOutcome::Load);
+            }
+            Nav::Right => match entries.get(i + 1) {
+                Some(child) if is_dir && child.3 == depth + 1 => i + 1,
+                _ => return NavOutcome::None,
+            },
+            Nav::Activate if is_dir => {
+                return self
+                    .toggle(&path)
+                    .map_or(NavOutcome::None, NavOutcome::Load);
+            }
+            Nav::Activate => return NavOutcome::Open(path),
+        };
+        self.selected = Some(entries[target].0.clone());
+        NavOutcome::None
     }
 
     /// The visible rows, depth-first.
@@ -388,6 +550,116 @@ mod tests {
         tree.set_root(a.clone());
         tree.set_listing(t.0.clone(), list_dir(&t.0));
         assert_eq!(names(&tree.rows()), ["(Loading…)"]);
+    }
+
+    /// Builds a tree for `dir` with every listing loaded synchronously.
+    fn loaded(dir: &Path) -> Tree {
+        let mut tree = Tree::new(dir.to_path_buf());
+        tree.set_listing(dir.to_path_buf(), list_dir(dir));
+        tree
+    }
+
+    fn selected_name(tree: &Tree) -> String {
+        tree.selected().map(|e| e.name.clone()).unwrap_or_default()
+    }
+
+    #[test]
+    fn keyboard_navigation() {
+        let t = TempDir::new("nav");
+        fs::create_dir_all(t.0.join("a/inner")).unwrap();
+        fs::write(t.0.join("a/x.rs"), "").unwrap();
+        fs::create_dir(t.0.join("b")).unwrap();
+        fs::write(t.0.join("c.txt"), "").unwrap();
+        let mut tree = loaded(&t.0);
+
+        // First key selects the top row; End the last.
+        assert_eq!(tree.navigate(Nav::Down, 10), NavOutcome::None);
+        assert_eq!(selected_name(&tree), "a");
+        tree.navigate(Nav::End, 10);
+        assert_eq!(selected_name(&tree), "c.txt");
+        assert_eq!(tree.selected_row(), Some(2));
+        // Enter on a file opens it.
+        assert_eq!(
+            tree.navigate(Nav::Activate, 10),
+            NavOutcome::Open(t.0.join("c.txt"))
+        );
+        tree.navigate(Nav::Home, 10);
+        assert_eq!(selected_name(&tree), "a");
+
+        // Right expands (load), Right again goes to the first child.
+        let a = t.0.join("a");
+        assert_eq!(tree.navigate(Nav::Right, 10), NavOutcome::Load(a.clone()));
+        assert_eq!(tree.navigate(Nav::Right, 10), NavOutcome::None);
+        assert_eq!(selected_name(&tree), "a", "children not loaded yet");
+        tree.set_listing(a.clone(), list_dir(&a));
+        tree.navigate(Nav::Right, 10);
+        assert_eq!(selected_name(&tree), "inner");
+        tree.navigate(Nav::Down, 10);
+        assert_eq!(selected_name(&tree), "x.rs");
+        // Left on a file goes to the parent folder's row; Left again collapses.
+        tree.navigate(Nav::Left, 10);
+        assert_eq!(selected_name(&tree), "a");
+        tree.navigate(Nav::Left, 10);
+        assert!(!tree.is_expanded(&a));
+        // Left at the top level has nowhere to go.
+        assert_eq!(tree.navigate(Nav::Left, 10), NavOutcome::None);
+        assert_eq!(selected_name(&tree), "a");
+        // Pages are clamped; Up at the top stays.
+        tree.navigate(Nav::PageDown, 10);
+        assert_eq!(selected_name(&tree), "c.txt");
+        tree.navigate(Nav::PageUp, 1);
+        assert_eq!(selected_name(&tree), "b");
+        tree.navigate(Nav::Home, 1);
+        tree.navigate(Nav::Up, 1);
+        assert_eq!(selected_name(&tree), "a");
+        // Enter on a folder toggles it (already listed once: re-read).
+        assert_eq!(tree.navigate(Nav::Activate, 1), NavOutcome::Load(a.clone()));
+        assert!(tree.is_expanded(&a));
+    }
+
+    #[test]
+    fn changes_are_detected_by_folder_time() {
+        let t = TempDir::new("watch");
+        fs::write(t.0.join("one.txt"), "").unwrap();
+        let tree = loaded(&t.0);
+        let shown = tree.shown_dirs();
+        assert_eq!(shown.len(), 1);
+        assert!(shown[0].1.is_some());
+        assert!(changed_dirs(&shown).is_empty());
+        // Coarse file-system clocks: wait until a new entry gives a newer time.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut n = 0;
+        while changed_dirs(&shown).is_empty() && std::time::Instant::now() < deadline {
+            n += 1;
+            fs::write(t.0.join(format!("new{n}.txt")), "").unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        assert_eq!(changed_dirs(&shown), vec![t.0.clone()]);
+        // A folder that disappeared counts as changed (its error gets shown).
+        let gone = vec![(t.0.join("gone"), shown[0].1)];
+        assert_eq!(changed_dirs(&gone), vec![t.0.join("gone")]);
+    }
+
+    #[test]
+    fn folder_input() {
+        let cur = Path::new("/work/proj");
+        let home = Path::new("/home/me");
+        assert_eq!(
+            folder_from_input("src", cur, Some(home)).unwrap(),
+            cur.join("src")
+        );
+        assert_eq!(folder_from_input(" ~ ", cur, Some(home)).unwrap(), home);
+        assert_eq!(
+            folder_from_input("~/code", cur, Some(home)).unwrap(),
+            home.join("code")
+        );
+        let abs = if cfg!(windows) { r"C:\Users" } else { "/usr" };
+        assert_eq!(
+            folder_from_input(&format!("\"{abs}\""), cur, None).unwrap(),
+            PathBuf::from(abs)
+        );
+        assert!(folder_from_input("  ", cur, None).is_err());
+        assert!(folder_from_input("~", cur, None).is_err());
     }
 
     #[test]
