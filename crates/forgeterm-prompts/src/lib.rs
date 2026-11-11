@@ -156,7 +156,7 @@ pub fn render(body: &str, values: &HashMap<String, String>) -> Rendered {
     Rendered { text, missing }
 }
 
-const BUILTIN: [(&str, &str); 6] = [
+const BUILTIN: [(&str, &str); 7] = [
     ("explain-error", include_str!("../builtin/explain-error.md")),
     ("review-file", include_str!("../builtin/review-file.md")),
     ("explain-code", include_str!("../builtin/explain-code.md")),
@@ -165,6 +165,10 @@ const BUILTIN: [(&str, &str); 6] = [
     (
         "commit-message",
         include_str!("../builtin/commit-message.md"),
+    ),
+    (
+        "check-thoroughly",
+        include_str!("../builtin/check-thoroughly.md"),
     ),
 ];
 

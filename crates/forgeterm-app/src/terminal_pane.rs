@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
+use forgeterm_terminal::status::{ProgramState, StatusRecord};
 use forgeterm_terminal::{
     GridSize, Modes, Palette, Session, SessionConfig, SessionEvent, ShellSpec, Snapshot,
 };
@@ -59,6 +60,9 @@ pub enum Outcome {
     Clipboard(String),
     /// The shell reported a new working directory.
     CwdChanged,
+    /// Something in a terminal the user is not looking at wants attention (bell, or
+    /// a program that is blocked on the user, done or failed).
+    Attention,
 }
 
 /// Session settings fixed when a terminal is created (from settings.toml).
@@ -88,6 +92,8 @@ pub struct TerminalPane {
     pub agent: Option<forgeterm_agents::AgentKind>,
     /// New output arrived while the terminal was not visible.
     dirty: bool,
+    /// A bell rang while the user was not looking at this terminal.
+    pub bell: bool,
     /// The shell starts on the first layout, at the pane's real size: a shell that
     /// draws its prompt at a placeholder size and is resized right after ends up with
     /// a wrong cursor position (PowerShell then types over its own prompt).
@@ -119,6 +125,7 @@ impl TerminalPane {
             cwd: None,
             agent: None,
             dirty: false,
+            bell: false,
             awaiting_size: true,
         }
     }
@@ -172,6 +179,7 @@ impl TerminalPane {
                 self.session = Some(session);
                 self.status = Status::Running;
                 self.title = None;
+                self.bell = false;
                 self.refresh(palette);
                 Task::run(rx, move |event| Message::Session {
                     id,
@@ -222,11 +230,13 @@ impl TerminalPane {
         }
     }
 
+    /// `visible`: in the active tab; `seen`: visible and the window has focus.
     pub fn on_session_event(
         &mut self,
         generation: u64,
         event: SessionEvent,
         visible: bool,
+        seen: bool,
         palette: &Palette,
     ) -> Outcome {
         if generation != self.generation {
@@ -242,7 +252,23 @@ impl TerminalPane {
             }
             SessionEvent::Title(t) => self.title = Some(t),
             SessionEvent::ResetTitle => self.title = None,
+            SessionEvent::Bell if !seen => {
+                self.bell = true;
+                return Outcome::Attention;
+            }
             SessionEvent::Bell => {}
+            SessionEvent::ProgramStatus => {
+                if seen {
+                    self.acknowledge();
+                } else if self.program_status().is_some_and(|s| {
+                    matches!(
+                        s.state,
+                        ProgramState::Blocked | ProgramState::Done | ProgramState::Error
+                    )
+                }) {
+                    return Outcome::Attention;
+                }
+            }
             SessionEvent::Cwd(path) => {
                 let path = PathBuf::from(path);
                 if self.cwd.as_ref() != Some(&path) {
@@ -287,6 +313,19 @@ impl TerminalPane {
         }
         self.refresh(palette);
         Task::none()
+    }
+
+    /// The most important status a program in this terminal reported (OSC 7501).
+    pub fn program_status(&self) -> Option<StatusRecord> {
+        self.session.as_ref()?.program_status()
+    }
+
+    /// The user is looking at this terminal: clears the bell and finished statuses.
+    pub fn acknowledge(&mut self) {
+        self.bell = false;
+        if let Some(s) = &self.session {
+            s.acknowledge_status();
+        }
     }
 
     /// Text for tabs and the window title.
@@ -337,6 +376,7 @@ fn blank_snapshot(palette: &Palette, cols: usize, rows: usize) -> Snapshot {
         background: palette.background,
         display_offset: 0,
         history: 0,
+        prompt_marks: Vec::new(),
     }
 }
 

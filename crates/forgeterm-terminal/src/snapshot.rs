@@ -40,6 +40,17 @@ pub struct CursorView {
     pub color: Rgb,
 }
 
+/// How a marked prompt row is drawn in the margin (shell integration).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromptMark {
+    /// A prompt whose command result is unknown (shells that only mark prompts).
+    Prompt,
+    Running,
+    Succeeded,
+    /// Non-zero exit code.
+    Failed(i32),
+}
+
 /// An immutable copy of the visible viewport, ready to render.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Snapshot {
@@ -53,6 +64,8 @@ pub struct Snapshot {
     pub display_offset: usize,
     /// Total lines available in scrollback.
     pub history: usize,
+    /// Viewport rows where a marked prompt starts.
+    pub prompt_marks: Vec<(usize, PromptMark)>,
 }
 
 impl Snapshot {

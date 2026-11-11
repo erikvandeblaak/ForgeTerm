@@ -10,12 +10,15 @@ mod cwd;
 pub use cwd::is_local_path;
 mod input;
 mod integration;
+pub mod marks;
+mod osc;
 mod palette;
 mod quote;
 mod search;
 mod session;
 mod shell;
 mod snapshot;
+pub mod status;
 mod url;
 
 pub use input::{
@@ -24,7 +27,10 @@ pub use input::{
 };
 pub use palette::{Palette, Rgb};
 pub use quote::{quote_path, quote_paths};
-pub use session::{GridSize, Modes, SearchOutcome, Session, SessionConfig, SessionEvent};
+pub use session::{
+    CommandOutput, GridSize, MAX_OUTPUT_LINES, Modes, OutputError, SearchOutcome, Session,
+    SessionConfig, SessionEvent,
+};
 pub use shell::{ShellKind, ShellSpec, default_shell, detect_shells};
-pub use snapshot::{CellFlags, CellView, CursorShape, CursorView, Snapshot};
+pub use snapshot::{CellFlags, CellView, CursorShape, CursorView, PromptMark, Snapshot};
 pub use url::{Link, is_openable, link_at, links};

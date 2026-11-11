@@ -144,9 +144,80 @@ pub fn default_shell() -> Option<ShellSpec> {
     detect_shells().into_iter().next()
 }
 
+/// `PSModulePath` for Windows PowerShell 5.1 (`powershell.exe`) without the module
+/// folders of PowerShell 7, or `None` when nothing needs to change.
+///
+/// pwsh 7 adds its own folders (`…\PowerShell\Modules`, `…\PowerShell\7\Modules`) to
+/// `PSModulePath` in its process. When ForgeTerm is started from pwsh 7 (for example
+/// the VS Code terminal), Windows PowerShell inherits them, loads pwsh's PSReadLine
+/// and fails ("Cannot load PSReadline module"): no history, no editing, no prompt
+/// marks. Only this session's environment changes; the user's setting is untouched.
+pub fn windows_powershell_module_path(program: &str, inherited: Option<&str>) -> Option<String> {
+    let name = program.rsplit(['/', '\\']).next()?.to_ascii_lowercase();
+    if name != "powershell.exe" && name != "powershell" {
+        return None;
+    }
+    let inherited = inherited?;
+    let kept: Vec<&str> = inherited
+        .split(';')
+        .filter(|entry| !is_pwsh7_module_dir(entry))
+        .collect();
+    (kept.len() != inherited.split(';').count()).then(|| kept.join(";"))
+}
+
+/// `…\PowerShell\Modules` or `…\PowerShell\<version>\Modules` (not
+/// `…\WindowsPowerShell\…`).
+fn is_pwsh7_module_dir(entry: &str) -> bool {
+    let parts: Vec<String> = entry
+        .trim()
+        .trim_end_matches(['\\', '/'])
+        .split(['\\', '/'])
+        .map(str::to_ascii_lowercase)
+        .collect();
+    match parts.as_slice() {
+        [.., ps, modules] if ps == "powershell" && modules == "modules" => true,
+        [.., ps, version, modules]
+            if ps == "powershell"
+                && modules == "modules"
+                && version.starts_with(|c: char| c.is_ascii_digit()) =>
+        {
+            true
+        }
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn windows_powershell_drops_pwsh7_module_dirs() {
+        let polluted = r"C:\Users\erik\OneDrive\Documenten\PowerShell\Modules;C:\Program Files\PowerShell\Modules;c:\program files\powershell\7\Modules;C:\Program Files\WindowsPowerShell\Modules;C:\WINDOWS\system32\WindowsPowerShell\v1.0\Modules;D:\tools\psmods";
+        let clean = r"C:\Program Files\WindowsPowerShell\Modules;C:\WINDOWS\system32\WindowsPowerShell\v1.0\Modules;D:\tools\psmods";
+        let winps = r"C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe";
+        assert_eq!(
+            windows_powershell_module_path(winps, Some(polluted)).as_deref(),
+            Some(clean)
+        );
+        // Already clean, not set, or another shell: leave it alone.
+        assert_eq!(windows_powershell_module_path(winps, Some(clean)), None);
+        assert_eq!(windows_powershell_module_path(winps, None), None);
+        assert_eq!(
+            windows_powershell_module_path(
+                r"C:\Program Files\PowerShell\7\pwsh.exe",
+                Some(polluted)
+            ),
+            None
+        );
+        assert!(is_pwsh7_module_dir(
+            r"C:\Program Files\PowerShell\7-preview\Modules\"
+        ));
+        assert!(!is_pwsh7_module_dir(
+            r"C:\Users\x\Documents\WindowsPowerShell\Modules"
+        ));
+        assert!(!is_pwsh7_module_dir(r"C:\PowerShell\Scripts"));
+    }
 
     #[test]
     fn shell_kind_from_program() {

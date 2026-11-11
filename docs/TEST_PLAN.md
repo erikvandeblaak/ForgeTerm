@@ -320,6 +320,22 @@ Rust 1.99.1 per gebruiker (rustup, geen sudo); verse clone in het Linux-bestands
 | Q1 | Alleen een wachtende PowerShell: Alt+F4 sluit direct, zonder vraag | ✅ |
 | Q2 | `ping -n 120` loopt: Ctrl+Shift+W → "Close this pane? · PING in PowerShell 7 (tab 1)"; Esc → ping loopt door; Alt+F4 → "Quit ForgeTerm?"; Enter → venster dicht en ping beëindigd | ✅ |
 
+## Commando's herkennen en meldingen (2026-11-11, Windows 11)
+
+| # | Stap | Resultaat |
+|---|---|---|
+| C1 | Echte PTY (`tests/command_marks.rs`): PowerShell 7, Windows PowerShell, cmd, Git Bash markeren prompts; pwsh/WinPS/Git Bash geven uitvoer + exit-code 3, balk `Failed(3)`; Ctrl+Shift+↑/↓-logica over scrollback heen en terug naar live | ✅ (WSL Ubuntu: bash ✅) |
+| C2 | Windows PowerShell zonder PSReadLine (lege module-map): `cmd /c exit 4` → commando + exit 4 via `Get-History`-terugval | ✅ |
+| C3 | ForgeTerm gestart vanuit pwsh 7 (vervuilde `PSModulePath`): Windows PowerShell laadt nu PSReadLine 2.0 (eerst: "Cannot load PSReadline module") | ✅ |
+| C4 | GUI: `cmd /c exit 3` → koraal balkje (#F08080), `echo ok` → mint (#55E6B5), huidige prompt geen balk | ✅ |
+| C5 | GUI: `1..60`, Ctrl+Shift+↑ → die prompt bovenaan (↑ 27/33), nog eens ↑ → vorige prompt, 3× ↓ → live scherm | ✅ |
+| C6 | GUI: palette "Copy Last Command Output" → klembord = promptregel + commando + uitvoer | ✅ |
+| C7 | GUI: tab 2 meldt OSC 7501 `blocked` terwijl tab 1 actief is → badge *needs you*; daarna `done` → *done*; tab 2 bekijken → weg; bel in tab 2 → *bell* | ✅ |
+| C8 | GUI: Claude Code in split (wegwerp-repo), shell focussen, "Insert Last Command Output into Agent" → in Claude `[Pasted text #1 +63 lines]`, focus op Claude, **niet verstuurd**; afgesloten met Ctrl+C zonder Enter | ✅ |
+| C9 | Taakbalk knippert bij een melding terwijl het venster niet actief is | ⬜ niet in de GUI getest (vereist een ander actief venster; pad = `window::request_user_attention`) |
+| C10 | OSC 7501-query-antwoord: Linux ✅ (echte PTY); Windows: ConPTY gooit OSC in de invoer weg (gemeten met een raw-stdin-lezer: CSI/DCS komen aan, OSC 7501/11 niet) | ✅ Linux · n.v.t. Windows |
+| C11 | About: https://vandeblaak.com als link (opent via Help → Open Website); browser openen niet in de GUI uitgevoerd (zelfde pad als L3) | 🟡 |
+
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)
 
 Gemeten 2026-11-10. Opstarttijden uit de eigen tracing-tijdstempels; geheugen = working set na 5 s, idle prompt.

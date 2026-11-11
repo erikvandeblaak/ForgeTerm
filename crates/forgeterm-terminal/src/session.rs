@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use alacritty_terminal::event::{Event as AlacEvent, EventListener, OnResize, WindowSize};
 use alacritty_terminal::event_loop::{EventLoop, EventLoopSender, Msg};
 use alacritty_terminal::grid::{Dimensions, Scroll};
-use alacritty_terminal::index::{Boundary, Column, Direction, Point, Side};
+use alacritty_terminal::index::{Boundary, Column, Direction, Line, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionType};
 use alacritty_terminal::sync::FairMutex;
 use alacritty_terminal::term::cell::Flags;
@@ -18,10 +18,12 @@ use alacritty_terminal::tty::{self, ChildEvent, EventedPty, EventedReadWrite};
 use alacritty_terminal::vte::ansi::CursorShape as AlacCursorShape;
 use anyhow::Context;
 
-use crate::cwd::CwdScanner;
+use crate::marks::{CommandLog, CommandRecord, CommandState, ShellMark};
+use crate::osc::OscScanner;
 use crate::palette::Palette;
 use crate::shell::ShellSpec;
-use crate::snapshot::{CellFlags, CellView, CursorShape, CursorView, Snapshot};
+use crate::snapshot::{CellFlags, CellView, CursorShape, CursorView, PromptMark, Snapshot};
+use crate::status::{ProgramStatus, StatusRecord, StatusReport};
 
 /// Terminal size in cells plus the pixel size of one cell (reported to the PTY).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,6 +113,125 @@ pub enum SessionEvent {
     /// existing directories. A hint printed by whatever runs in the terminal: use it
     /// to pick directories, never execute it.
     Cwd(String),
+    /// A program's status changed (OSC 7501); read [`Session::program_status`].
+    ProgramStatus,
+}
+
+/// What shell integration and programs reported, shared between the I/O thread
+/// (writes) and the session owner (reads). Lock order: the terminal first, then this.
+#[derive(Debug, Default)]
+struct Reported {
+    commands: CommandLog,
+    status: ProgramStatus,
+}
+
+/// The output of one command, as text from the grid.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommandOutput {
+    /// The command line, when the shell reported it.
+    pub command: Option<String>,
+    /// `None` while running or when the shell does not report exit codes.
+    pub exit: Option<i32>,
+    pub running: bool,
+    /// The prompt line(s), the command and its output, as shown in the terminal.
+    pub text: String,
+    /// Lines dropped from the start because of [`MAX_OUTPUT_LINES`].
+    pub omitted_lines: usize,
+}
+
+/// Longest command output returned by [`Session::last_command_output`] (the end is
+/// kept: that is where errors are).
+pub const MAX_OUTPUT_LINES: usize = 2000;
+
+impl CommandOutput {
+    /// Markdown for an agent's prompt: a short heading and the text in a code
+    /// fence longer than any run of backticks inside it, so output cannot end the
+    /// block early. Never ends with a newline (inserting it must not submit).
+    pub fn to_markdown(&self) -> String {
+        let mut facts = Vec::new();
+        if let Some(command) = &self.command {
+            facts.push(format!("`{}`", command.replace('`', "'")));
+        }
+        if self.running {
+            facts.push("still running".to_owned());
+        } else if let Some(code) = self.exit {
+            facts.push(format!("exit code {code}"));
+        }
+        let mut out = String::from("Output of the last command in my terminal");
+        if !facts.is_empty() {
+            out.push_str(&format!(" ({})", facts.join(", ")));
+        }
+        out.push_str(":\n");
+        if self.omitted_lines > 0 {
+            out.push_str(&format!(
+                "(the first {} lines are left out)\n",
+                self.omitted_lines
+            ));
+        }
+        let longest = self
+            .text
+            .split(|c| c != '`')
+            .map(str::len)
+            .max()
+            .unwrap_or(0);
+        let fence = "`".repeat((longest + 1).max(3));
+        out.push_str(&format!("{fence}text\n{}\n{fence}", self.text));
+        out
+    }
+}
+
+#[cfg(test)]
+mod output_tests {
+    use super::CommandOutput;
+
+    fn output(text: &str) -> CommandOutput {
+        CommandOutput {
+            command: Some("cargo test".into()),
+            exit: Some(101),
+            running: false,
+            text: text.into(),
+            omitted_lines: 0,
+        }
+    }
+
+    #[test]
+    fn markdown_has_heading_and_fence() {
+        assert_eq!(
+            output("PS> cargo test\nerror[E0433]").to_markdown(),
+            "Output of the last command in my terminal (`cargo test`, exit code 101):\n```text\nPS> cargo test\nerror[E0433]\n```"
+        );
+        let mut running = output("x");
+        running.running = true;
+        running.command = None;
+        running.omitted_lines = 5;
+        assert_eq!(
+            running.to_markdown(),
+            "Output of the last command in my terminal (still running):\n(the first 5 lines are left out)\n```text\nx\n```"
+        );
+        let mut bare = output("x");
+        bare.command = None;
+        bare.exit = None;
+        assert!(
+            bare.to_markdown()
+                .starts_with("Output of the last command in my terminal:\n")
+        );
+    }
+
+    #[test]
+    fn fence_outgrows_backticks_in_output() {
+        let md = output("a ```` b").to_markdown();
+        assert!(md.contains("`````text\n"), "{md}");
+        assert!(md.ends_with("\n`````"));
+        assert!(!md.ends_with('\n'));
+        // A backtick in the command cannot break the inline code span.
+        let mut tricky = output("x");
+        tricky.command = Some("echo `date`".into());
+        assert!(
+            tricky
+                .to_markdown()
+                .contains("(`echo 'date'`, exit code 101)")
+        );
+    }
 }
 
 /// Terminal modes relevant to input handling.
@@ -193,16 +314,49 @@ impl EventListener for Listener {
 /// emulator, while [`CwdScanner`] looks for working-directory reports.
 struct ScanPty<P> {
     inner: P,
-    scanner: CwdScanner,
+    scanner: OscScanner,
     last: Option<String>,
     listener: Listener,
+    reported: Arc<Mutex<Reported>>,
 }
 
 impl<P: EventedReadWrite> io::Read for ScanPty<P> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let n = self.inner.reader().read(buf)?;
+        let mut cwd = None;
+        let mut queries = 0;
+        let mut status_changed = false;
+        {
+            let mut reported = self.reported.lock().unwrap_or_else(|e| e.into_inner());
+            self.scanner.feed(&buf[..n], |payload| {
+                if let Some(path) = crate::cwd::parse(payload) {
+                    cwd = Some(path);
+                } else if let Some(mark) = crate::marks::parse(payload) {
+                    if mark == ShellMark::PromptStart {
+                        status_changed |= reported.status.on_prompt();
+                    }
+                    reported.commands.apply(mark);
+                } else {
+                    match crate::status::parse(payload) {
+                        Some(StatusReport::Query) => queries += 1,
+                        Some(report) => status_changed |= reported.status.apply(report),
+                        None => {}
+                    }
+                }
+            });
+        }
+        // Answered before the emulator parses this chunk, so the reply precedes the
+        // answer to a DA1 sent right after the query (the protocol's way to detect
+        // "unsupported" without a timeout). At most one reply per read: output full of
+        // queries (a hostile file being printed) must not flood the program's input.
+        if queries > 0 {
+            self.listener.write(crate::status::QUERY_REPLY.to_vec());
+        }
+        if status_changed {
+            (self.listener.0.sink)(SessionEvent::ProgramStatus);
+        }
         // Checked here, on the I/O thread, so a slow (network) path never stalls the UI.
-        if let Some(cwd) = self.scanner.feed(&buf[..n])
+        if let Some(cwd) = cwd
             && self.last.as_ref() != Some(&cwd)
             && std::path::Path::new(&cwd).is_dir()
         {
@@ -275,6 +429,7 @@ pub enum SearchOutcome {
 /// One live shell: PTY + child process + emulator state.
 pub struct Session {
     term: Arc<FairMutex<Term<Listener>>>,
+    reported: Arc<Mutex<Reported>>,
     sender: EventLoopSender,
     listener: Listener,
     size: GridSize,
@@ -304,6 +459,17 @@ impl Session {
             "TERM_PROGRAM_VERSION".into(),
             env!("CARGO_PKG_VERSION").into(),
         );
+
+        let inherited_modules = env
+            .get("PSModulePath")
+            .cloned()
+            .or_else(|| std::env::var("PSModulePath").ok());
+        if let Some(path) = crate::shell::windows_powershell_module_path(
+            &shell.program,
+            inherited_modules.as_deref(),
+        ) {
+            env.insert("PSModulePath".into(), path);
+        }
 
         let mut args = shell.args.clone();
         if config.shell_integration {
@@ -338,11 +504,13 @@ impl Session {
         let pid = pty.child_watcher().pid().map(std::num::NonZeroU32::get);
         #[cfg(unix)]
         let pid = Some(pty.child().id());
+        let reported = Arc::new(Mutex::new(Reported::default()));
         let pty = ScanPty {
             inner: pty,
-            scanner: CwdScanner::default(),
+            scanner: OscScanner::default(),
             last: None,
             listener: listener.clone(),
+            reported: reported.clone(),
         };
 
         let term_config = term::Config {
@@ -366,6 +534,7 @@ impl Session {
         tracing::info!(shell = %shell.program, cols = size.cols, rows = size.rows, "session started");
         Ok(Self {
             term,
+            reported,
             sender,
             listener,
             size,
@@ -525,6 +694,103 @@ impl Session {
         SearchOutcome::Found
     }
 
+    /// The most important status a program in this terminal reported (OSC 7501).
+    pub fn program_status(&self) -> Option<StatusRecord> {
+        self.reported().status.summary()
+    }
+
+    /// The user has seen this terminal: drops finished (`done` / `error`) statuses.
+    /// Returns whether anything changed.
+    pub fn acknowledge_status(&self) -> bool {
+        self.reported().status.acknowledge()
+    }
+
+    /// The shell marks its prompts (shell integration), so commands can be navigated.
+    pub fn has_prompt_marks(&self) -> bool {
+        self.reported().commands.links_prompts
+    }
+
+    fn reported(&self) -> std::sync::MutexGuard<'_, Reported> {
+        self.reported.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Scrolls so the previous (`older`) or next marked prompt is at the top of the
+    /// view. Past the newest prompt the view returns to the live screen. Returns
+    /// whether the view moved.
+    pub fn jump_to_prompt(&self, older: bool) -> bool {
+        let mut term = self.term.lock();
+        let offset = term.grid().display_offset();
+        let top = Line(-(offset as i32));
+        let prompts = prompt_lines(&term);
+        let target = if older {
+            prompts.iter().rev().find(|p| p.line < top)
+        } else {
+            prompts.iter().find(|p| p.line > top)
+        };
+        match target {
+            Some(p) => {
+                let wanted = (-p.line.0).max(0) as usize;
+                term.scroll_display(Scroll::Delta(wanted as i32 - offset as i32));
+                term.grid().display_offset() != offset
+            }
+            None if !older && offset != 0 => {
+                term.scroll_display(Scroll::Bottom);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// The last command that ran, with its prompt line and output, as shown in the
+    /// grid. Shells that only mark prompts (cmd) give the block between the last two
+    /// prompts. The text is terminal output: data to show or paste, never to run.
+    pub fn last_command_output(&self) -> Result<CommandOutput, OutputError> {
+        let term = self.term.lock();
+        let prompts = prompt_lines(&term);
+        if prompts.is_empty() {
+            return Err(OutputError::NoMarks);
+        }
+        let reported = self.reported();
+        let commands = &reported.commands;
+
+        let (index, record): (usize, Option<&CommandRecord>) = if commands.reports_commands {
+            let record = commands.last_run().ok_or(OutputError::NothingRan)?;
+            let id = record.id.ok_or(OutputError::NotInScrollback)?;
+            let index = prompts
+                .iter()
+                .rposition(|p| p.id == Some(id))
+                .ok_or(OutputError::NotInScrollback)?;
+            (index, Some(record))
+        } else {
+            if prompts.len() < 2 {
+                return Err(OutputError::NothingRan);
+            }
+            (prompts.len() - 2, None)
+        };
+
+        let start = prompts[index].line;
+        let end = match prompts.get(index + 1) {
+            Some(next) => next.line - 1,
+            None => term.grid().cursor.point.line,
+        };
+        let last_col = Column(term.columns().saturating_sub(1));
+        let raw = term.bounds_to_string(Point::new(start, Column(0)), Point::new(end, last_col));
+        let (text, omitted_lines) = tail_lines(&raw, MAX_OUTPUT_LINES);
+
+        let (command, exit, running) = match record.map(|r| (r.command.clone(), r.state)) {
+            Some((command, CommandState::Finished(code))) => (command, code, false),
+            Some((command, _)) => (command, None, true),
+            None => (None, None, false),
+        };
+        Ok(CommandOutput {
+            command,
+            exit,
+            running,
+            text,
+            omitted_lines,
+        })
+    }
+
     pub fn selection_text(&self) -> Option<String> {
         self.term
             .lock()
@@ -620,6 +886,33 @@ impl Session {
                 })
         };
 
+        let prompt_marks = {
+            let reported = self.reported();
+            (0..rows)
+                .filter_map(|row| {
+                    let line = Line(row as i32 - offset as i32);
+                    let link = prompt_link_at(&term, line)?;
+                    // A prompt over several lines is marked once, at its first line.
+                    if line > term.grid().topmost_line()
+                        && prompt_link_at(&term, line - 1).is_some_and(|prev| prev.0 == link.0)
+                    {
+                        return None;
+                    }
+                    let mark = match link.1.and_then(|id| reported.commands.by_id(id)) {
+                        None => PromptMark::Prompt,
+                        Some(r) => match r.state {
+                            CommandState::AtPrompt => return None,
+                            CommandState::Running => PromptMark::Running,
+                            CommandState::Finished(Some(0)) => PromptMark::Succeeded,
+                            CommandState::Finished(Some(code)) => PromptMark::Failed(code),
+                            CommandState::Finished(None) => PromptMark::Prompt,
+                        },
+                    };
+                    Some((row, mark))
+                })
+                .collect()
+        };
+
         Snapshot {
             cols,
             rows,
@@ -628,8 +921,78 @@ impl Session {
             background: palette.background,
             display_offset: offset,
             history: term.grid().history_size(),
+            prompt_marks,
         }
     }
+}
+
+/// Why [`Session::last_command_output`] has nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputError {
+    /// The shell does not mark prompts (no shell integration, or an unsupported shell).
+    NoMarks,
+    /// No command has run yet.
+    NothingRan,
+    /// The command's prompt is no longer in the scrollback (or was cleared).
+    NotInScrollback,
+}
+
+impl std::fmt::Display for OutputError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            OutputError::NoMarks => {
+                "this shell does not mark its commands (no shell integration for it)"
+            }
+            OutputError::NothingRan => "no command has run in this terminal yet",
+            OutputError::NotInScrollback => "the last command is no longer in the scrollback",
+        })
+    }
+}
+
+/// A marked prompt in the grid.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PromptLine {
+    line: Line,
+    id: Option<u64>,
+}
+
+/// The prompt hyperlink on a grid line: (alacritty's link id, prompt number).
+/// Every OSC 8 without an `id` parameter gets a fresh link id, so two prompts on
+/// consecutive lines are told apart.
+fn prompt_link_at<T>(term: &Term<T>, line: Line) -> Option<(String, Option<u64>)> {
+    let row = &term.grid()[line];
+    (0..term.columns()).find_map(|col| {
+        let cell = &row[Column(col)];
+        cell.extra.as_ref()?;
+        let link = cell.hyperlink()?;
+        let id = crate::marks::prompt_link(link.uri())?;
+        Some((link.id().to_owned(), id))
+    })
+}
+
+/// All marked prompts from the oldest scrollback line down, one per prompt.
+fn prompt_lines<T>(term: &Term<T>) -> Vec<PromptLine> {
+    let grid = term.grid();
+    let mut out = Vec::new();
+    let mut previous: Option<String> = None;
+    for line in grid.topmost_line().0..=grid.bottommost_line().0 {
+        let line = Line(line);
+        let link = prompt_link_at(term, line);
+        if let Some((link_id, id)) = &link
+            && previous.as_ref() != Some(link_id)
+        {
+            out.push(PromptLine { line, id: *id });
+        }
+        previous = link.map(|l| l.0);
+    }
+    out
+}
+
+/// Trims trailing blank lines and keeps at most `max` lines from the end.
+fn tail_lines(text: &str, max: usize) -> (String, usize) {
+    let lines: Vec<&str> = text.trim_end().lines().map(str::trim_end).collect();
+    let omitted = lines.len().saturating_sub(max);
+    (lines[omitted..].join("\n"), omitted)
 }
 
 impl Drop for Session {

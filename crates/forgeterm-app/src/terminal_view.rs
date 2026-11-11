@@ -1,7 +1,9 @@
 //! Canvas widget that renders a terminal [`Snapshot`] and turns mouse input into
 //! messages (selection, scrolling, mouse reporting).
 
-use forgeterm_terminal::{CellView, CursorShape, Modes, MouseButton, Snapshot, encode_mouse};
+use forgeterm_terminal::{
+    CellView, CursorShape, Modes, MouseButton, PromptMark, Snapshot, encode_mouse,
+};
 use iced::alignment::Vertical;
 use iced::font::{Style, Weight};
 use iced::mouse::{self, Cursor, ScrollDelta};
@@ -367,6 +369,22 @@ fn font_for(cell: &CellView) -> Font {
 fn draw_snapshot(frame: &mut Frame, snap: &Snapshot, m: Metrics, size: Size, focused: bool) {
     let (cw, ch) = (m.cell_width, m.cell_height);
     frame.fill_rectangle(Point::ORIGIN, size, to_color(snap.background));
+
+    // Shell integration: a bar in the left padding at every prompt, coloured by how
+    // its command ended.
+    for (row, mark) in &snap.prompt_marks {
+        let color = match mark {
+            PromptMark::Prompt => crate::theme::DISABLED,
+            PromptMark::Running => crate::theme::CYAN,
+            PromptMark::Succeeded => crate::theme::MINT,
+            PromptMark::Failed(_) => crate::theme::CORAL,
+        };
+        frame.fill_rectangle(
+            Point::new(3.0, (PADDING + *row as f32 * ch + 2.0).round()),
+            Size::new(3.0, (ch - 4.0).max(2.0).round()),
+            color,
+        );
+    }
 
     let origin =
         |col: usize, row: usize| Point::new(PADDING + col as f32 * cw, PADDING + row as f32 * ch);

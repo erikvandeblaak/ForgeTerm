@@ -109,6 +109,10 @@ pub fn menus(shell_count: usize) -> Vec<Menu> {
                 C(ScrollPageUp),
                 C(ScrollPageDown),
                 Sep,
+                C(PreviousCommand),
+                C(NextCommand),
+                C(CopyLastCommandOutput),
+                Sep,
                 C(RestartShell),
             ],
         },
@@ -127,6 +131,8 @@ pub fn menus(shell_count: usize) -> Vec<Menu> {
                     C(OpenPromptStudio),
                     C(TogglePromptStudioDock),
                     C(OpenPromptsFolder),
+                    Sep,
+                    C(InsertLastOutputIntoAgent),
                 ]);
                 ai
             },
@@ -137,7 +143,7 @@ pub fn menus(shell_count: usize) -> Vec<Menu> {
         },
         Menu {
             title: "Help",
-            items: vec![C(KeyboardShortcuts), Sep, C(About)],
+            items: vec![C(KeyboardShortcuts), Sep, C(About), C(Website)],
         },
     ]
 }

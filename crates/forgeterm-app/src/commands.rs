@@ -35,6 +35,12 @@ pub enum CommandId {
     FocusPane(Dir),
     RestartShell,
     ClearScrollback,
+    /// Shell integration: scroll to the previous / next command's prompt.
+    PreviousCommand,
+    NextCommand,
+    CopyLastCommandOutput,
+    /// The focused shell's last command output into the agent's prompt (no Enter).
+    InsertLastOutputIntoAgent,
     ScrollToTop,
     ScrollToBottom,
     ScrollPageUp,
@@ -72,8 +78,13 @@ pub enum CommandId {
     GitRefresh,
     GitShowHistory,
     About,
+    /// Opens the maker's website ([`WEBSITE`]) in the default browser.
+    Website,
     Quit,
 }
+
+/// The maker's website, shown in Help → About.
+pub const WEBSITE: &str = "https://vandeblaak.com";
 
 /// Commands that exist regardless of runtime state, in palette order.
 /// Parameterised commands (shells, tabs) are added by the app from live data.
@@ -92,6 +103,10 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::FocusPane(Dir::Down),
     CommandId::RestartShell,
     CommandId::ClearScrollback,
+    CommandId::PreviousCommand,
+    CommandId::NextCommand,
+    CommandId::CopyLastCommandOutput,
+    CommandId::InsertLastOutputIntoAgent,
     CommandId::ScrollToTop,
     CommandId::ScrollToBottom,
     CommandId::ScrollPageUp,
@@ -126,6 +141,7 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::GitRefresh,
     CommandId::GitShowHistory,
     CommandId::About,
+    CommandId::Website,
     CommandId::Quit,
 ];
 
@@ -136,7 +152,14 @@ impl CommandId {
             CommandPalette | ZoomIn | ZoomOut | ZoomReset | ToggleMonitor => "View",
             NewTab | NewTabWithShell(_) | CloseTab | NextTab | PreviousTab | SelectTab(_) => "Tab",
             SplitRight | SplitDown | ClosePane | TogglePaneZoom | FocusPane(_) => "Pane",
-            RestartShell | ClearScrollback | ScrollToTop | ScrollToBottom | ScrollPageUp
+            RestartShell
+            | ClearScrollback
+            | PreviousCommand
+            | NextCommand
+            | CopyLastCommandOutput
+            | ScrollToTop
+            | ScrollToBottom
+            | ScrollPageUp
             | ScrollPageDown => "Terminal",
             Copy | Paste | FindInTerminal => "Edit",
             ToggleExplorer
@@ -153,11 +176,12 @@ impl CommandId {
             ToggleAiPanel
             | AiRefresh
             | StartAgent(..)
+            | InsertLastOutputIntoAgent
             | OpenPromptStudio
             | TogglePromptStudioDock
             | OpenPromptsFolder => "AI",
             ToggleGitPanel | GitRefresh | GitShowHistory => "Git",
-            About | KeyboardShortcuts => "Help",
+            About | Website | KeyboardShortcuts => "Help",
             Quit => "App",
         }
     }
@@ -198,6 +222,10 @@ impl CommandId {
             TogglePaneZoom => "toggle_pane_zoom",
             RestartShell => "restart_shell",
             ClearScrollback => "clear_scrollback",
+            PreviousCommand => "previous_command",
+            NextCommand => "next_command",
+            CopyLastCommandOutput => "copy_last_output",
+            InsertLastOutputIntoAgent => "insert_last_output_into_agent",
             ScrollToTop => "scroll_to_top",
             ScrollToBottom => "scroll_to_bottom",
             ScrollPageUp => "scroll_page_up",
@@ -232,6 +260,7 @@ impl CommandId {
             ToggleMonitor => "toggle_monitor",
             KeyboardShortcuts => "keyboard_shortcuts",
             About => "about",
+            Website => "website",
             Quit => "quit",
         };
         fixed.to_owned()
@@ -279,6 +308,10 @@ impl CommandId {
             FocusPane(Dir::Down) => "Focus Pane Down",
             RestartShell => "Restart Shell",
             ClearScrollback => "Clear Scrollback",
+            PreviousCommand => "Go to Previous Command",
+            NextCommand => "Go to Next Command",
+            CopyLastCommandOutput => "Copy Last Command Output",
+            InsertLastOutputIntoAgent => "Insert Last Command Output into Agent",
             ScrollToTop => "Scroll to Top",
             ScrollToBottom => "Scroll to Bottom",
             ScrollPageUp => "Scroll Page Up",
@@ -314,6 +347,7 @@ impl CommandId {
             GitShowHistory => "Show History and Activity",
             ReloadSettings => "Reload Settings",
             About => "About ForgeTerm",
+            Website => "Open Website (vandeblaak.com)",
             Quit => "Quit ForgeTerm",
         }
     }
@@ -486,6 +520,8 @@ impl Default for Keymap {
             (b(A, Down), FocusPane(Dir::Down)),
             (b(S, PageUp), ScrollPageUp),
             (b(S, PageDown), ScrollPageDown),
+            (b(CS, Up), PreviousCommand),
+            (b(CS, Down), NextCommand),
             (b(CS, Char('c')), Copy),
             (b(CS, Char('v')), Paste),
             (b(S, Insert), Paste),
