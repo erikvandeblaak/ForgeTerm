@@ -9,107 +9,51 @@
 //! to choose where new tabs start and what the explorer shows, and only after checking
 //! that the directory exists. It is never executed or interpreted otherwise.
 
-/// Longest OSC payload that is considered; longer sequences are ignored.
-const MAX_PAYLOAD: usize = 4096;
+#[cfg(test)]
+use crate::osc::{MAX_PAYLOAD, OscScanner};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum State {
-    Ground,
-    Esc,
-    Osc,
-    OscEsc,
-}
-
-/// Incremental scanner; sequences may be split across reads.
-#[derive(Debug, Clone)]
+/// Incremental scanner for directory reports (tests; the session dispatches all
+/// OSC payloads itself).
+#[cfg(test)]
+#[derive(Debug, Clone, Default)]
 pub struct CwdScanner {
-    state: State,
-    payload: Vec<u8>,
-    overflow: bool,
+    osc: OscScanner,
 }
 
-impl Default for CwdScanner {
-    fn default() -> Self {
-        Self {
-            state: State::Ground,
-            payload: Vec::new(),
-            overflow: false,
-        }
-    }
-}
-
+#[cfg(test)]
 impl CwdScanner {
     /// Feeds output bytes; returns the last directory reported in them, if any.
     pub fn feed(&mut self, bytes: &[u8]) -> Option<String> {
         let mut found = None;
-        for &b in bytes {
-            self.state = match (self.state, b) {
-                (State::Ground, 0x1b) => State::Esc,
-                (State::Ground, _) => State::Ground,
-                (State::Esc, b']') => {
-                    self.payload.clear();
-                    self.overflow = false;
-                    State::Osc
-                }
-                (State::Esc, 0x1b) => State::Esc,
-                (State::Esc, _) => State::Ground,
-                (State::Osc, 0x07) => {
-                    found = self.finish().or(found);
-                    State::Ground
-                }
-                (State::Osc, 0x1b) => State::OscEsc,
-                // CAN / SUB abort a control sequence.
-                (State::Osc, 0x18 | 0x1a) => State::Ground,
-                (State::Osc, _) => {
-                    self.push(b);
-                    State::Osc
-                }
-                (State::OscEsc, b'\\') => {
-                    found = self.finish().or(found);
-                    State::Ground
-                }
-                // ESC followed by something else: the OSC is cut off, a new escape starts.
-                (State::OscEsc, b']') => {
-                    self.payload.clear();
-                    self.overflow = false;
-                    State::Osc
-                }
-                (State::OscEsc, _) => State::Ground,
-            };
-        }
+        self.osc.feed(bytes, |payload| {
+            if let Some(path) = parse(payload) {
+                found = Some(path);
+            }
+        });
         found
     }
+}
 
-    fn push(&mut self, b: u8) {
-        if self.payload.len() < MAX_PAYLOAD {
-            self.payload.push(b);
-        } else {
-            self.overflow = true;
-        }
-    }
-
-    fn finish(&mut self) -> Option<String> {
-        if self.overflow {
+/// The directory in one complete OSC payload (OSC 7 or OSC 9;9), if it is one and
+/// names a local path.
+pub(crate) fn parse(payload: &[u8]) -> Option<String> {
+    let payload = std::str::from_utf8(payload).ok()?;
+    let path = if let Some(uri) = payload.strip_prefix("7;") {
+        path_from_file_uri(uri)?
+    } else {
+        let path = payload.strip_prefix("9;9;")?.trim();
+        let path = path
+            .strip_prefix('"')
+            .and_then(|p| p.strip_suffix('"'))
+            .unwrap_or(path);
+        if path.is_empty() {
             return None;
         }
-        let payload = std::str::from_utf8(&self.payload).ok()?;
-        let path = if let Some(uri) = payload.strip_prefix("7;") {
-            path_from_file_uri(uri)?
-        } else {
-            let path = payload.strip_prefix("9;9;")?.trim();
-            let path = path
-                .strip_prefix('"')
-                .and_then(|p| p.strip_suffix('"'))
-                .unwrap_or(path);
-            if path.is_empty() {
-                return None;
-            }
-            native_path(path)
-        };
-        // Terminal output is untrusted: a network path would make the existence
-        // check below contact a remote host (SMB, leaking the Windows login hash).
-        is_local_path(&path).then_some(path)
-    }
+        native_path(path)
+    };
+    // Terminal output is untrusted: a network path would make the existence
+    // check below contact a remote host (SMB, leaking the Windows login hash).
+    is_local_path(&path).then_some(path)
 }
 
 /// `file://host/path` (percent-encoded) → native path string.

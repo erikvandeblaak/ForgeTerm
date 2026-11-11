@@ -39,6 +39,10 @@ Vereist: Rust (stable) en op Windows de Visual Studio C++ Build Tools + Windows 
 | Git-paneel (status, diff, stage/unstage, commit, recente commits) | **Ctrl+Shift+G**, menu Git, of klik op de branch in de statusbalk |
 | Pad in de terminal zetten (gequote voor de shell, níet uitgevoerd) | dubbelklik op bestand, knop *Insert path*, of sleep een bestand uit Windows Verkenner op het venster |
 | Link in de terminal openen | **Ctrl+klik** (Ctrl ingedrukt = link onderstreept); alleen `http`/`https` |
+| Van commando naar commando springen (shell-integratie) | **Ctrl+Shift+↑ / ↓**. Elke prompt krijgt een balkje in de linkermarge: mint = gelukt, koraal = mislukt (exit-code ≠ 0), cyaan = loopt nog, grijs = onbekend (cmd meldt geen exit-codes) |
+| Uitvoer van het laatste commando kopiëren | Terminal → Copy Last Command Output (prompt, commando en uitvoer; max. 2000 regels, het eind blijft) |
+| Die uitvoer bij de prompt van Claude Code / Codex zetten | AI → Insert Last Command Output into Agent: als Markdown-blok met commando en exit-code, **zonder Enter**; het agent-tabblad krijgt de focus zodat je je vraag erbij typt |
+| Zien welk tabblad op je wacht | badge op de tab: *needs you* / *done* / *failed* / *working* (programma's die OSC 7501 melden) of *bell* (bel in een tab waar je niet naar kijkt). Is het venster niet actief, dan knippert de taakbalkknop. Verdwijnt zodra je de tab bekijkt |
 | Zoeken in terminaluitvoer en scrollback | **Ctrl+Shift+F** (typen zoekt meteen; Enter/F3 ouder, Shift+F3 nieuwer, Ctrl+C kopieert de treffer, Esc sluit) |
 | Kopiëren | **Ctrl+C** als er een selectie is (zonder selectie gaat Ctrl+C als onderbreking naar het programma), Ctrl+Shift+C |
 | Plakken | **Ctrl+V** (Windows), Ctrl+Shift+V, Shift+Insert, rechtermuisklik. Meerdere regels zonder bracketed paste vragen eerst bevestiging. Op Linux blijft Ctrl+V van het programma (zoals in andere Linux-terminals) |
@@ -136,7 +140,7 @@ ForgeTerm leest `%APPDATA%\ForgeTerm\settings.toml` (Linux: `$XDG_CONFIG_HOME/fo
 | `terminal.scrollback` | 10000 | regels per terminal (0–100000), voor nieuwe terminals |
 | `terminal.default_shell` | eerste gevonden | naam zoals in "New tab with…", bv. `"Git Bash"` |
 | `terminal.start_directory` | startmap van ForgeTerm | map van de eerste tab |
-| `terminal.shell_integration` | true | shells melden hun map (geen profielwijzigingen) |
+| `terminal.shell_integration` | true | shells melden hun map en markeren prompts en commando's (geen profielwijzigingen) |
 | `explorer.visible` / `follow_terminal` / `show_hidden` | false / true / false | verkenner |
 | `[keys]` | (leeg) | eigen sneltoetsen: `"Ctrl+K" = "command_palette"`, `= "none"` haalt een standaardtoets weg; namen staan in Help → Keyboard Shortcuts |
 | `workspace.restore_session` | true | bij het starten de tabs, splits (met hun map) en viewer-bestanden van de vorige keer terugzetten |

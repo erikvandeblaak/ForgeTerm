@@ -83,6 +83,8 @@ pub enum Message {
     MenuClose,
     AboutClose,
     ShortcutsClose,
+    /// The window gained (`true`) or lost keyboard focus.
+    WindowFocus(bool),
     ExplorerListed(PathBuf, Result<Listing, String>),
     ExplorerSelect(PathBuf),
     /// Chevron click: expand / collapse a folder.
@@ -215,6 +217,8 @@ pub struct App {
     menus: Vec<Menu>,
     menu: Option<MenuState>,
     about_open: bool,
+    /// The window has keyboard focus (attention for unseen terminals otherwise).
+    window_focused: bool,
     explorer: Tree,
     explorer_visible: bool,
     /// The explorer follows the focused shell's directory.
@@ -277,6 +281,7 @@ impl App {
             menus: Vec::new(),
             menu: None,
             about_open: false,
+            window_focused: true,
             explorer: Tree::new(launch_dir()),
             explorer_visible: false,
             explorer_follow: true,
@@ -632,6 +637,8 @@ impl App {
             Event::Window(window::Event::FileHovered(_)) => Some(Message::FileHovered),
             Event::Window(window::Event::FilesHoveredLeft) => Some(Message::FilesHoveredLeft),
             Event::Window(window::Event::FileDropped(path)) => Some(Message::FileDropped(path)),
+            Event::Window(window::Event::Focused) => Some(Message::WindowFocus(true)),
+            Event::Window(window::Event::Unfocused) => Some(Message::WindowFocus(false)),
             _ => None,
         });
         // git status is cheap but starts a process: every 4 s keeps the status bar
@@ -651,6 +658,7 @@ impl App {
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         let task = self.handle(message);
+        self.acknowledge_seen();
         let follow_ups: Vec<Task<Message>> = [
             self.sync_explorer(),
             self.reveal_active_tab(),
@@ -751,11 +759,22 @@ impl App {
                 event,
             } => {
                 let visible = self.workspace.is_visible(id);
+                let seen = visible && self.window_focused;
                 let Some(terminal) = self.terminals.get_mut(&id) else {
                     return Task::none();
                 };
-                match terminal.on_session_event(generation, event, visible, &self.palette) {
+                match terminal.on_session_event(generation, event, visible, seen, &self.palette) {
                     Outcome::None => {}
+                    // The tab shows it; outside the window the taskbar button flashes.
+                    Outcome::Attention if !self.window_focused => {
+                        return iced::window::latest().and_then(|w| {
+                            iced::window::request_user_attention(
+                                w,
+                                Some(iced::window::UserAttention::Informational),
+                            )
+                        });
+                    }
+                    Outcome::Attention => {}
                     Outcome::Clipboard(text) => return self.program_clipboard(id, text),
                     Outcome::Close => return self.close_terminal(id),
                     // Picked up by `sync_explorer` after this message.
@@ -915,6 +934,7 @@ impl App {
             }
             Message::MenuClose => self.menu = None,
             Message::AboutClose => self.about_open = false,
+            Message::WindowFocus(focused) => self.window_focused = focused,
             Message::ShortcutsClose => self.shortcuts_open = false,
             Message::ExplorerListed(path, result) => self.explorer.set_listing(path, result),
             Message::ExplorerSelect(path) => self.explorer.select(Some(path)),
@@ -1577,6 +1597,29 @@ impl App {
                     t.refresh(palette);
                 }
             }
+            CommandId::PreviousCommand | CommandId::NextCommand => {
+                let palette = &self.palette;
+                if let Some(focused) = self.workspace.focused()
+                    && let Some(t) = self.terminals.get_mut(&focused)
+                {
+                    if let Some(s) = t.session() {
+                        s.jump_to_prompt(id == CommandId::PreviousCommand);
+                    }
+                    t.refresh(palette);
+                }
+            }
+            CommandId::CopyLastCommandOutput => {
+                let output = self
+                    .focused()
+                    .and_then(TerminalPane::session)
+                    .map(forgeterm_terminal::Session::last_command_output);
+                match output {
+                    Some(Ok(out)) => return clipboard::write(out.text),
+                    Some(Err(e)) => self.notice = Some(format!("Nothing copied: {e}.")),
+                    None => {}
+                }
+            }
+            CommandId::InsertLastOutputIntoAgent => return self.insert_last_output_into_agent(),
             CommandId::Copy => return self.copy_selection(),
             CommandId::FindInTerminal => {
                 if self.term_find.is_none() {
@@ -1748,6 +1791,11 @@ impl App {
                 }
             }
             CommandId::About => self.about_open = true,
+            CommandId::Website => {
+                if let Err(e) = open_url(crate::commands::WEBSITE) {
+                    self.notice = Some(e);
+                }
+            }
             CommandId::KeyboardShortcuts => self.shortcuts_open = true,
             // Same as closing the window: sessions are dropped, shells are shut down.
             CommandId::Quit => return self.request_close(CloseTarget::Quit),
@@ -1762,6 +1810,18 @@ impl App {
         match id {
             CommandId::FocusPane(_) | CommandId::TogglePaneZoom => self.has_splits(),
             CommandId::NextTab | CommandId::PreviousTab => self.workspace.tabs.len() > 1,
+            CommandId::PreviousCommand
+            | CommandId::NextCommand
+            | CommandId::CopyLastCommandOutput => focused
+                .and_then(TerminalPane::session)
+                .is_some_and(forgeterm_terminal::Session::has_prompt_marks),
+            CommandId::InsertLastOutputIntoAgent => {
+                focused.is_some_and(|t| {
+                    t.agent.is_none()
+                        && t.session()
+                            .is_some_and(forgeterm_terminal::Session::has_prompt_marks)
+                }) && self.agent_target().is_some()
+            }
             CommandId::Copy => focused
                 .and_then(TerminalPane::session)
                 .is_some_and(|s| s.selection_text().is_some()),
@@ -1795,6 +1855,7 @@ impl App {
             | CommandId::ZoomOut
             | CommandId::ZoomReset
             | CommandId::About
+            | CommandId::Website
             | CommandId::Quit
             | CommandId::ToggleExplorer
             | CommandId::ToggleAiPanel
@@ -2586,6 +2647,69 @@ impl App {
         self.focused().filter(|t| t.is_running())
     }
 
+    /// The agent that receives inserted command output: a running agent terminal in
+    /// the active tab, else the first one in another tab.
+    fn agent_target(&self) -> Option<TermId> {
+        let is_agent = |id: &TermId| {
+            self.terminals
+                .get(id)
+                .is_some_and(|t| t.agent.is_some() && t.is_running())
+        };
+        self.workspace
+            .active_tab()
+            .and_then(|tab| tab.terminals().find(is_agent))
+            .or_else(|| {
+                self.workspace
+                    .tabs
+                    .iter()
+                    .flat_map(|tab| tab.terminals())
+                    .find(is_agent)
+            })
+    }
+
+    /// Puts the focused shell's last command output (Markdown, see
+    /// `CommandOutput::to_markdown`) at the agent's prompt, like a paste and without
+    /// Enter, then gives the agent the keyboard so the user can add a question.
+    fn insert_last_output_into_agent(&mut self) -> Task<Message> {
+        let Some(session) = self.focused().and_then(TerminalPane::session) else {
+            return Task::none();
+        };
+        let output = match session.last_command_output() {
+            Ok(out) => out,
+            Err(e) => {
+                self.notice = Some(format!("Nothing inserted: {e}."));
+                return Task::none();
+            }
+        };
+        let Some(target) = self.agent_target() else {
+            self.notice = Some("Nothing inserted: no agent is running.".into());
+            return Task::none();
+        };
+        if let Some((index, _)) = self.workspace.locate(target)
+            && self.workspace.select(index)
+        {
+            self.refresh_visible();
+        }
+        self.focus_terminal(target);
+        self.insert_text_into(target, output.to_markdown());
+        unfocus_widgets()
+    }
+
+    /// Terminals the user is looking at no longer need attention.
+    fn acknowledge_seen(&mut self) {
+        if !self.window_focused {
+            return;
+        }
+        let Some(tab) = self.workspace.active_tab() else {
+            return;
+        };
+        for id in tab.terminals().collect::<Vec<_>>() {
+            if let Some(t) = self.terminals.get_mut(&id) {
+                t.acknowledge();
+            }
+        }
+    }
+
     /// Inserts the rendered prompt into the focused terminal, without Enter, and
     /// gives that terminal the keyboard. The docked studio stays open.
     fn insert_prompt(&mut self) -> Task<Message> {
@@ -2830,6 +2954,31 @@ impl App {
         layers.into()
     }
 
+    /// What a tab's terminals want from the user: a program's status (OSC 7501) or
+    /// a bell that rang while the user was elsewhere. Finished results disappear once
+    /// the tab has been looked at.
+    fn tab_badge(&self, tab: &crate::workspace::Tab) -> Option<(String, Color)> {
+        use forgeterm_terminal::status::ProgramState;
+        let terminals: Vec<&TerminalPane> = tab
+            .terminals()
+            .filter_map(|id| self.terminals.get(&id))
+            .collect();
+        let status = terminals
+            .iter()
+            .filter_map(|t| t.program_status())
+            .max_by_key(|s| s.state);
+        let bell = terminals.iter().any(|t| t.bell);
+        match status.map(|s| (s.state, s.progress)) {
+            Some((ProgramState::Blocked, _)) => Some(("needs you".into(), theme::AMBER)),
+            Some((ProgramState::Error, _)) => Some(("failed".into(), theme::CORAL)),
+            Some((ProgramState::Done, _)) => Some(("done".into(), theme::MINT)),
+            _ if bell => Some(("bell".into(), theme::AMBER)),
+            Some((ProgramState::Working, Some(p))) => Some((format!("{p}%"), theme::CYAN)),
+            Some((ProgramState::Working, None)) => Some(("working".into(), theme::CYAN)),
+            _ => None,
+        }
+    }
+
     fn view_top_bar(&self) -> Element<'_, Message> {
         let mut tabs = row![].spacing(4).align_y(iced::Alignment::Center);
         for (index, tab) in self.workspace.tabs.iter().enumerate() {
@@ -2847,21 +2996,23 @@ impl App {
             } else {
                 truncate(&title, MAX_TAB_TITLE)
             };
-            let select = button(
-                row![
-                    text("●").size(9).color(dot),
-                    text(label).size(12).color(if active {
-                        theme::TEXT
-                    } else {
-                        theme::TEXT_MUTED
-                    }),
-                ]
-                .spacing(7)
-                .align_y(iced::Alignment::Center),
-            )
-            .on_press(Message::SelectTab(index))
-            .padding([5, 4])
-            .style(|_, _| button::Style::default());
+            let mut content = row![
+                text("●").size(9).color(dot),
+                text(label).size(12).color(if active {
+                    theme::TEXT
+                } else {
+                    theme::TEXT_MUTED
+                }),
+            ]
+            .spacing(7)
+            .align_y(iced::Alignment::Center);
+            if let Some((badge, color)) = self.tab_badge(tab) {
+                content = content.push(text(badge).size(11).color(color));
+            }
+            let select = button(content)
+                .on_press(Message::SelectTab(index))
+                .padding([5, 4])
+                .style(|_, _| button::Style::default());
             let close = button(text("×").size(13).color(theme::TEXT_MUTED))
                 .on_press(Message::CloseTab(index))
                 .padding([1, 6])
@@ -3453,6 +3604,10 @@ fn view_about<'a>() -> Element<'a, Message> {
             text("Created by Erik van de Blaak")
                 .size(13)
                 .color(theme::TEXT),
+            button(text(crate::commands::WEBSITE).size(13))
+                .on_press(Message::Command(CommandId::Website))
+                .padding(0)
+                .style(|_, status| link_button(status)),
             column![
                 muted("Built with Rust, iced 0.14 (MIT) and alacritty_terminal 0.26 (Apache-2.0)."),
                 muted("Terminal font: JetBrains Mono (SIL Open Font License 1.1)."),
@@ -3643,6 +3798,18 @@ fn viewer_key(key: &keyboard::Key, mods: keyboard::Modifiers, v: &Viewer) -> Opt
         }
         _ => return None,
     })
+}
+
+/// A text link: cyan, brighter on hover, no background.
+fn link_button(status: button::Status) -> button::Style {
+    button::Style {
+        background: None,
+        text_color: match status {
+            button::Status::Hovered | button::Status::Pressed => theme::TEXT,
+            _ => theme::CYAN,
+        },
+        ..Default::default()
+    }
 }
 
 /// Opens a web link from terminal output in the default browser, only after a
