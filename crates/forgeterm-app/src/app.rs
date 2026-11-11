@@ -83,6 +83,12 @@ pub enum Message {
     MenuClose,
     AboutClose,
     ShortcutsClose,
+    /// A Ctrl+clicked file reference was looked up (`found`: the local file).
+    FileRefResolved {
+        wanted: String,
+        line: Option<u32>,
+        found: Option<PathBuf>,
+    },
     /// The window gained (`true`) or lost keyboard focus.
     WindowFocus(bool),
     ExplorerListed(PathBuf, Result<Listing, String>),
@@ -934,6 +940,22 @@ impl App {
             }
             Message::MenuClose => self.menu = None,
             Message::AboutClose => self.about_open = false,
+            Message::FileRefResolved {
+                wanted,
+                line,
+                found,
+            } => match found {
+                Some(path) => {
+                    self.viewer.pending_line =
+                        line.map(|l| (path.clone(), (l as usize).saturating_sub(1)));
+                    return self.viewer_msg(ViewerMsg::Open(path));
+                }
+                None => {
+                    self.notice = Some(format!(
+                        "Not opened: {wanted} is not a file in this terminal's folder or its project."
+                    ));
+                }
+            },
             Message::WindowFocus(focused) => self.window_focused = focused,
             Message::ShortcutsClose => self.shortcuts_open = false,
             Message::ExplorerListed(path, result) => self.explorer.set_listing(path, result),
@@ -1188,6 +1210,9 @@ impl App {
                 if let Err(e) = open_url(&url) {
                     self.notice = Some(e);
                 }
+            }
+            TermMsg::OpenFile { path, line } => {
+                return resolve_file_ref(path, line, t.directory().map(Path::to_path_buf));
             }
         }
         Task::none()
@@ -2327,6 +2352,11 @@ impl App {
                 if let Some(i) = v.index_of(&path) {
                     v.active = i;
                     v.focused = true;
+                    if let Some((p, line)) = v.pending_line.take()
+                        && p == path
+                    {
+                        v.tabs[i].go_to_line(line);
+                    }
                     if v.find_open {
                         v.refresh_matches();
                     }
@@ -2336,6 +2366,8 @@ impl App {
             }
             ViewerMsg::Loaded(path, result) => match result {
                 Err(e) => {
+                    // A later, unrelated open of this file must not jump to the line.
+                    v.pending_line.take_if(|(p, _)| *p == path);
                     if let Some(i) = v.index_of(&path) {
                         v.tabs[i].reloading = false;
                     } else {
@@ -2358,7 +2390,11 @@ impl App {
                     if index == v.active && v.find_open {
                         v.refresh_matches();
                     }
+                    let pending = v.pending_line.take_if(|(p, _)| *p == path);
                     let tab = &mut v.tabs[index];
+                    if let Some((_, line)) = pending {
+                        tab.go_to_line(line);
+                    }
                     if tab.doc.highlightable() && tab.doc.syntax != "Plain Text" {
                         tab.highlighting = true;
                         let doc = tab.doc.clone();
@@ -3844,6 +3880,30 @@ fn save_screenshot(shot: &iced::window::Screenshot, path: &Path) {
         Some(Err(e)) => tracing::warn!("screenshot not saved: {e}"),
         None => tracing::warn!("screenshot not saved: could not encode the frame"),
     }
+}
+
+/// Looks up a Ctrl+clicked file reference off the UI thread (a stat can be slow):
+/// relative paths against the terminal's folder, then its project root.
+fn resolve_file_ref(wanted: String, line: Option<u32>, dir: Option<PathBuf>) -> Task<Message> {
+    let key = wanted.clone();
+    background(
+        move || {
+            let mut bases = Vec::new();
+            if let Some(dir) = dir {
+                let (root, _) = forgeterm_agents::project_root(&dir);
+                bases.push(dir);
+                if !bases.contains(&root) {
+                    bases.push(root);
+                }
+            }
+            forgeterm_terminal::resolve_file_ref(&key, &bases, Path::is_file)
+        },
+        move |found| Message::FileRefResolved {
+            wanted: wanted.clone(),
+            line,
+            found,
+        },
+    )
 }
 
 fn load_document(path: PathBuf) -> Task<Message> {

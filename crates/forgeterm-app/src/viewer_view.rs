@@ -111,6 +111,13 @@ impl ViewerTab {
         self.cache.clear();
     }
 
+    /// Shows `line` (0-based) in the middle and selects it.
+    pub fn go_to_line(&mut self, line: usize) {
+        let line = line.min(self.doc.line_count().saturating_sub(1));
+        self.selection = Some((line, line));
+        self.center_on(line);
+    }
+
     /// Scrolls just enough to show `line`.
     pub fn reveal(&mut self, line: usize) {
         if line < self.top {
@@ -153,6 +160,8 @@ pub struct Viewer {
     pub current_match: Option<usize>,
     /// Problem opening a file, shown in the panel.
     pub error: Option<String>,
+    /// Line (0-based) to show once this file is open (Ctrl+click on `path:line`).
+    pub pending_line: Option<(std::path::PathBuf, usize)>,
 }
 
 impl Viewer {

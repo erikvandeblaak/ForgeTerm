@@ -336,6 +336,16 @@ Rust 1.99.1 per gebruiker (rustup, geen sudo); verse clone in het Linux-bestands
 | C10 | OSC 7501-query-antwoord: Linux ✅ (echte PTY); Windows: ConPTY gooit OSC in de invoer weg (gemeten met een raw-stdin-lezer: CSI/DCS komen aan, OSC 7501/11 niet) | ✅ Linux · n.v.t. Windows |
 | C11 | About: https://vandeblaak.com als link (opent via Help → Open Website); browser openen niet in de GUI uitgevoerd (zelfde pad als L3) | 🟡 |
 
+## Bestandsverwijzingen openen (2026-11-11, Windows 11)
+
+| # | Stap | Resultaat |
+|---|---|---|
+| F1 | Unit: rustc/gcc/tsc `path:line:col`, MSVC `path(line,col)`, Python `File "…", line N` (ook met spaties), `Update(path)`, `path:12-30`, bare paden met map + extensie; géén verwijzing: `localhost:8080`, `github.com:22`, versies, tijden, Apache-tijdstempel, URL's, `NUL.txt`/`COM1.log`, `a:b/c.rs` | ✅ (Windows + WSL) |
+| F2 | Unit: `resolve` zoekt relatief in terminalmap en daarna projectroot; UNC, `//host`, `\\?\`, `\\?\UNC`, pad zonder schijf geweigerd; netwerk-basis → `is_file` wordt niet eens aangeroepen | ✅ |
+| F3 | GUI: Ctrl ingedrukt boven `src/main.rs:42:5` → alleen het pad cyaan onderstreept; Ctrl+klik → viewer opent `main.rs`, regel 42 in het midden en geselecteerd | ✅ |
+| F4 | GUI: Ctrl+klik `Program.cs(12,5)` → regel 12; `File "tool.py", line 3` → regel 3; `Update(src/main.rs)` → tab `main.rs` actief | ✅ |
+| F5 | GUI: Ctrl+klik `missing/nothing.rs:3` → melding "Not opened: missing/nothing.rs is not a file in this terminal's folder or its project." | ✅ |
+
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)
 
 Gemeten 2026-11-10. Opstarttijden uit de eigen tracing-tijdstempels; geheugen = working set na 5 s, idle prompt.

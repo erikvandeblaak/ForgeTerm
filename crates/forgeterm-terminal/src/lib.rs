@@ -6,6 +6,8 @@
 //! out of this crate, so it can be tested headless.
 
 mod cwd;
+mod filelink;
+pub use filelink::{FileRef, file_ref_at, file_refs, resolve as resolve_file_ref};
 
 pub use cwd::is_local_path;
 mod input;
