@@ -39,6 +39,7 @@ Vereist: Rust (stable) en op Windows de Visual Studio C++ Build Tools + Windows 
 | Git-paneel (status, diff, stage/unstage, commit, recente commits) | **Ctrl+Shift+G**, menu Git, of klik op de branch in de statusbalk |
 | Pad in de terminal zetten (gequote voor de shell, níet uitgevoerd) | dubbelklik op bestand, knop *Insert path*, of sleep een bestand uit Windows Verkenner op het venster |
 | Link in de terminal openen | **Ctrl+klik** (Ctrl ingedrukt = link onderstreept); alleen `http`/`https` |
+| Bestand uit een foutmelding openen | **Ctrl+klik** op `src/main.rs:42:5`, `Program.cs(12,5)`, `File "app.py", line 3`, `Update(src/lib.rs)` of `src/x.rs:12-30`: de code-viewer opent op die regel (alleen lezen). Relatieve paden worden gezocht in de map van de terminal en daarna in de projectroot |
 | Van commando naar commando springen (shell-integratie) | **Ctrl+Shift+↑ / ↓**. Elke prompt krijgt een balkje in de linkermarge: mint = gelukt, koraal = mislukt (exit-code ≠ 0), cyaan = loopt nog, grijs = onbekend (cmd meldt geen exit-codes) |
 | Uitvoer van het laatste commando kopiëren | Terminal → Copy Last Command Output (prompt, commando en uitvoer; max. 2000 regels, het eind blijft) |
 | Die uitvoer bij de prompt van Claude Code / Codex zetten | AI → Insert Last Command Output into Agent: als Markdown-blok met commando en exit-code, **zonder Enter**; het agent-tabblad krijgt de focus zodat je je vraag erbij typt |

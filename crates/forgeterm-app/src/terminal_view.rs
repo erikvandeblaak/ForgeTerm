@@ -68,13 +68,22 @@ pub struct Interaction {
     ctrl: bool,
     /// Keyboard modifiers, for mouse reports (Shift/Alt/Ctrl+click in vim, htop…).
     mods: iced::keyboard::Modifiers,
-    /// Link under the pointer while Ctrl is held: (row, first col, end col, url).
-    hover_link: Option<(usize, usize, usize, String)>,
+    /// Link under the pointer while Ctrl is held: (row, first col, end col, target).
+    hover_link: Option<(usize, usize, usize, Hit)>,
 }
 
-/// The link at a viewport cell, as (first column, end column, url). Columns and
-/// chars differ around wide characters, hence the mapping.
-fn link_at_cell(snapshot: &Snapshot, col: usize, row: usize) -> Option<(usize, usize, String)> {
+/// What Ctrl+click on terminal text opens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Hit {
+    /// A web link (http/https only).
+    Url(String),
+    /// A file reference such as `src/main.rs:42`, opened read-only in the viewer.
+    File { path: String, line: Option<u32> },
+}
+
+/// The link or file reference at a viewport cell, as (first column, end column,
+/// target). Columns and chars differ around wide characters, hence the mapping.
+fn link_at_cell(snapshot: &Snapshot, col: usize, row: usize) -> Option<(usize, usize, Hit)> {
     if row >= snapshot.rows {
         return None;
     }
@@ -88,10 +97,20 @@ fn link_at_cell(snapshot: &Snapshot, col: usize, row: usize) -> Option<(usize, u
         cols.push((c, if cell.flags.wide { 2 } else { 1 }));
     }
     let at = cols.iter().position(|&(c, w)| c <= col && col < c + w)?;
-    let link = forgeterm_terminal::link_at(&text, at)?;
-    let first = cols[link.start].0;
-    let (last, width) = cols[link.end - 1];
-    Some((first, last + width, link.url))
+    let (start, end, hit) = match forgeterm_terminal::link_at(&text, at) {
+        Some(link) => (link.start, link.end, Hit::Url(link.url)),
+        None => {
+            let r = forgeterm_terminal::file_ref_at(&text, at)?;
+            let hit = Hit::File {
+                path: r.path,
+                line: r.line,
+            };
+            (r.start, r.end, hit)
+        }
+    };
+    let first = cols[start].0;
+    let (last, width) = cols[end - 1];
+    Some((first, last + width, hit))
 }
 
 impl TerminalCanvas<'_> {
@@ -205,15 +224,17 @@ impl canvas::Program<Message> for TerminalCanvas<'_> {
                     }
                     mouse::Event::ButtonPressed(button) => {
                         let (col, row, right) = self.cell_at(bounds, cursor)?;
-                        // Ctrl+click on a link opens it (before mouse reporting and
-                        // selection: the user explicitly asked for the link).
+                        // Ctrl+click on a link or file reference opens it (before mouse
+                        // reporting and selection: the user explicitly asked for it).
                         if *button == mouse::Button::Left
                             && state.ctrl
-                            && let Some((_, _, url)) = link_at_cell(self.snapshot, col, row)
+                            && let Some((_, _, hit)) = link_at_cell(self.snapshot, col, row)
                         {
-                            return Some(
-                                Action::publish(self.msg(TermMsg::OpenUrl(url))).and_capture(),
-                            );
+                            let msg = match hit {
+                                Hit::Url(url) => TermMsg::OpenUrl(url),
+                                Hit::File { path, line } => TermMsg::OpenFile { path, line },
+                            };
+                            return Some(Action::publish(self.msg(msg)).and_capture());
                         }
                         let tb = match button {
                             mouse::Button::Left => MouseButton::Left,
@@ -250,7 +271,7 @@ impl canvas::Program<Message> for TerminalCanvas<'_> {
                         };
                         if state.ctrl && !state.selecting {
                             let hover = link_at_cell(self.snapshot, col, row)
-                                .map(|(a, b, url)| (row, a, b, url));
+                                .map(|(a, b, hit)| (row, a, b, hit));
                             if hover != state.hover_link {
                                 state.hover_link = hover;
                                 return Some(Action::request_redraw());

@@ -32,6 +32,11 @@ pub enum TermMsg {
     Paste,
     /// Ctrl+click on a link.
     OpenUrl(String),
+    /// Ctrl+click on a file reference (`src/main.rs:42`); resolved by the app.
+    OpenFile {
+        path: String,
+        line: Option<u32>,
+    },
 }
 
 impl TermMsg {
