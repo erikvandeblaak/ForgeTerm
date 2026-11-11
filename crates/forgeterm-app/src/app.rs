@@ -40,6 +40,31 @@ const LOGO: &[u8] = include_bytes!("../../../assets/branding/forgeterm-logo.svg"
 const MAX_TAB_TITLE: usize = 28;
 /// The horizontally scrolling tab strip.
 const TABS_ID: &str = "forgeterm-tabs";
+pub const EXPLORER_LIST_ID: &str = "forgeterm-explorer-list";
+pub const EXPLORER_GOTO_ID: &str = "forgeterm-explorer-goto";
+
+/// Navigation keys of the focused explorer (no modifiers except Shift-less).
+fn explorer_key(key: &keyboard::Key, mods: keyboard::Modifiers) -> Option<forgeterm_explorer::Nav> {
+    use forgeterm_explorer::Nav;
+    if mods.control() || mods.alt() || mods.shift() {
+        return None;
+    }
+    let keyboard::Key::Named(named) = key else {
+        return None;
+    };
+    Some(match named {
+        Named::ArrowUp => Nav::Up,
+        Named::ArrowDown => Nav::Down,
+        Named::ArrowLeft => Nav::Left,
+        Named::ArrowRight => Nav::Right,
+        Named::PageUp => Nav::PageUp,
+        Named::PageDown => Nav::PageDown,
+        Named::Home => Nav::Home,
+        Named::End => Nav::End,
+        Named::Enter => Nav::Activate,
+        _ => return None,
+    })
+}
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -92,6 +117,13 @@ pub enum Message {
     /// The window gained (`true`) or lost keyboard focus.
     WindowFocus(bool),
     ExplorerListed(PathBuf, Result<Listing, String>),
+    /// Every 2 s while the explorer is visible: look for changed folders.
+    ExplorerTick,
+    ExplorerChanged(Vec<PathBuf>),
+    ExplorerScrolled(scrollable::Viewport),
+    ExplorerGoToInput(String),
+    ExplorerGoToSubmit,
+    ExplorerGoToResult(Result<PathBuf, String>),
     ExplorerSelect(PathBuf),
     /// Chevron click: expand / collapse a folder.
     ExplorerToggle(PathBuf),
@@ -227,6 +259,15 @@ pub struct App {
     window_focused: bool,
     explorer: Tree,
     explorer_visible: bool,
+    /// The explorer has the keyboard (after a click in it or Ctrl+Shift+E).
+    explorer_focused: bool,
+    /// "Go to Folder" field: text and the last problem.
+    explorer_goto: Option<(String, Option<String>)>,
+    /// Explorer list scroll offset and visible height (for keeping the selection
+    /// in view).
+    explorer_scroll: (f32, f32),
+    /// A change check is running (no second one meanwhile).
+    explorer_checking: bool,
     /// The explorer follows the focused shell's directory.
     explorer_follow: bool,
     /// Shell directory the explorer was last moved to; manual navigation in the
@@ -290,6 +331,10 @@ impl App {
             window_focused: true,
             explorer: Tree::new(launch_dir()),
             explorer_visible: false,
+            explorer_focused: false,
+            explorer_goto: None,
+            explorer_scroll: (0.0, 0.0),
+            explorer_checking: false,
             explorer_follow: true,
             explorer_synced: None,
             revealed_tab: (0, 0),
@@ -598,8 +643,40 @@ impl App {
         }
     }
 
+    /// The explorer takes the keyboard (the viewer and docked studio let go).
+    fn focus_explorer(&mut self) {
+        self.explorer_focused = true;
+        self.viewer.focused = false;
+        self.set_prompt_focused(false);
+    }
+
+    /// Scrolls the explorer list so the selected row is visible.
+    fn reveal_explorer_selection(&self) -> Task<Message> {
+        const ROW: f32 = 22.0;
+        let Some(index) = self.explorer.selected_row() else {
+            return Task::none();
+        };
+        let (offset, height) = self.explorer_scroll;
+        let top = index as f32 * ROW;
+        let y = if top < offset {
+            top
+        } else if height > ROW && top + ROW > offset + height {
+            top + ROW - height
+        } else {
+            return Task::none();
+        };
+        iced::widget::operation::scroll_to(
+            EXPLORER_LIST_ID,
+            iced::widget::operation::AbsoluteOffset {
+                x: None,
+                y: Some(y),
+            },
+        )
+    }
+
     fn focus_terminal(&mut self, id: TermId) {
         self.viewer.focused = false;
+        self.explorer_focused = false;
         self.set_prompt_focused(false);
         if self.workspace.focused() == Some(id) {
             return;
@@ -659,7 +736,12 @@ impl App {
         } else {
             Subscription::none()
         };
-        Subscription::batch([events, settings, git, close, screenshot])
+        let explorer = if self.explorer_visible {
+            iced::time::every(Duration::from_secs(2)).map(|_| Message::ExplorerTick)
+        } else {
+            Subscription::none()
+        };
+        Subscription::batch([events, settings, git, close, screenshot, explorer])
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -959,9 +1041,13 @@ impl App {
             Message::WindowFocus(focused) => self.window_focused = focused,
             Message::ShortcutsClose => self.shortcuts_open = false,
             Message::ExplorerListed(path, result) => self.explorer.set_listing(path, result),
-            Message::ExplorerSelect(path) => self.explorer.select(Some(path)),
+            Message::ExplorerSelect(path) => {
+                self.explorer.select(Some(path));
+                self.focus_explorer();
+            }
             Message::ExplorerToggle(path) => {
                 self.explorer.select(Some(path.clone()));
+                self.focus_explorer();
                 return self
                     .explorer
                     .toggle(&path)
@@ -974,6 +1060,70 @@ impl App {
                     .map_or_else(Task::none, load_dir);
             }
             Message::ExplorerActivate(path, false) => self.insert_paths(&[path]),
+            Message::ExplorerTick => {
+                if self.explorer_visible && !self.explorer_checking {
+                    let shown = self.explorer.shown_dirs();
+                    if !shown.is_empty() {
+                        self.explorer_checking = true;
+                        return background(
+                            move || forgeterm_explorer::changed_dirs(&shown),
+                            Message::ExplorerChanged,
+                        );
+                    }
+                }
+            }
+            Message::ExplorerChanged(dirs) => {
+                self.explorer_checking = false;
+                return Task::batch(dirs.into_iter().map(load_dir));
+            }
+            Message::ExplorerScrolled(viewport) => {
+                self.explorer_scroll = (viewport.absolute_offset().y, viewport.bounds().height);
+            }
+            Message::ExplorerGoToInput(text) => {
+                if let Some(goto) = &mut self.explorer_goto {
+                    *goto = (text, None);
+                }
+            }
+            Message::ExplorerGoToSubmit => {
+                let Some((text, _)) = &self.explorer_goto else {
+                    return Task::none();
+                };
+                let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+                    .map(PathBuf::from);
+                let wanted = forgeterm_explorer::folder_from_input(
+                    text,
+                    self.explorer.root(),
+                    home.as_deref(),
+                );
+                return background(
+                    move || {
+                        let dir = wanted?;
+                        // Same rule as folders reported by shells: never a network path.
+                        if !dir.to_str().is_some_and(forgeterm_terminal::is_local_path) {
+                            return Err(format!("{} is not a local folder.", dir.display()));
+                        }
+                        if dir.is_dir() {
+                            Ok(dir)
+                        } else {
+                            Err(format!("{} is not a folder.", dir.display()))
+                        }
+                    },
+                    Message::ExplorerGoToResult,
+                );
+            }
+            Message::ExplorerGoToResult(result) => match result {
+                Ok(dir) => {
+                    self.explorer_goto = None;
+                    self.explorer_visible = true;
+                    self.focus_explorer();
+                    return Task::batch([load_dir(self.explorer.set_root(dir)), unfocus_widgets()]);
+                }
+                Err(e) => {
+                    if let Some(goto) = &mut self.explorer_goto {
+                        goto.1 = Some(e);
+                    }
+                }
+            },
             Message::FileHovered => self.drop_hover = true,
             Message::FilesHoveredLeft => self.drop_hover = false,
             Message::SettingsTick => {
@@ -1334,6 +1484,11 @@ impl App {
                 };
             }
         }
+        // The "Go to Folder" field closes with Esc, also while it has the keyboard.
+        if self.explorer_goto.is_some() && matches!(key, keyboard::Key::Named(Named::Escape)) {
+            self.explorer_goto = None;
+            return unfocus_widgets();
+        }
         // Keys handled by a widget never reach the terminal.
         if captured {
             return Task::none();
@@ -1350,6 +1505,44 @@ impl App {
                 return self.viewer_msg(msg);
             }
             return self.app_shortcut(&key, mods).unwrap_or_else(Task::none);
+        }
+
+        // The focused explorer takes navigation keys (Esc gives the keyboard back
+        // to the terminal); app shortcuts still work; other keys go to the terminal.
+        if self.explorer_visible && self.explorer_focused {
+            if matches!(key, keyboard::Key::Named(Named::Escape)) {
+                self.explorer_focused = false;
+                return Task::none();
+            }
+            if let Some(nav) = explorer_key(&key, mods) {
+                let page = ((self.explorer_scroll.1 / 22.0) as usize).max(1);
+                let task = match self.explorer.navigate(nav, page) {
+                    forgeterm_explorer::NavOutcome::None => Task::none(),
+                    forgeterm_explorer::NavOutcome::Load(dir) => load_dir(dir),
+                    // Like an editor: the opened file gets the keyboard (Esc there
+                    // returns it to the terminal).
+                    forgeterm_explorer::NavOutcome::Open(file) => {
+                        self.viewer_msg(ViewerMsg::Open(file))
+                    }
+                };
+                return Task::batch([task, self.reveal_explorer_selection()]);
+            }
+            if let Some(task) = self.app_shortcut(&key, mods) {
+                return task;
+            }
+            // A modifier on its own (Shift before a capital, Ctrl before a shortcut,
+            // Alt) is not typing yet: the explorer keeps the keyboard.
+            if matches!(
+                key,
+                keyboard::Key::Named(
+                    Named::Shift | Named::Control | Named::Alt | Named::Super | Named::AltGraph
+                )
+            ) {
+                return Task::none();
+            }
+            // Any other key is typing meant for the terminal: it gets the keyboard
+            // back, including this key, so nothing typed is lost.
+            self.explorer_focused = false;
         }
 
         if let Some(task) = self.app_shortcut(&key, mods) {
@@ -1667,13 +1860,34 @@ impl App {
                 }
             }
             CommandId::ReloadSettings => self.load_settings(false),
+            // Like VS Code: hidden → show with the keyboard, shown → take the
+            // keyboard, already focused → hide (keyboard back to the terminal).
             CommandId::ToggleExplorer => {
-                self.explorer_visible = !self.explorer_visible;
-                if self.explorer_visible {
+                if self.explorer_visible && self.explorer_focused {
+                    self.explorer_visible = false;
+                    self.explorer_focused = false;
+                    self.explorer_goto = None;
+                } else {
+                    self.explorer_visible = true;
                     self.ai_visible = false;
                     self.git_visible = false;
                     self.monitor.visible = false;
+                    self.focus_explorer();
+                    return unfocus_widgets();
                 }
+            }
+            CommandId::ExplorerGoToFolder => {
+                self.explorer_visible = true;
+                self.ai_visible = false;
+                self.git_visible = false;
+                self.monitor.visible = false;
+                self.focus_explorer();
+                let current = self.explorer.root().to_string_lossy().into_owned();
+                self.explorer_goto = Some((current, None));
+                return Task::batch([
+                    iced::widget::operation::focus(EXPLORER_GOTO_ID),
+                    iced::widget::operation::select_all(EXPLORER_GOTO_ID),
+                ]);
             }
             CommandId::ToggleAiPanel => {
                 self.ai_visible = !self.ai_visible;
@@ -1891,6 +2105,7 @@ impl App {
             | CommandId::ExplorerRefresh
             | CommandId::ExplorerToggleFollow => self.explorer_visible,
             CommandId::ExplorerParent => self.explorer_visible && self.explorer.parent().is_some(),
+            CommandId::ExplorerGoToFolder => true,
             CommandId::ExplorerOpenSelected => {
                 self.explorer_visible && self.explorer.selected().is_some_and(|e| e.is_dir)
             }
@@ -2352,6 +2567,7 @@ impl App {
                 if let Some(i) = v.index_of(&path) {
                     v.active = i;
                     v.focused = true;
+                    self.explorer_focused = false;
                     if let Some((p, line)) = v.pending_line.take()
                         && p == path
                     {
@@ -2384,6 +2600,7 @@ impl App {
                             v.tabs.push(ViewerTab::new(*doc));
                             v.active = v.tabs.len() - 1;
                             v.focused = true;
+                            self.explorer_focused = false;
                             v.tabs.len() - 1
                         }
                     };
@@ -2429,12 +2646,14 @@ impl App {
             }
             ViewerMsg::ScrollFraction(f) => {
                 v.focused = true;
+                self.explorer_focused = false;
                 if let Some(t) = v.tab_mut() {
                     t.scroll_to_fraction(f);
                 }
             }
             ViewerMsg::CenterOn(line) => {
                 v.focused = true;
+                self.explorer_focused = false;
                 if let Some(t) = v.tab_mut() {
                     t.center_on(line);
                 }
@@ -2448,6 +2667,7 @@ impl App {
             }
             ViewerMsg::SelectStart(line, extend) => {
                 v.focused = true;
+                self.explorer_focused = false;
                 if let Some(t) = v.tab_mut() {
                     t.selection = match (extend, t.selection) {
                         (true, Some((anchor, _))) => Some((anchor, line)),
@@ -2469,6 +2689,7 @@ impl App {
                 if i < v.tabs.len() {
                     v.active = i;
                     v.focused = true;
+                    self.explorer_focused = false;
                     if v.find_open {
                         v.refresh_matches();
                     }
@@ -2796,6 +3017,8 @@ impl App {
     }
 
     fn insert_paths(&mut self, paths: &[PathBuf]) {
+        // The path lands in the terminal: so does the keyboard.
+        self.explorer_focused = false;
         let Some(kind) = self.focused().map(|t| t.shell.kind) else {
             return;
         };
@@ -2920,7 +3143,12 @@ impl App {
         };
         let body: Element<'_, Message> = if self.explorer_visible {
             row![
-                explorer_view::view(&self.explorer, self.explorer_follow),
+                explorer_view::view(
+                    &self.explorer,
+                    self.explorer_follow,
+                    self.explorer_focused,
+                    self.explorer_goto.as_ref(),
+                ),
                 body
             ]
             .into()
@@ -3159,7 +3387,8 @@ impl App {
         let canvas = Canvas::new(TerminalCanvas {
             // Hollow cursor while the docked Prompt Studio has the keyboard.
             focused: self.workspace.focused() == Some(t.id)
-                && !(self.prompt_docked && self.prompt_focused),
+                && !(self.prompt_docked && self.prompt_focused)
+                && !(self.explorer_visible && self.explorer_focused),
             id: t.id,
             snapshot: &t.snapshot,
             cache: &t.cache,

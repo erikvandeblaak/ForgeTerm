@@ -346,6 +346,17 @@ Rust 1.99.1 per gebruiker (rustup, geen sudo); verse clone in het Linux-bestands
 | F4 | GUI: Ctrl+klik `Program.cs(12,5)` → regel 12; `File "tool.py", line 3` → regel 3; `Update(src/main.rs)` → tab `main.rs` actief | ✅ |
 | F5 | GUI: Ctrl+klik `missing/nothing.rs:3` → melding "Not opened: missing/nothing.rs is not a file in this terminal's folder or its project." | ✅ |
 
+## Verkenner: toetsenbord, verversen, map kiezen (2026-11-11, Windows 11)
+
+| # | Stap | Resultaat |
+|---|---|---|
+| V1 | Unit: navigatie (eerste toets selecteert, End/Home, → uitklappen + naar eerste kind, ← naar oudermap / inklappen, PgUp/PgDn begrensd, Enter op bestand/map), wijzigingstijd-detectie met echte map, pad-invoer (`~`, relatief, quotes) | ✅ (Windows + WSL) |
+| V2 | GUI: Ctrl+Shift+E → verkenner + toetsenbord (terminalcursor hol); ↓↓↑→ → `src` geselecteerd met cyaan rand en uitgeklapt; →↓ Enter → `Program.cs` in de viewer | ✅ |
+| V3 | Eerst fout: de losse Alt-toets (en Shift/Ctrl) gaf het toetsenbord terug aan de terminal, waardoor ↓ in de shell belandde; opgelost (modifier alleen = geen typen) en hertest | ✅ |
+| V4 | GUI: buiten ForgeTerm `added-later.txt` en `src/newdir` aangemaakt → binnen 4 s zichtbaar zonder Refresh | ✅ |
+| V5 | GUI: Go to Folder (palette) → veld met huidig pad geselecteerd; `nope` → rode melding "… is not a folder."; `src` → nieuwe root | ✅ |
+| V6 | GUI: verkenner heeft het toetsenbord, `echo typed` + Enter getypt → komt in de terminal en wordt uitgevoerd door de gebruiker-Enter; verkenner laat los | ✅ |
+
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)
 
 Gemeten 2026-11-10. Opstarttijden uit de eigen tracing-tijdstempels; geheugen = working set na 5 s, idle prompt.

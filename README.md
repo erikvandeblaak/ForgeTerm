@@ -29,7 +29,8 @@ Vereist: Rust (stable) en op Windows de Visual Studio C++ Build Tools + Windows 
 | Pane maximaliseren / terug | Ctrl+Shift+Enter |
 | Shell herstarten, scrollback wissen, naar begin/eind scrollen | via de Command Palette of het menu Terminal |
 | Menubalk (File, Edit, View, Terminal, Help) | klik op een titel; daarna ←→ ↑↓ Enter Esc |
-| Bestandsverkenner tonen/verbergen | **Ctrl+Shift+E** |
+| Bestandsverkenner | **Ctrl+Shift+E**: verborgen → tonen met toetsenbord, zichtbaar → toetsenbord erheen, al actief → verbergen. In de boom: ↑↓ PgUp/PgDn Home/End, → uitklappen / naar eerste item, ← inklappen / naar oudermap, Enter = map open/dicht of bestand in de viewer (die krijgt dan het toetsenbord), Esc = terug naar de terminal (gewoon typen ook: de toets gaat meteen naar de terminal). Ververst vanzelf als er bestanden bijkomen of verdwijnen |
+| Andere map in de verkenner | knop **…** of View → Go to Folder…: pad typen of plakken (`~` = thuismap, relatief = vanaf de huidige map), Enter |
 | Instellingen openen (`settings.toml`, wordt live toegepast) | **Ctrl+,** of File → Open Settings File |
 | AI-werkplek (Claude Code / Codex starten, projectcontext) | **Ctrl+Shift+A** of menu AI |
 | Prompt Studio (sjabloon kiezen, variabelen invullen, invoegen zonder Enter) | **Ctrl+Shift+I** of AI → Prompt Studio |

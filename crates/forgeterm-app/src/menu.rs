@@ -83,6 +83,7 @@ pub fn menus(shell_count: usize) -> Vec<Menu> {
                 C(ExplorerRefresh),
                 C(ExplorerParent),
                 C(ExplorerOpenSelected),
+                C(ExplorerGoToFolder),
                 Sep,
                 C(ZoomIn),
                 C(ZoomOut),
