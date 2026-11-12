@@ -29,6 +29,7 @@ if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 New-Item -ItemType Directory -Force $stage | Out-Null
 Copy-Item target\release\forgeterm.exe $stage
 Copy-Item README.md $stage
+Copy-Item LICENSE-MIT, LICENSE-APACHE $stage
 Copy-Item assets\fonts\JetBrainsMono-OFL.txt (Join-Path $stage "JetBrainsMono-OFL.txt")
 
 # Every crate compiled into forgeterm.exe (normal dependencies), with its license.

@@ -1,0 +1,35 @@
+name: Bug report
+description: Something in ForgeTerm does not work as expected
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: ForgeTerm version
+      description: Help › About
+      placeholder: "0.1.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows 11
+        - Linux Mint 22
+        - Ubuntu 24.04
+        - Other Linux
+    validations:
+      required: true
+  - type: input
+    id: shell
+    attributes:
+      label: Shell and program
+      placeholder: "PowerShell 7, running Claude Code"
+  - type: textarea
+    id: steps
+    attributes:
+      label: What happened?
+      description: What you did, what you expected and what happened instead. Screenshots help.
+    validations:
+      required: true

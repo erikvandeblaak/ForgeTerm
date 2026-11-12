@@ -1,6 +1,11 @@
 [package]
 name = "forgeterm-app"
-description = "ForgeTerm: AI-native terminal (Erik van de Blaak Edition)"
+description = "ForgeTerm: a GPU-rendered terminal for Windows and Linux, built for working with AI coding agents like Claude Code and Codex"
+repository.workspace = true
+homepage.workspace = true
+readme = "../../README.md"
+keywords = ["terminal", "terminal-emulator", "ai", "claude-code", "iced"]
+categories = ["command-line-utilities", "development-tools"]
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -57,5 +62,7 @@ assets = [
     ["../../assets/branding/forgeterm-logo.svg", "usr/share/icons/hicolor/scalable/apps/forgeterm.svg", "644"],
     ["../../README.md", "usr/share/doc/forgeterm/", "644"],
     ["../../assets/fonts/JetBrainsMono-OFL.txt", "usr/share/doc/forgeterm/", "644"],
+    ["../../LICENSE-MIT", "usr/share/doc/forgeterm/", "644"],
+    ["../../LICENSE-APACHE", "usr/share/doc/forgeterm/", "644"],
     ["../../dist/linux/THIRD-PARTY.txt", "usr/share/doc/forgeterm/", "644"],
 ]

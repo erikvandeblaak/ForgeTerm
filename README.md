@@ -1,152 +1,189 @@
-# ForgeTerm
+<p align="center">
+  <img src="assets/branding/forgeterm-logo.svg" alt="ForgeTerm logo" width="96" height="96">
+</p>
 
-**AI-Native Developer Workspace** — Erik van de Blaak Edition
-Created by Erik van de Blaak.
+<h1 align="center">ForgeTerm</h1>
 
-Status: eerste werkende build (Windows 11). Echte ConPTY-terminal met GPU-rendering; Claude Code, vim en PowerShell draaien erin. Zie [docs/ROADMAP.md](docs/ROADMAP.md) voor wat wel en niet af is.
+<p align="center">
+  <strong>A GPU-rendered terminal for Windows 11 and Linux, built for programming with AI coding agents like Claude Code and Codex.</strong><br>
+  Written in Rust. Tabs, splits, a file explorer, a code viewer, a Git panel and a Prompt Studio, in one window.
+</p>
 
-## Starten
+<p align="center">
+  <a href="https://github.com/erikvandeblaak/ForgeTerm/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/erikvandeblaak/ForgeTerm?label=release"></a>
+  <a href="#license"><img alt="License: MIT or Apache-2.0" src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue"></a>
+  <img alt="Platforms: Windows 11 and Linux" src="https://img.shields.io/badge/platform-Windows%2011%20%7C%20Linux-informational">
+  <img alt="Rust 1.88 or newer" src="https://img.shields.io/badge/rust-1.88%2B-orange">
+</p>
 
+<p align="center">
+  <a href="https://www.vandeblaak.com/downloads/?lang=en">Download</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#keyboard-shortcuts">Shortcuts</a> ·
+  <a href="#building-from-source">Build</a> ·
+  <a href="docs/ARCHITECTURE.md">Architecture</a> ·
+  <a href="README.nl.md">Nederlands</a>
+</p>
+
+![ForgeTerm on Windows 11: file explorer, PowerShell 7 and cmd stacked, and the code viewer with a Rust file and minimap](docs/screenshots/forgeterm-workspace.webp)
+
+## Why ForgeTerm
+
+A terminal that runs AI agents has to be predictable. ForgeTerm puts the tools you use next to an agent (files, code, Git, your prompts) beside the terminal, and keeps you in control of what runs:
+
+- **Nothing runs by itself.** Text that ForgeTerm puts in the terminal (a pasted prompt, a path, the output of the last command) never gets an Enter. You decide when it runs.
+- **ForgeTerm never sends a prompt to an agent.** Terminal and agent output is treated as data, not as instructions.
+- **Safe in unknown repositories.** Git never starts programs a repository configures (no fsmonitor, external diff or textconv) and the background status takes no `index.lock`.
+- **No fake features.** What is not measured (for example the GPU) is shown as *not measured*.
+
+## Features
+
+| | |
+|---|---|
+| **GPU-rendered terminal** | ConPTY on Windows and a real PTY on Linux, with the VT emulation of [alacritty_terminal](https://github.com/alacritty/alacritty). Truecolor, 256 colours, alt screen for vim, CJK characters, the Kitty keyboard protocol (so Shift+Enter gives a new line in Claude Code). JetBrains Mono. |
+| **Tabs and splits** | Side by side or stacked, drag the divider, maximise one pane. Each tab picks its own shell: PowerShell 7, Windows PowerShell, cmd, Git Bash, WSL, bash. |
+| **Command Palette** | Ctrl+Shift+P lists every action with fuzzy search. The same actions are in the menu bar, and every shortcut can be changed in `settings.toml`. |
+| **AI workspace** | Finds Claude Code and Codex, shows their version and starts them in the project root as a tab or split. Shows the project context: `CLAUDE.md`, `AGENTS.md`, rules, skills, commands, subagents and MCP. |
+| **Prompt Studio** | Templates with `{{variables}}`. ForgeTerm fills in what it actually knows (project, folder, selected text, file) and inserts the prompt without an Enter. Floating, or docked beside the terminal. Your own templates are plain `.md` files. |
+| **Shell integration** | Every prompt gets a mark in the margin (succeeded, failed, running). Jump between commands with Ctrl+Shift+↑/↓, copy the output of the last command, or put it in your agent's prompt. Never touches your profile or rc files. |
+| **Code viewer** | Read-only viewer with syntax highlighting, line numbers, a minimap, search and copy. Ctrl+click on `src/main.rs:42`, `Program.cs(12,5)` or a Python traceback in the output opens the file at that line. |
+| **Git panel** | Branch, ahead/behind and changes in the status bar. Diff, stage, unstage, commit, switch branches, history, and commits per day over thirty days. Push and pull are deliberately left to the terminal. |
+| **Explorer and session** | A file tree that follows your shell's folder, usable by keyboard. Double-click puts the path in the terminal, quoted correctly for that shell. Tabs, splits and folders come back at the next start. |
+| **Monitor** | CPU and memory of the system and of each terminal's whole process tree, with three minutes of history. |
+| **Tab badges** | A tab shows *needs you*, *done*, *failed*, *working* or *bell* when a program asks for attention; the taskbar flashes when the window is in the background. |
+
+![Three panes in one tab and a second tab with cmd; the status bar shows shell, folder, Git branch and pane count](docs/screenshots/forgeterm-splits.webp)
+
+## Install
+
+Download the latest version from the [releases page](https://github.com/erikvandeblaak/ForgeTerm/releases/latest) or from [vandeblaak.com/downloads](https://www.vandeblaak.com/downloads/?lang=en). Every file comes with a `.sha256` file.
+
+**Windows 11 (x64)**
+
+- `ForgeTerm-<version>-setup-x64.exe` installs per user to `%LOCALAPPDATA%\Programs\ForgeTerm`, without administrator rights, with a Start menu shortcut and an entry under *Settings › Apps*. The installer is not signed yet, so SmartScreen says *Unknown publisher*: choose *More info › Run anyway* after checking the hash.
+- `ForgeTerm-<version>-windows-x64.zip` is the portable version: unzip and start `forgeterm.exe`.
+
+```powershell
+Get-FileHash .\ForgeTerm-0.1.1-setup-x64.exe -Algorithm SHA256
 ```
+
+**Linux Mint 22 / Ubuntu 24.04 (amd64)**
+
+```bash
+sha256sum -c forgeterm_0.1.1-1_amd64.deb.sha256
+sudo apt install ./forgeterm_0.1.1-1_amd64.deb      # remove: sudo apt remove forgeterm
+```
+
+apt installs the missing libraries itself (X11/Wayland, xkbcommon, EGL). Git and Vulkan are recommended.
+
+There is no macOS version.
+
+## Keyboard shortcuts
+
+| Action | Keys |
+|---|---|
+| Command Palette | Ctrl+Shift+P |
+| New tab / tab with shell N | Ctrl+Shift+T / Ctrl+Shift+1…9 |
+| Go to tab N, next / previous tab | Alt+1…9, Ctrl+Tab / Ctrl+Shift+Tab |
+| Split side by side / stacked | Alt+Shift+= / Alt+Shift+- |
+| Move focus between panes | Alt+arrow keys |
+| Maximise pane and back | Ctrl+Shift+Enter |
+| Close pane | Ctrl+Shift+W |
+| Previous / next command | Ctrl+Shift+↑ / ↓ |
+| AI workspace | Ctrl+Shift+A |
+| Prompt Studio | Ctrl+Shift+I |
+| Explorer | Ctrl+Shift+E |
+| Code viewer | Ctrl+Shift+O |
+| Git panel | Ctrl+Shift+G |
+| Monitor | Ctrl+Shift+M |
+| Search output and scrollback | Ctrl+Shift+F |
+| Copy / paste | Ctrl+C with a selection, Ctrl+Shift+C / Ctrl+V, Ctrl+Shift+V, Shift+Insert |
+| Font size | Ctrl+= / Ctrl+- / Ctrl+0 |
+| Open settings | Ctrl+, |
+
+The full list, with every detail, is in the [Dutch manual](README.nl.md#sneltoetsen) and in *Help › Keyboard Shortcuts* inside ForgeTerm.
+
+## Settings
+
+ForgeTerm reads `%APPDATA%\ForgeTerm\settings.toml` on Windows and `~/.config/forgeterm/settings.toml` on Linux (or the file in `FORGETERM_SETTINGS`). Ctrl+, creates the file with an explanation per setting and opens it; saved changes apply within about two seconds. Mistakes show up in a bar at the top and that setting falls back to its default. ForgeTerm never writes to an existing settings file.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `terminal.font_size` | 14 | 8–32 |
+| `terminal.scrollback` | 10000 | lines per terminal (0–100000) |
+| `terminal.default_shell` | first one found | name as in *New tab with…*, e.g. `"Git Bash"` |
+| `terminal.start_directory` | ForgeTerm's start folder | folder of the first tab |
+| `terminal.shell_integration` | true | shells report their folder and mark prompts and commands |
+| `explorer.visible` / `follow_terminal` / `show_hidden` | false / true / false | explorer |
+| `[keys]` | (empty) | your own shortcuts: `"Ctrl+K" = "command_palette"`, `= "none"` removes a default |
+| `workspace.restore_session` | true | restore tabs, splits, folders and viewer files at start |
+
+## Building from source
+
+Requirements: Rust 1.88 or newer (stable). On Windows also the Visual Studio C++ Build Tools and the Windows SDK.
+
+```bash
+git clone https://github.com/erikvandeblaak/ForgeTerm.git
+cd ForgeTerm
 cargo run --release
 ```
 
-Vereist: Rust (stable) en op Windows de Visual Studio C++ Build Tools + Windows SDK.
+Quality gate before a change counts as done:
 
-## Sneltoetsen
+```bash
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+```
 
-| Actie | Toets |
+Packages: `pwsh scripts\package-windows.ps1` builds the zip and, with [NSIS 3](https://nsis.sourceforge.io), the installer. `bash scripts/package-linux.sh` builds the `.deb` (needs `cargo-deb` and `dpkg-dev`).
+
+### Project layout
+
+ForgeTerm is a Cargo workspace of nine crates. The terminal engine contains no GUI code, so it can be tested on its own, and the workspace denies `unsafe` code apart from two documented places.
+
+| Crate | Purpose |
 |---|---|
-| **Command Palette** (alle acties, fuzzy zoeken) | **Ctrl+Shift+P** |
-| Nieuwe tab (standaardshell) | Ctrl+Shift+T, of **+** in de tabbalk |
-| Nieuwe tab met shell N (zie menu *New tab with…*) | Ctrl+Shift+1 … 9 |
-| Naar tab N | Alt+1 … 9 |
-| Volgende / vorige tab | Ctrl+Tab / Ctrl+Shift+Tab |
-| Splitsen naast elkaar / onder elkaar | Alt+Shift+= / Alt+Shift+- |
-| Focus naar pane links/rechts/boven/onder | Alt+pijltjes, of klik in de pane |
-| Pane (of tab) sluiten | Ctrl+Shift+W, of **×** op de tab |
-| Pane-grootte | Sleep de scheidingslijn |
-| Pane maximaliseren / terug | Ctrl+Shift+Enter |
-| Shell herstarten, scrollback wissen, naar begin/eind scrollen | via de Command Palette of het menu Terminal |
-| Menubalk (File, Edit, View, Terminal, Help) | klik op een titel; daarna ←→ ↑↓ Enter Esc |
-| Bestandsverkenner | **Ctrl+Shift+E**: verborgen → tonen met toetsenbord, zichtbaar → toetsenbord erheen, al actief → verbergen. In de boom: ↑↓ PgUp/PgDn Home/End, → uitklappen / naar eerste item, ← inklappen / naar oudermap, Enter = map open/dicht of bestand in de viewer (die krijgt dan het toetsenbord), Esc = terug naar de terminal (gewoon typen ook: de toets gaat meteen naar de terminal). Ververst vanzelf als er bestanden bijkomen of verdwijnen |
-| Andere map in de verkenner | knop **…** of View → Go to Folder…: pad typen of plakken (`~` = thuismap, relatief = vanaf de huidige map), Enter |
-| Instellingen openen (`settings.toml`, wordt live toegepast) | **Ctrl+,** of File → Open Settings File |
-| AI-werkplek (Claude Code / Codex starten, projectcontext) | **Ctrl+Shift+A** of menu AI |
-| Prompt Studio (sjabloon kiezen, variabelen invullen, invoegen zonder Enter) | **Ctrl+Shift+I** of AI → Prompt Studio |
-| Prompt Studio naast de terminal (of weer zwevend) | knop *Dock beside terminal* / *Float* in de studio, of AI → Prompt Studio Beside Terminal / Floating |
-| Monitor: CPU en geheugen van het systeem en per terminal (echte metingen) | **Ctrl+Shift+M** of View → Toggle Monitor |
-| Code-viewer (bestanden bekijken met kleuring, minimap, zoeken) | **Ctrl+Shift+O**, View in de verkenner, of *Open in viewer* in een Git-diff |
-| Git-paneel (status, diff, stage/unstage, commit, recente commits) | **Ctrl+Shift+G**, menu Git, of klik op de branch in de statusbalk |
-| Pad in de terminal zetten (gequote voor de shell, níet uitgevoerd) | dubbelklik op bestand, knop *Insert path*, of sleep een bestand uit Windows Verkenner op het venster |
-| Link in de terminal openen | **Ctrl+klik** (Ctrl ingedrukt = link onderstreept); alleen `http`/`https` |
-| Bestand uit een foutmelding openen | **Ctrl+klik** op `src/main.rs:42:5`, `Program.cs(12,5)`, `File "app.py", line 3`, `Update(src/lib.rs)` of `src/x.rs:12-30`: de code-viewer opent op die regel (alleen lezen). Relatieve paden worden gezocht in de map van de terminal en daarna in de projectroot |
-| Van commando naar commando springen (shell-integratie) | **Ctrl+Shift+↑ / ↓**. Elke prompt krijgt een balkje in de linkermarge: mint = gelukt, koraal = mislukt (exit-code ≠ 0), cyaan = loopt nog, grijs = onbekend (cmd meldt geen exit-codes) |
-| Uitvoer van het laatste commando kopiëren | Terminal → Copy Last Command Output (prompt, commando en uitvoer; max. 2000 regels, het eind blijft) |
-| Die uitvoer bij de prompt van Claude Code / Codex zetten | AI → Insert Last Command Output into Agent: als Markdown-blok met commando en exit-code, **zonder Enter**; het agent-tabblad krijgt de focus zodat je je vraag erbij typt |
-| Zien welk tabblad op je wacht | badge op de tab: *needs you* / *done* / *failed* / *working* (programma's die OSC 7501 melden) of *bell* (bel in een tab waar je niet naar kijkt). Is het venster niet actief, dan knippert de taakbalkknop. Verdwijnt zodra je de tab bekijkt |
-| Zoeken in terminaluitvoer en scrollback | **Ctrl+Shift+F** (typen zoekt meteen; Enter/F3 ouder, Shift+F3 nieuwer, Ctrl+C kopieert de treffer, Esc sluit) |
-| Kopiëren | **Ctrl+C** als er een selectie is (zonder selectie gaat Ctrl+C als onderbreking naar het programma), Ctrl+Shift+C |
-| Plakken | **Ctrl+V** (Windows), Ctrl+Shift+V, Shift+Insert, rechtermuisklik. Meerdere regels zonder bracketed paste vragen eerst bevestiging. Op Linux blijft Ctrl+V van het programma (zoals in andere Linux-terminals) |
-| Knippen | Niet in de terminal: terminaltekst is uitvoer en kan niet worden weggeknipt. In tekstvelden (palette) werken Ctrl+X/C/V gewoon |
-| Scrollback | Muiswiel, Shift+PageUp / Shift+PageDown |
-| Lettergrootte | Ctrl+= / Ctrl+- / Ctrl+0 |
-| Shell herstarten na een fout-exit | Enter (een schone `exit` sluit de pane) |
+| `forgeterm-terminal` | session (PTY + emulator), input encoding, palette, shell detection, path quoting per shell |
+| `forgeterm-app` | the [iced](https://github.com/iced-rs/iced) application, canvas renderer, theme |
+| `forgeterm-agents` | find Claude Code and Codex, versions, project context (read only) |
+| `forgeterm-prompts` | Prompt Studio templates and variables |
+| `forgeterm-git` | Git through the CLI (porcelain v2) with safe fixed options |
+| `forgeterm-viewer` | file loading, syntax highlighting (syntect), search |
+| `forgeterm-explorer` | file tree; never changes the file system |
+| `forgeterm-settings` | `settings.toml`: tolerant loading, template |
+| `forgeterm-system` | CPU and memory per terminal (sysinfo, read only) |
 
-## Prompt Studio
+More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/TEST_PLAN.md](docs/TEST_PLAN.md) (in Dutch).
 
-Sjablonen met `{{variabelen}}`. ForgeTerm vult in wat het echt weet (`project`, `project_path`, `cwd`, `selection` = geselecteerde terminaltekst, `file` = in de verkenner geselecteerd bestand, relatief aan de projectroot); al het andere typ je zelf. **Insert (no Enter)** zet de tekst bij de prompt van de gefocuste terminal; jij beslist wanneer je verstuurt. Meerregelige tekst in een shell zonder bracketed paste vraagt eerst bevestiging. **Copy** zet hem op het klembord.
+## Status and known limitations
 
-**Naast de terminal:** met *Dock beside terminal* wordt de studio een paneel rechts van de terminal. De terminal blijft gewoon werken: klik in een veld om te typen (cyaan rand, cursor in de terminal wordt hol), **Esc** of een klik in de terminal geeft het toetsenbord terug, **Tab** springt tussen velden. *Insert* zet de tekst in de terminal die op dat moment focus heeft en laat het paneel open, zodat je meteen het volgende sjabloon kunt invullen. *Float* maakt er weer een zwevend venster van. De plek wordt onthouden in de sessie (met `restore_session`); ingevulde waarden niet.
+ForgeTerm is young (version 0.1). Tested on Windows 11 with PowerShell 7, Windows PowerShell, cmd, Git Bash, Claude Code and Codex. Linux is built and tested in WSL with Ubuntu 24.04, the base of Linux Mint 22, but not yet on a real Mint desktop.
 
-Eigen sjablonen: `.md`-bestanden in de map `prompts` naast `settings.toml` (AI → Open Prompts Folder maakt de map met een voorbeeld). Optionele front matter `name:` en `description:`; een eigen bestand met dezelfde naam als een ingebouwd sjabloon (bijv. `review-file.md`) vervangt dat.
+- The installer is not code-signed.
+- One theme (Forge Dark) and no font choice yet.
+- Emoji are monochrome.
+- No IME (Chinese or Japanese input). Dead keys (US-International) do work.
+- No macOS version.
 
-## Code-viewer
+The complete, honest list is in [docs/ROADMAP.md](docs/ROADMAP.md#bekende-beperkingen-eerlijk).
 
-Bekijk bestanden naast je terminals, alleen lezen: syntaxkleuring (Rust, Python, JS, C/C++, C#, Go, Java, JSON, YAML, Markdown, shell, HTML, CSS, SQL, Makefile, …; onbekend = platte tekst), regelnummers en een **minimap** (code glance) rechts: klik om erheen te springen, sleep om te scrollen. Meerdere bestanden als tabbladen. Klik en sleep om regels te selecteren (Shift+klik breidt uit), **Ctrl+C** kopieert ze, Ctrl+A alles, **Ctrl+F** zoekt (Enter/F3 volgende, Shift+F3 vorige, Esc sluit). Pijltjes, PgUp/PgDn, Home/End scrollen zolang de viewer de focus heeft (klik in de terminal geeft de focus terug). Een bestand dat buiten ForgeTerm wijzigt, wordt automatisch opnieuw geladen. Limieten: tot 8 MB, kleuring tot 2 MB / 50.000 regels, binaire bestanden worden geweigerd; UTF-8 en UTF-16 (met BOM) worden herkend, besturingstekens zichtbaar gemaakt (nooit uitgevoerd).
+## Contributing
 
-## Git
+Bug reports and ideas are welcome in the [issues](https://github.com/erikvandeblaak/ForgeTerm/issues). Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Security problems: see [SECURITY.md](SECURITY.md).
 
-De statusbalk toont branch, ahead/behind en het aantal gewijzigde bestanden van de map van de gefocuste terminal (elke 4 s en bij elke mapwissel bijgewerkt). Het Git-paneel toont conflicten, staged, changes en untracked bestanden; klik op een bestand voor de diff (Esc sluit), **+** / **−** staget of unstaget, en *Commit* voert `git commit -m` uit met de hooks van de repository. **Branches**: wisselen (vraagt eerst bevestiging; git weigert als lokale wijzigingen overschreven zouden worden en die melding wordt getoond), nieuwe branch vanaf de huidige commit, remote branch volgen (*Track*). **History & activity** (knop in het paneel, Git-menu of palette): commits per dag over 30 dagen (uit `git log`, lokale kalenderdag), de laatste 300 commits en per commit header, bestandsoverzicht en diff. Push, pull, discard en verwijderen van branches gaan bewust via de terminal.
+## License
 
-Veilig in onbekende repositories: lezen voert nooit door de repository geconfigureerde programma's uit (`core.fsmonitor` uit, diffs met `--no-ext-diff --no-textconv`), achtergrond-status neemt geen `index.lock` (`--no-optional-locks`), git vraagt nooit om invoer. Vereist `git` op PATH.
+ForgeTerm is licensed under either of
 
-## Installeren
+- [Apache License, Version 2.0](LICENSE-APACHE)
+- [MIT license](LICENSE-MIT)
 
-**Windows 11** — `ForgeTerm-<versie>-setup-x64.exe`: installeert per gebruiker (geen beheerdersrechten) naar `%LOCALAPPDATA%\Programs\ForgeTerm`, met snelkoppeling in het Startmenu (bureaublad optioneel) en een vermelding onder *Instellingen › Apps*. Verwijderen haalt alleen de geïnstalleerde bestanden weg; je instellingen en sessie in `%APPDATA%\ForgeTerm` blijven staan. Draait ForgeTerm nog, dan vraagt de installer of verwijderaar eerst om het te sluiten. De installer is niet ondertekend: SmartScreen meldt "Onbekende uitgever" (*Meer info › Toch uitvoeren*). Zonder installer: de zip uitpakken en `forgeterm.exe` starten.
+at your option. Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in ForgeTerm by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 
-**Linux Mint 22 / Ubuntu 24.04** — `forgeterm_<versie>-1_amd64.deb`:
+Third-party: JetBrains Mono (SIL Open Font License 1.1, `assets/fonts/JetBrainsMono-OFL.txt`), iced (MIT), alacritty_terminal (Apache-2.0). Release packages include `THIRD-PARTY.txt` with the license of every compiled-in crate.
 
-```
-sudo apt install ./forgeterm_0.1.1-1_amd64.deb     # verwijderen: sudo apt remove forgeterm
-```
+## Author
 
-Installeert `/usr/bin/forgeterm`, een menu-item (*Systeemgereedschap / Ontwikkeling*) met icoon, en de documentatie in `/usr/share/doc/forgeterm`. apt haalt ontbrekende bibliotheken zelf op (X11/Wayland, xkbcommon, EGL; aanbevolen: git en Vulkan). Getest in WSL Ubuntu 24.04 (pakketinhoud, afhankelijkheden via `apt-get install --simulate`, starten en Wayland-app-id); nog niet op een echte Mint-desktop.
-
-Controleer een download met het bijbehorende `.sha256`-bestand (`Get-FileHash` / `sha256sum`).
-
-## Release bouwen
-
-Windows (zip, en de installer als [NSIS 3](https://nsis.sourceforge.io) aanwezig is: op PATH, in de standaardmap, of `-Makensis <pad>`):
-
-```
-pwsh scripts\package-windows.ps1
-```
-
-Maakt `dist\ForgeTerm-<versie>-windows-x64.zip` en `dist\ForgeTerm-<versie>-setup-x64.exe` (elk + `.sha256`) met `forgeterm.exe` (met icoon, zonder consolevenster), deze README, de lettertypelicentie en `THIRD-PARTY.txt`: alle meegecompileerde crates met hun licentie, gegenereerd uit `cargo tree`. Het installerscript staat in `packaging/windows/forgeterm.nsi`.
-
-Linux (.deb; vereist `cargo install --locked cargo-deb` en `dpkg-dev`):
-
-```
-bash scripts/package-linux.sh
-```
-
-Maakt `dist/forgeterm_<versie>-1_amd64.deb` (+ `.sha256`). Pakketgegevens: `[package.metadata.deb]` in `crates/forgeterm-app/Cargo.toml`; menu-item: `packaging/linux/forgeterm.desktop`.
-
-## Ontwikkelen in VS Code
-
-Open de map in VS Code; aanbevolen extensies worden voorgesteld (`.vscode/extensions.json`).
-
-| Actie | Hoe |
-|---|---|
-| Bouwen | `Ctrl+Shift+B` |
-| Debuggen | `F5` → *ForgeTerm — Debug (testinstellingen)*: gebruikt `target/dev/settings.toml`, je echte instellingen blijven onaangeroerd. *Debug (eigen instellingen)* gebruikt je gewone `settings.toml` |
-| Release testen | `F5` → *ForgeTerm — Release (testinstellingen)*; log in `target/forgeterm-release.log` |
-| Starten zonder debugger | Task *ForgeTerm starten* / *ForgeTerm starten (testinstellingen)* |
-| Tests | *Tasks: Run Test Task*, de Testing-zijbalk, of de ▶ Run / Debug-lens boven een test |
-| Tests debuggen | `F5` → *Tests debuggen: library-crate kiezen* of *Tests debuggen: app* (vraagt crate + testfilter) |
-| Kwaliteitspoort | Task *Kwaliteitspoort*: fmt-check → clippy → clippy Linux-target → alle tests |
-| Overig | Tasks *Probe*, *cargo doc (openen)*, *Windows-pakket bouwen* |
-
-Tasks start je via `Ctrl+Shift+P` → *Tasks: Run Task*. Opslaan formatteert automatisch (rustfmt) en zet regeleindes op LF. rust-analyzer draait clippy bij opslaan en gebruikt een eigen target-map, zodat het de build niet blokkeert. Voor Linux-code (`#[cfg(unix)]`) met volledige IDE-hulp: zet tijdelijk `rust-analyzer.cargo.target` in `.vscode/settings.json`.
-
-## Documentatie
-
-- [Architectuur](docs/ARCHITECTURE.md)
-- [Roadmap & bekende beperkingen](docs/ROADMAP.md)
-- [Design system](docs/DESIGN_SYSTEM.md)
-- [Testplan](docs/TEST_PLAN.md)
-
-## Licenties van derden
-
-JetBrains Mono — SIL Open Font License 1.1 (`assets/fonts/JetBrainsMono-OFL.txt`).
-Iced (MIT), alacritty_terminal (Apache-2.0).
-
-## Instellingen
-
-ForgeTerm leest `%APPDATA%\ForgeTerm\settings.toml` (Linux: `$XDG_CONFIG_HOME/forgeterm/settings.toml`, anders `~/.config/forgeterm/`). Met `FORGETERM_SETTINGS=<pad>` kies je een ander bestand. **Ctrl+,** maakt het bestand (met uitleg per instelling) aan als het nog niet bestaat en opent het (Windows: Kladblok; Linux: `xdg-open`); opgeslagen wijzigingen worden binnen ~2 seconden toegepast.
-
-| Instelling | Standaard | Betekenis |
-|---|---|---|
-| `terminal.font_size` | 14 | 8–32 |
-| `terminal.scrollback` | 10000 | regels per terminal (0–100000), voor nieuwe terminals |
-| `terminal.default_shell` | eerste gevonden | naam zoals in "New tab with…", bv. `"Git Bash"` |
-| `terminal.start_directory` | startmap van ForgeTerm | map van de eerste tab |
-| `terminal.shell_integration` | true | shells melden hun map en markeren prompts en commando's (geen profielwijzigingen) |
-| `explorer.visible` / `follow_terminal` / `show_hidden` | false / true / false | verkenner |
-| `[keys]` | (leeg) | eigen sneltoetsen: `"Ctrl+K" = "command_palette"`, `= "none"` haalt een standaardtoets weg; namen staan in Help → Keyboard Shortcuts |
-| `workspace.restore_session` | true | bij het starten de tabs, splits (met hun map) en viewer-bestanden van de vorige keer terugzetten |
-
-Fouten (typefout, onbekende sleutel, waarde buiten bereik) verschijnen in een balk bovenin; die instelling valt terug op de standaard. Een syntaxfout tijdens het bewerken laat de huidige instellingen staan. ForgeTerm schrijft nooit in een bestaand instellingenbestand.
-
-**Sessie:** de indeling staat in `session.toml` naast `settings.toml` (alleen shell, map en splitverhouding per pane, de actieve tab en de open viewer-bestanden; nooit terminaluitvoer of commando's). Agents komen terug als gewone shell in hun projectmap, zodat er nooit vanzelf een agent start. Verwijderen kan altijd; dan start ForgeTerm met één tab.
+Made by **Erik van de Blaak**, AI Solutions Engineer and full-stack developer in the Netherlands.
+[vandeblaak.com](https://www.vandeblaak.com/?lang=en) · [ForgeTerm downloads](https://www.vandeblaak.com/downloads/?lang=en)
