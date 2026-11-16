@@ -1,0 +1,14 @@
+[package]
+name = "forgeterm-docker"
+description = "ForgeTerm Docker support through the docker CLI: list, start and stop containers; shell and log commands. UI-agnostic, no dependencies."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

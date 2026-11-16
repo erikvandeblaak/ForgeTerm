@@ -46,6 +46,7 @@ Start de app vanuit een omgeving **zonder** `NO_COLOR` (Claude Code zet die; Pow
 - `crates/forgeterm-system` — processen in de terminals (sysinfo, alleen lezen): welke programma's een shell nog draait; GPU-gebruik via NVML (NVIDIA) en amdgpu-sysfs, anders "niet beschikbaar" met reden
 - `crates/forgeterm-settings` — `settings.toml` laden (tolerant, problemen als tekst), template, pad
 - `crates/forgeterm-fs` — padveiligheid zonder dependencies: `is_local_path`, `resolves_locally` (geen symlink/junction naar een netwerkshare volgen); gebruik dit vóór elke bestandssysteemaanroep op een pad van buiten (terminaluitvoer, repo, sessiebestand)
+- `crates/forgeterm-docker` — Docker via de `docker`-CLI (zonder dependencies): containers lijsten, starten, stoppen; argumenten voor een shell of de log in een terminal; container-ids gecontroleerd; nooit verwijderen
 - `crates/forgeterm-explorer` — bestandsboom (lezen, sorteren, verborgen, lazy uitklappen); wijzigt nooit het bestandssysteem
 - `crates/forgeterm-app` — iced-applicatie, canvas-renderer, thema-tokens
 - `assets/` — fonts (OFL), branding

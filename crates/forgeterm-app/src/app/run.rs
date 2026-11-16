@@ -24,7 +24,13 @@ impl App {
                 }
                 let entries = self.palette_entries();
                 self.command_palette = Some(CommandPalette::new(entries, &self.recent_commands));
-                return iced::widget::operation::focus(command_palette::INPUT_ID);
+                // Containers change outside ForgeTerm: a fresh list while the palette
+                // is open (it updates when the answer arrives).
+                let refresh = self.refresh_docker(false);
+                return Task::batch([
+                    iced::widget::operation::focus(command_palette::INPUT_ID),
+                    refresh,
+                ]);
             }
             CommandId::NewTab => return self.new_tab(None, None),
             CommandId::NewSshTab(i) => return self.new_ssh_tab(i),
@@ -158,6 +164,11 @@ impl App {
                 }
             }
             CommandId::ReloadSettings => self.load_settings(false),
+            CommandId::DockerRefresh => return self.refresh_docker(true),
+            CommandId::DockerShell(key) => return self.docker_terminal(key, true),
+            CommandId::DockerLogs(key) => return self.docker_terminal(key, false),
+            CommandId::DockerStart(key) => return self.docker_start_stop(key, true),
+            CommandId::DockerStop(key) => return self.docker_start_stop(key, false),
             CommandId::SetTheme(choice) => self.apply_theme(choice),
             // Like VS Code: hidden → show with the keyboard, shown → take the
             // keyboard, already focused → hide (keyboard back to the terminal).
@@ -520,6 +531,14 @@ impl App {
             | CommandId::SplitDown => focused.is_some(),
             CommandId::NewTabWithShell(i) => i < self.shells.len(),
             CommandId::NewSshTab(i) => self.ssh_program.is_some() && i < self.ssh_hosts.len(),
+            CommandId::DockerRefresh => self.docker.program.is_some(),
+            CommandId::DockerShell(key) | CommandId::DockerStop(key) => {
+                self.docker_container(key).is_some_and(|c| c.is_running())
+            }
+            CommandId::DockerStart(key) => {
+                self.docker_container(key).is_some_and(|c| !c.is_running())
+            }
+            CommandId::DockerLogs(key) => self.docker_container(key).is_some(),
             CommandId::SelectTab(i) => i < self.workspace.tabs.len() && i != self.workspace.active,
             CommandId::OpenPromptsFolder => self.prompts_dir().is_some(),
             CommandId::GitShowHistory => self.git.root().is_some(),
@@ -629,6 +648,21 @@ impl App {
                 format!("Theme: {} (current)", t.name())
             }
             CommandId::SetTheme(t) => format!("Theme: {}", t.name()),
+            CommandId::DockerShell(key)
+            | CommandId::DockerLogs(key)
+            | CommandId::DockerStart(key)
+            | CommandId::DockerStop(key) => match self.docker_container(key) {
+                Some(c) => {
+                    let verb = match id {
+                        CommandId::DockerShell(_) => "Open Shell in",
+                        CommandId::DockerLogs(_) => "Follow Logs of",
+                        CommandId::DockerStart(_) => "Start",
+                        _ => "Stop",
+                    };
+                    format!("{verb} {} ({}, {})", c.name, c.image, c.status)
+                }
+                None => id.static_title().to_owned(),
+            },
             CommandId::NewSshTab(i) => self.ssh_hosts.get(i).map_or_else(
                 || id.static_title().to_owned(),
                 |h| format!("New SSH Tab: {} ({})", h.alias, h.target()),
@@ -696,6 +730,17 @@ impl App {
         for i in 0..self.ssh_hosts.len() {
             let id = CommandId::NewSshTab(i);
             entries.push(entry(id, self.command_title(id)));
+        }
+        for c in &self.docker.containers {
+            let key = c.key();
+            for id in [
+                CommandId::DockerShell(key),
+                CommandId::DockerLogs(key),
+                CommandId::DockerStart(key),
+                CommandId::DockerStop(key),
+            ] {
+                entries.push(entry(id, self.command_title(id)));
+            }
         }
         for t in ThemeChoice::ALL {
             let id = CommandId::SetTheme(t);

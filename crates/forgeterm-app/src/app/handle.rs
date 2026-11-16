@@ -104,6 +104,8 @@ impl App {
             }
             Message::TermFindClose => self.term_find = None,
             Message::DismissNotice => self.notice = None,
+            Message::DockerListed(result, explicit) => return self.docker_listed(result, explicit),
+            Message::DockerDone(result, what) => return self.docker_done(result, what),
             Message::MonitorSampled(sample) => {
                 self.record_mission_cpu(&sample);
                 self.monitor.record(*sample);

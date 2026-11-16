@@ -126,6 +126,13 @@ pub enum CommandId {
     WorktreeTerminal(u64),
     GitRefresh,
     GitShowHistory,
+    /// Reads the container list again (`docker ps -a`).
+    DockerRefresh,
+    /// Container actions carry `forgeterm_docker::Container::key`, never a list index.
+    DockerShell(u64),
+    DockerLogs(u64),
+    DockerStart(u64),
+    DockerStop(u64),
     /// Switches the color theme for this session (settings.toml keeps the default).
     SetTheme(ThemeChoice),
     About,
@@ -209,6 +216,7 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::CompareInsertPrompt,
     CommandId::About,
     CommandId::Website,
+    CommandId::DockerRefresh,
     CommandId::Quit,
 ];
 
@@ -229,6 +237,10 @@ impl CommandId {
                 | RemoveWorktree(_)
                 | CloseTabAt(_)
                 | NewSshTab(_)
+                | DockerShell(_)
+                | DockerLogs(_)
+                | DockerStart(_)
+                | DockerStop(_)
         )
     }
 
@@ -242,6 +254,8 @@ impl CommandId {
             NewTab
                 | NewTabWithShell(_)
                 | NewSshTab(_)
+                | DockerShell(_)
+                | DockerLogs(_)
                 | NextTab
                 | PreviousTab
                 | SelectTab(_)
@@ -333,6 +347,9 @@ impl CommandId {
             | CompareSwap
             | CompareOpenTests
             | CompareInsertPrompt => "Git",
+            DockerRefresh | DockerShell(_) | DockerLogs(_) | DockerStart(_) | DockerStop(_) => {
+                "Docker"
+            }
             About | Website | KeyboardShortcuts => "Help",
             Quit => "App",
         }
@@ -367,6 +384,11 @@ impl CommandId {
             // Per-terminal actions exist only for live terminals: not bindable.
             GoToTerminal(_) => "go_to_terminal",
             NewSshTab(_) => "new_ssh_tab",
+            DockerShell(_) => "docker_shell",
+            DockerLogs(_) => "docker_logs",
+            DockerStart(_) => "docker_start",
+            DockerStop(_) => "docker_stop",
+            DockerRefresh => "docker_refresh",
             TerminalFolder(_) => "terminal_folder",
             TerminalGit(_) => "terminal_git",
             StopTerminal(_) => "stop_terminal",
@@ -474,6 +496,11 @@ impl CommandId {
             NewTab => "New Tab",
             NewTabWithShell(_) => "New Tab with Shell",
             NewSshTab(_) => "New SSH Tab",
+            DockerRefresh => "Refresh Containers",
+            DockerShell(_) => "Open Shell in Container",
+            DockerLogs(_) => "Follow Container Logs",
+            DockerStart(_) => "Start Container",
+            DockerStop(_) => "Stop Container",
             CloseTab => "Close Tab",
             ClosePane => "Close Pane",
             NextTab => "Next Tab",

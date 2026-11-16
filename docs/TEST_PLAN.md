@@ -472,6 +472,18 @@ Zie `docs/PERFORMANCE.md` voor de cijfers. GUI-controles van de wijzigingen:
 | TH10 | Linux (WSLg, `FORGETERM_SCREENSHOT`): Arctic met verkenner; bash-prompt (groen/blauw), tekst en statusbalk leesbaar | ✅ |
 | TH11 | Onafhankelijke review: een afgelopen terminal die openblijft (exitcode ≠ 0) hield na een themawissel de oude kleuren. Nu bewaart het paneel het scherm (`EndedScreen`) en tekent het opnieuw in het nieuwe palet; een paneel zonder shell krijgt een leeg beeld in de nieuwe kleuren (`ended_screen_redraws_in_a_new_palette`). GUI: `exit 3` in PowerShell, daarna Arctic: tekst en melding "exited with code 3" in de nieuwe kleuren | ✅ |
 
+### Docker (2026-11-16, Windows 11, Docker Desktop 29.9.2, wegwerpcontainer `forgeterm-test-1` van `postgres:18` met `sleep`)
+
+| # | Stap | Resultaat |
+|---|---|---|
+| DK1 | Palette "forgeterm-test": Open Shell, Follow Logs en Stop van de testcontainer, met image en status; de lijst kwam binnen terwijl de palette open was | ✅ |
+| DK2 | Open Shell: tab "Docker: forgeterm-test-1", `root@<id>`, `echo`, `hostname` (= container-id) en `ls /` werken; statusbalk zonder lokale map | ✅ |
+| DK3 | Follow Logs: tab "Logs: forgeterm-test-1" met de echo-regels van de container | ✅ |
+| DK4 | Stop en start (crate-test `stop_and_start_a_test_container`, alleen met `FORGETERM_TEST_CONTAINER`): gestopt → niet meer running, gestart → weer running; onbekend id geeft de fout van docker | ✅ |
+| DK5 | Engine uit: "Docker is installed, but its engine is not running" (unit, met de echte foutmelding van Docker Desktop) | ✅ |
+| DK6 | Statusbalk van een SSH- of containertab toonde de git-status van de lokale map → nu niet meer | ✅ na fix |
+| DK7 | Bewust niet via de GUI-palette gestopt: fuzzy zoeken kan een andere container kiezen dan bedoeld; daarom stop/start via de crate op de testcontainer | — |
+
 ### SSH-profielen (2026-11-16, Windows 11, `USERPROFILE` naar een testmap met `.ssh/config`)
 
 | # | Stap | Resultaat |

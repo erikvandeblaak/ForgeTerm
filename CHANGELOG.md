@@ -2,6 +2,14 @@
 
 All notable changes to ForgeTerm. Dates are release dates.
 
+## [Unreleased]
+
+### Added
+- **Docker** (when the `docker` CLI is installed): the containers appear in the command palette. Open a shell in a running container or follow its log, each in its own tab, and start or stop a container. ForgeTerm never removes containers, images or volumes, and without a running engine it says so.
+
+### Changed
+- An SSH or container tab no longer shows the local folder's Git status in the status bar.
+
 ## [0.2.0] – 2026-11-16
 
 Source only for now: there is no 0.2.0 download yet (the latest installer is 0.1.1).

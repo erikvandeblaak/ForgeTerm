@@ -127,6 +127,8 @@ pub fn menus(shell_count: usize, ssh_count: usize) -> Vec<Menu> {
                 C(CopyLastCommandOutput),
                 Sep,
                 C(RestartShell),
+                Sep,
+                C(DockerRefresh),
             ],
         },
         Menu {

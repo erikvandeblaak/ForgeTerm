@@ -26,6 +26,7 @@ forgeterm-prompts.workspace = true
 forgeterm-git.workspace = true
 forgeterm-viewer.workspace = true
 forgeterm-system.workspace = true
+forgeterm-docker.workspace = true
 # Same version iced already uses (no extra build): renders the window icon.
 resvg = "0.45"
 iced.workspace = true

@@ -16,7 +16,9 @@
                 "forgeterm-viewer",
                 "forgeterm-system",
                 "forgeterm-settings",
-                "forgeterm-explorer"
+                "forgeterm-explorer",
+                "forgeterm-fs",
+                "forgeterm-docker"
             ],
             "default": "forgeterm-terminal"
         },

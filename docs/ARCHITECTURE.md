@@ -60,7 +60,8 @@ ForgeTerm/
 │   ├── forgeterm-prompts/        # Prompt Studio-sjablonen: parsen, variabelen, invullen; unit-getest
 │   ├── forgeterm-git/            # Git via de CLI: status (porcelain v2), diff, log, branches, worktrees, vergelijken; tests tegen echte git
 │   ├── forgeterm-viewer/         # Code-viewer: laden, decoderen, kleuren (syntect, pure-Rust regex), zoeken; unit-getest + bench
-│   ├── forgeterm-system/         # Procesinfo (sysinfo): programma's die een shell nog draait; tests met echte processen
+│   ├── forgeterm-system/         # Procesinfo (sysinfo): programma's die een shell nog draait; GPU (NVML, amdgpu-sysfs); tests met echte processen
+│   ├── forgeterm-docker/         # Docker via de docker-CLI: containers lijsten/starten/stoppen, shell- en log-argumenten; nooit verwijderen
 │   ├── forgeterm-settings/       # settings.toml: tolerant laden, template, pad; unit-getest
 │   └── forgeterm-app/            # GUI (binary `forgeterm`)
 │       ├── src/app/mod.rs        # App-state, Message, update, subscriptions
