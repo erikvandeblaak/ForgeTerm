@@ -37,7 +37,7 @@ Legenda: ✅ klaar en getest · 🟡 deels · ⬜ open. "Getest" betekent: daadw
 
 ## Fase 3 — Premium UI
 
-Design system ✅ (tokens), thema's ⬜ (alleen Forge Dark), Theme Editor ⬜, animaties ⬜, Command Palette ✅, splashscreen ⬜ (met reduced-motion en uitschakelbaar), logo ✅ (eerste versie, `assets/branding`).
+Design system ✅ (kleur-, tekst-, ruimte- en radiustokens), thema's ✅ Windows (Midnight, Graphite, Arctic, Cyber, High Contrast; wisselen zonder herstart, contrast getest; 2026-11-16), Theme Editor ⬜, animaties ⬜ (reduced motion pas zinvol als er animaties zijn), Command Palette ✅, splashscreen ⬜ (met reduced-motion en uitschakelbaar), logo ✅ (eerste versie, `assets/branding`).
 
 ## Fase 4 — Analytics
 
@@ -73,7 +73,7 @@ App-icoon: venster (gerenderd uit het SVG-logo) en `forgeterm.exe` (ICO via buil
 - **Explorer:** geen bestandsbewerkingen (bewust: alleen lezen). Automatisch verversen ziet nieuwe, verwijderde en hernoemde items (wijzigingstijd van de map, elke 2 s, alleen zichtbare mappen), geen wijzigingen ín een bestand (niet nodig voor de boom). Map kiezen via een pad-veld (*Go to Folder…*), geen native mapdialoog (zou op Linux GTK/portal vereisen). Geen typ-om-te-zoeken in de boom: typen gaat naar de terminal. Paneelbreedte vast (270 px).
 - **cmd en `%VAR%`:** in interactieve cmd wordt `%NAAM%` ook binnen quotes uitgebreid als die variabele bestaat; dat is in cmd niet te escapen.
 - **WSL-quoting** (`/mnt/c/…`) is unit-getest maar niet in een echte WSL-shell uitgevoerd.
-- **Instellingen** worden niet vanuit de UI geschreven (zoom/verkenner-toggles gelden voor de sessie). Geen instellingen-UI; het bestand is de bron. Nog geen thema-, lettertype-familie- of sneltoetsinstellingen.
+- **Instellingen** worden niet vanuit de UI geschreven (zoom/verkenner-toggles gelden voor de sessie). Geen instellingen-UI; het bestand is de bron. Thema en sneltoetsen staan in het bestand; nog geen lettertype-familie.
 - **Afsluiten** vraagt alleen bevestiging als er in een shell nog een programma draait (kindproces van de shell); een shell die alleen op de prompt wacht, sluit direct. Programma's die niet als kind van de shell lopen (bijv. losgekoppeld gestart), worden niet gezien.
 - **Geen Alt-mnemonics in de menubalk** (Alt+F enz. horen bij de shell); menu's openen met de muis of via de Command Palette.
 - **Tab-sneltoets Alt+1…9** i.p.v. Ctrl+Alt+N: Ctrl+Alt is AltGr op Windows en typt tekens op veel layouts.

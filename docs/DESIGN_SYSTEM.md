@@ -1,6 +1,30 @@
 # ForgeTerm — Design System
 
-Bron in code: `crates/forgeterm-app/src/theme.rs` (UI) en `crates/forgeterm-terminal/src/palette.rs` (terminal). Wijzig kleuren alleen daar.
+Bron in code: `crates/forgeterm-app/src/theme.rs`. Daar staan per thema de UI-kleuren, het terminalpalet en de codekleuren, plus de maten voor tekst, ruimte en radius. Wijzig kleuren alleen daar. `Palette::forge_dark()` in `forgeterm-terminal` is de standaard van de engine; een test bewaakt dat Midnight gelijk is.
+
+## Thema's
+
+| Thema | Karakter | Instelling |
+|---|---|---|
+| **Midnight** | diep blauwzwart met cyaan; de oorspronkelijke Forge Dark (standaard) | `midnight` |
+| **Graphite** | neutraal donkergrijs zonder blauwzweem, rustigere accenten | `graphite` |
+| **Arctic** | licht; donkerdere accenten zodat ze op wit leesbaar zijn | `arctic` |
+| **Cyber** | violetzwart met neonaccenten | `cyber` |
+| **High Contrast** | zwart en wit, felle accenten, randen die opvallen | `high-contrast` |
+
+- **Kiezen:** `[appearance] theme = "…"` in `settings.toml` is de standaard. *View → Theme: …* (of de palette) probeert er een voor deze sessie, net als de lettergrootte. ForgeTerm schrijft nooit in het instellingenbestand.
+- **Wisselen** gebeurt zonder herstart: de UI, alle open terminals (en hun miniaturen in Mission Control) en de code-viewer krijgen direct de nieuwe kleuren. Programma's die naar de kleuren vragen (OSC 10/11) krijgen het nieuwe antwoord. Op Windows laat ConPTY die antwoorden vallen; op Linux werkt het (getest).
+- **Code-kleuring** levert rollen (commentaar, string, keyword, …); de app kiest de kleur per thema, dus wisselen kost geen nieuwe kleuring.
+- **Dezelfde semantiek** in elk thema: cyaan = primair/focus, mint = succes, violet = informatief, amber = waarschuwing, coral = fout. Gevulde accentknoppen dragen de achtergrondkleur als tekst (licht op donker accent in Arctic).
+- **Contrast** wordt per thema getest (`theme::tests::contrast_meets_the_design_system`):
+  - tekst ≥ 7:1 en gedempte tekst ≥ 4,5:1 op alle vier de oppervlakken;
+  - accenten ≥ 3:1 op die oppervlakken;
+  - tekst op selectie ≥ 4,5:1, en tekst op een cyaan knop ≥ 4,5:1;
+  - grafiekbalken ≥ 3:1;
+  - in de terminal: voorgrond ≥ 7:1 en élke ANSI-kleur ≥ 3:1 (zwart uitgezonderd in donkere thema's, waar programma's het als achtergrond gebruiken);
+  - codekleuren ≥ 3:1.
+- **Arctic:** ANSI wit en helder wit zijn middengrijs, zoals in de lichte thema's van VS Code. Programma's (PSReadLine, git) printen gewone tekst in "wit"; op een lichte achtergrond was dat onleesbaar (gezien in de GUI-test).
+- **Reduced motion:** ForgeTerm heeft geen animaties (geen knipperende cursor, geen overgangen, geen spinners). Een instelling daarvoor zou niets doen en komt er pas met de eerste animatie.
 
 ## Principes
 
@@ -49,11 +73,13 @@ Blauw is bewust donkerder dan de rest: programma's (o.a. PowerShell `-Background
 
 - Terminal: **JetBrains Mono** (Regular/Bold/Italic, OFL-1.1, gebundeld), standaard 14 px, Ctrl+= / Ctrl+- / Ctrl+0.
 - UI: **Fira Sans** (iced-ingebouwd) — tijdelijk; Inter (OFL) volgt bij de premium UI-fase.
-- Groottes UI: 15 (titel), 13 (primair), 12 (secundair).
+- Groottes UI (`theme::size`): `CAPTION` 10 (badges, as-labels), `TINY` 11 (tellers, hints), `SMALL` 12 (labels, lijstregels, knoppen), `BODY` 13 (primair), `LARGE` 14, `TITLE` 15 (dialoogtitels), `HEADING` 18 (koppen in dashboards). Eenmalige grote maten (grote getallen, het logo in About) staan bij hun gebruik.
 
 ## Ruimte en vorm
 
-Padding app-balk 8×14, statusbalk 5×14, terminal 10 rondom. Knopradius 6. Randen 1 px.
+- Afstand tussen items (`theme::space`): `XXS` 2, `XS` 4, `S` 6, `M` 8, `L` 10, `XL` 12, `XXL` 16.
+- Radius (`theme::radius`): `S` 4 (badges, chips), `M` 6 (knoppen, invoer, menuregels), `L` 8 (popovers, kaarten), `XL` 10 (panelen, dialogen). Ronde stippen gebruiken de helft van hun maat.
+- Padding staat nog bij de widgets (app-balk 8×14, statusbalk 5×14, terminal 10 rondom). Randen 1 px.
 
 ## Logo
 

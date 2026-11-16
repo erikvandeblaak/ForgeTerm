@@ -148,7 +148,8 @@ const GRAPHITE: Tokens = Tokens {
 };
 
 /// Arctic: light. Accents are darker so they read on white; filled accent buttons
-/// carry the (light) background color as text.
+/// carry the (light) background color as text. ANSI white and bright white are mid
+/// greys (as in VS Code's light themes): programs print ordinary text in them.
 const ARCTIC: Tokens = Tokens {
     choice: ThemeChoice::Arctic,
     obsidian: hex(0xF7F9FC),
@@ -180,8 +181,8 @@ const ARCTIC: Tokens = Tokens {
     ],
     terminal: TermPalette {
         ansi: ansi([
-            0x1B2431, 0xBF3732, 0x0A7A53, 0x8A5800, 0x2456C2, 0x7A3FB0, 0x007A8A, 0xC9D1DC,
-            0x5B6779, 0xD14C47, 0x138A60, 0x9E6600, 0x3A6BD9, 0x8E52C8, 0x0A8C9E, 0xE6EBF1,
+            0x1B2431, 0xBF3732, 0x0A7A53, 0x8A5800, 0x2456C2, 0x7A3FB0, 0x007A8A, 0x66707F,
+            0x4E5A6B, 0xD14C47, 0x138A60, 0x9E6600, 0x3A6BD9, 0x8E52C8, 0x0A8C9E, 0x7E8898,
         ]),
         foreground: Rgb::hex(0x1B2431),
         background: Rgb::hex(0xF7F9FC),
@@ -224,7 +225,7 @@ const CYBER: Tokens = Tokens {
     terminal: TermPalette {
         ansi: ansi([
             0x231B3E, 0xFF5D8F, 0x2EF2A0, 0xFFD15C, 0x5552E0, 0xC77DFF, 0x00E0F5, 0xD3CBEE,
-            0x5F5386, 0xFF8AB0, 0x7DF8C4, 0xFFE08F, 0x9C9CFF, 0xDCA8FF, 0x6CF0FA, 0xF7F4FF,
+            0x6B5F96, 0xFF8AB0, 0x7DF8C4, 0xFFE08F, 0x9C9CFF, 0xDCA8FF, 0x6CF0FA, 0xF7F4FF,
         ]),
         foreground: Rgb::hex(0xECE6FF),
         background: Rgb::hex(0x0A0714),
@@ -468,7 +469,13 @@ mod tests {
             let bg = to_color(p.background);
             let c = contrast(to_color(p.foreground), bg);
             assert!(c >= 7.0, "{name}: terminal text {c:.2}");
-            for i in [1, 2, 3, 5, 6] {
+            // Every color a program may print text in; black (0) is the exception
+            // on dark themes, where programs use it as a background.
+            let light = luminance(bg) > 0.5;
+            for i in 0..16 {
+                if i == 0 && !light {
+                    continue;
+                }
                 let c = contrast(to_color(p.ansi[i]), bg);
                 assert!(c >= 3.0, "{name}: ansi {i} {c:.2}");
             }

@@ -331,7 +331,8 @@ fn parse_appearance(t: &Table, out: &mut Appearance, problems: &mut Vec<String>)
                         None => {
                             let names: Vec<_> = ThemeChoice::ALL.iter().map(|t| t.id()).collect();
                             problems.push(format!(
-                                "{name} = \"{s}\" is not a theme; use one of: {}",
+                                "{name} = \"{s}\" is not a theme; using {}. Themes: {}",
+                                ThemeChoice::default().id(),
                                 names.join(", ")
                             ))
                         }
@@ -591,7 +592,10 @@ mod tests {
         assert_eq!(s.settings.appearance.theme, ThemeChoice::Midnight);
         assert_eq!(s.problems.len(), 2, "{:?}", s.problems);
         let all = s.problems.join("\n");
-        assert!(all.contains("\"solarized\" is not a theme"), "{all}");
+        assert!(
+            all.contains("\"solarized\" is not a theme; using midnight"),
+            "{all}"
+        );
         assert!(all.contains("midnight, graphite, arctic, cyber, high-contrast"));
         assert!(all.contains("unknown setting 'appearance.motion'"), "{all}");
         for t in ThemeChoice::ALL {

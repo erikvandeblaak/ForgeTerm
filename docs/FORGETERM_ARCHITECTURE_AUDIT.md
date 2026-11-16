@@ -102,7 +102,7 @@ Goed al: wakeup-coalescing, verborgen panes kosten bijna niets, viewer cachet pe
 
 ## 7. UX
 
-- **Typografie en vormen zonder tokens.** Groottes 9–18 en radii 0–10 staan verspreid in de code; DESIGN_SYSTEM noemt alleen 15/13/12 en radius 6.
+- ✅ **Tokens** 2026-11-16: `theme::size`, `theme::space` en `theme::radius`. Alle exacte treffers van de schaal gebruiken ze; eenmalige maten staan bij hun gebruik (DESIGN_SYSTEM). Oorspronkelijk: groottes 9–18 en radii 0–10 verspreid in de code; DESIGN_SYSTEM noemde alleen 15/13/12 en radius 6.
 - **Toetsenbord.** Het git-paneel en de AI-contextlijst zijn niet met het toetsenbord te bedienen.
 - **Tooltips ontbreken** op "+", "×" en de git-samenvatting.
 - **Contrast.** `DISABLED` (3,0:1) wordt ook voor gewone informatieve tekst gebruikt.
@@ -117,8 +117,8 @@ Goed al: wakeup-coalescing, verborgen panes kosten bijna niets, viewer cachet pe
 - **Duplicatie:**
   - 3 open-in-OS-functies (elk met een macOS-tak die nooit gebouwd wordt);
   - de clipboard-CRLF-conversie, de home-dir-lookup, de 22 px rijhoogte (3×) en de modal-scrim (6×);
-  - `viewer_view::to_color` dupliceert `theme::to_color`.
-- **Achterhaalde markeringen:** `#![allow(dead_code)]` in `theme.rs` en een verkeerd geplaatst sectiecommentaar.
+  - ✅ `viewer_view::to_color` is weg (de viewer levert coderollen; `theme::code` kiest de kleur).
+- **Achterhaalde markeringen:** ✅ `#![allow(dead_code)]` in `theme.rs` is weg (2026-11-16); het verkeerd geplaatste sectiecommentaar nog niet.
 - ✅ **Docs-drift** weggewerkt 2026-11-16 (kop, §3-boom, §7 platform/Linux, CI-sectie, testaantallen). Oorspronkelijk:
   - ARCHITECTURE-kop zegt nog "Fase 1", §7 "Linux nog niet gevalideerd", §3-boom mist ±15 bestanden, en er staat een verwijzing naar `links` (moet `url` zijn);
   - testaantallen in ROADMAP/TEST_PLAN (142 vs. 177);

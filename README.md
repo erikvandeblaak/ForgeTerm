@@ -117,6 +117,7 @@ ForgeTerm reads `%APPDATA%\ForgeTerm\settings.toml` on Windows and `~/.config/fo
 
 | Setting | Default | Meaning |
 |---|---|---|
+| `appearance.theme` | `"midnight"` | `midnight`, `graphite`, `arctic` (light), `cyber`, `high-contrast`; *View → Theme* tries one for the session |
 | `terminal.font_size` | 14 | 8–32 |
 | `terminal.scrollback` | 10000 | lines per terminal (0–100000) |
 | `terminal.default_shell` | first one found | name as in *New tab with…*, e.g. `"Git Bash"` |

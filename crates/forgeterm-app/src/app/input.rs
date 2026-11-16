@@ -45,15 +45,21 @@ impl App {
                 _ => Task::none(),
             };
         }
-        // Modal overlays own the keyboard while open.
+        // Modal overlays own the keyboard while open. A captured Enter is the one
+        // that opened them from the command palette's input: it must not close them.
+        let closes = |key: &keyboard::Key| match key {
+            keyboard::Key::Named(Named::Escape) => true,
+            keyboard::Key::Named(Named::Enter) => !captured,
+            _ => false,
+        };
         if self.shortcuts_open {
-            if matches!(key, keyboard::Key::Named(Named::Escape | Named::Enter)) {
+            if closes(&key) {
                 self.shortcuts_open = false;
             }
             return Task::none();
         }
         if self.about_open {
-            if matches!(key, keyboard::Key::Named(Named::Escape | Named::Enter)) {
+            if closes(&key) {
                 self.about_open = false;
             }
             return Task::none();
