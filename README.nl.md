@@ -3,7 +3,7 @@
 **AI-Native Developer Workspace** — Erik van de Blaak Edition
 Created by Erik van de Blaak.
 
-Status: eerste werkende build (Windows 11). Echte ConPTY-terminal met GPU-rendering; Claude Code, vim en PowerShell draaien erin. Zie [docs/ROADMAP.md](docs/ROADMAP.md) voor wat wel en niet af is.
+Status: versie 0.2 (broncode; de laatste download is 0.1.1). Getest op Windows 11 en in WSL Ubuntu 24.04 (basis van Linux Mint 22), nog niet op een echte Mint-desktop. Zie [docs/ROADMAP.md](docs/ROADMAP.md) voor wat wel en niet af is, en [CHANGELOG.md](CHANGELOG.md) voor wat er per versie bij kwam.
 
 ## Starten
 
@@ -35,7 +35,13 @@ Vereist: Rust (stable) en op Windows de Visual Studio C++ Build Tools + Windows 
 | AI-werkplek (Claude Code / Codex starten, projectcontext) | **Ctrl+Shift+A** of menu AI |
 | Prompt Studio (sjabloon kiezen, variabelen invullen, invoegen zonder Enter) | **Ctrl+Shift+I** of AI → Prompt Studio |
 | Prompt Studio naast de terminal (of weer zwevend) | knop *Dock beside terminal* / *Float* in de studio, of AI → Prompt Studio Beside Terminal / Floating |
-| Monitor: CPU en geheugen van het systeem en per terminal (echte metingen) | **Ctrl+Shift+M** of View → Toggle Monitor |
+| Monitor: CPU en geheugen van het systeem en per terminal, GPU (NVIDIA via de driver, AMD op Linux; anders "not available" met de reden). Alleen echte metingen, alleen zolang het paneel open is | **Ctrl+Shift+M** of View → Toggle Monitor |
+| Mission Control: elke agent in het venster als kaart (status, project, branch, looptijd, laatste uitvoer, miniatuur, CPU/geheugen); Open, Files, Changes, Stop | **Ctrl+Shift+D** of menu AI |
+| Git Control Center: branch, upstream, wijzigingen, worktrees met hun agent, activiteit en recente commits op één pagina | **Ctrl+Shift+H** of menu Git |
+| Agent in een eigen worktree (nieuwe branch, eigen map naast de repository) en die worktree later weer verwijderen | Git → Start Agent in a New Worktree…, of in het Git Control Center |
+| Twee worktrees vergelijken: wat elk veranderde sinds hun gemeenschappelijke commit, naast elkaar; testterminals in beide; één prompt voor beide agents (zonder Enter) | **Ctrl+Shift+K** of menu Git |
+| Thema: Midnight, Graphite, Arctic (licht), Cyber, High Contrast | View → Theme (voor deze sessie), of `[appearance] theme` in de instellingen |
+| SSH-tab naar een host uit `~/.ssh/config` (je eigen OpenSSH-client; wachtwoorden typ je in de terminal) | palette of File → New SSH Tab: … |
 | Code-viewer (bestanden bekijken met kleuring, minimap, zoeken) | **Ctrl+Shift+O**, View in de verkenner, of *Open in viewer* in een Git-diff |
 | Git-paneel (status, diff, stage/unstage, commit, recente commits) | **Ctrl+Shift+G**, menu Git, of klik op de branch in de statusbalk |
 | Pad in de terminal zetten (gequote voor de shell, níet uitgevoerd) | dubbelklik op bestand, knop *Insert path*, of sleep een bestand uit Windows Verkenner op het venster |
