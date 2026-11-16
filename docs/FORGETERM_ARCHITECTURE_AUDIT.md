@@ -110,7 +110,7 @@ Goed al: wakeup-coalescing, verborgen panes kosten bijna niets, viewer cachet pe
 
 ## 8. Technische schuld
 
-- **`app.rs` is 4300+ regels**: 95 `Message`-varianten en 45 velden in één `impl`. Voorstel:
+- ✅ **Opgesplitst 2026-11-16** in `app/` (18 bestanden, 39–701 regels; per onderwerp een `impl App`-blok; alleen verplaatst, aangetoond met een regel-voor-regel-vergelijking en dezelfde 222 tests). Geneste messages zijn nog niet gedaan. Oorspronkelijk: **`app.rs` is 4300+ regels**: 95 `Message`-varianten en 45 velden in één `impl`. Voorstel:
   - `app/{message,keyboard,git,explorer,prompts,ai,session,close,view}.rs` met eigen `impl App`-blokken;
   - geneste messages (`Git(GitMsg)` enz., zoals `Viewer(ViewerMsg)` al doet);
   - `run_command` blijft de enige dispatch.

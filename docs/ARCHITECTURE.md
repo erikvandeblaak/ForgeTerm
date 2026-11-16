@@ -53,7 +53,13 @@ ForgeTerm/
 │   ├── forgeterm-system/         # Procesinfo (sysinfo): programma's die een shell nog draait; tests met echte processen
 │   ├── forgeterm-settings/       # settings.toml: tolerant laden, template, pad; unit-getest
 │   └── forgeterm-app/            # GUI (binary `forgeterm`)
-│       ├── src/app.rs            # state, messages, update, layout, sneltoetsen
+│       ├── src/app/mod.rs        # App-state, Message, update, subscriptions
+│       ├── src/app/handle.rs     # de message-handler
+│       ├── src/app/run.rs        # run_command (enige uitvoerplek) en is_applicable
+│       ├── src/app/input.rs      # toetsenbordroute: dialogen, overlays, sneltoetsen, terminal
+│       ├── src/app/{terminals,panels,settings,ai,git,compare,mission,monitor,session,close,viewer,view}.rs
+│       ├── src/app/widgets.rs    # kleine view-stukken zonder App-state
+│       ├── src/app/tasks.rs      # achtergrondwerk en OS-hulpjes
 │       ├── src/workspace.rs      # tabs + split-layout (pane_grid-state), unit-getest
 │       ├── src/commands.rs       # centrale command registry + keymap, unit-getest
 │       ├── src/fuzzy.rs          # fuzzy matcher, unit-getest
@@ -121,7 +127,7 @@ Belangrijke details:
 
 ## 4d. Bestandsverkenner en paden invoegen
 
-- `forgeterm-explorer::Tree` houdt root, uitgeklapte mappen, listings (Loading / Ready / Failed), verborgen-filter en selectie bij. Mappen worden pas gelezen bij uitklappen; `list_dir` draait in een eigen thread (`load_dir` in app.rs), zodat trage of netwerkschijven de UI nooit blokkeren. Resultaten voor mappen die inmiddels zijn ingeklapt of na een root-wissel binnenkomen, worden genegeerd (getest).
+- `forgeterm-explorer::Tree` houdt root, uitgeklapte mappen, listings (Loading / Ready / Failed), verborgen-filter en selectie bij. Mappen worden pas gelezen bij uitklappen; `list_dir` draait in een eigen thread (`load_dir` in `app/tasks.rs`), zodat trage of netwerkschijven de UI nooit blokkeren. Resultaten voor mappen die inmiddels zijn ingeklapt of na een root-wissel binnenkomen, worden genegeerd (getest).
 - **Toetsenbord:** `Tree::navigate(Nav, page)` (unit-getest) verplaatst de selectie over de zichtbare items en klapt mappen in/uit (`NavOutcome::Load` → `load_dir`, `Open` → viewer). De app routeert toetsen naar de verkenner zolang `explorer_focused` (klik in de boom, Ctrl+Shift+E, Go to Folder); Esc, een klik in de terminal, *Insert path* of een gewone toets geven het toetsenbord terug (die toets gaat dan naar de terminal). De selectie blijft in beeld via `scroll_to` op basis van de bijgehouden `Viewport` (rijen van 22 px).
 - **Verversen:** `list_dir` bewaart de wijzigingstijd van de map; elke 2 s (alleen als de verkenner zichtbaar is) vergelijkt `changed_dirs` die op een achtergrondthread voor root + uitgeklapte mappen en leest alleen gewijzigde mappen opnieuw. Oude inhoud blijft staan tot de nieuwe binnen is.
 - **Go to Folder:** `folder_from_input` (`~`, relatief t.o.v. de root, quotes weg) → achtergrond: `is_local_path` (geen netwerkpad) en `is_dir` → nieuwe root.

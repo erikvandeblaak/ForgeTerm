@@ -453,6 +453,7 @@ Zie `docs/PERFORMANCE.md` voor de cijfers. GUI-controles van de wijzigingen:
 | Q5 | Sneltoets van een niet-toepasselijk commando: doet niets, gaat niet naar de shell | ✅ unit (`is_applicable`) + code |
 | Q6 | Palette "stage all" → *Git: Stage All Changes*: drie bestanden staged (gecontroleerd met `git diff --cached`); "unstage all": leeg, paneel meldt "Unstaged 3 files" | ✅ |
 | Q7 | × van tab 2 (via `CloseTabAt`): tab dicht, "Tab 1/1" | ✅ |
+| Q8 | Na het opsplitsen van `app.rs`: Mission Control, Git Control Center, Compare, Esc terug, verkenner, AI-paneel en palette openen; app blijft responsief; dezelfde 222 tests | ✅ |
 
 ### Testvalkuilen (geleerd)
 
