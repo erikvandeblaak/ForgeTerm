@@ -184,6 +184,15 @@ impl CommandId {
                 | ScrollToBottom
                 | ScrollPageUp
                 | ScrollPageDown
+                // These act on the focused terminal, which the dashboard hides.
+                | Copy
+                | Paste
+                | ClosePane
+                | CloseTab
+                | ClearScrollback
+                | CopyLastCommandOutput
+                | InsertLastOutputIntoAgent
+                | InsertSelectedPath
         )
     }
 
@@ -793,6 +802,11 @@ mod tests {
             SplitRight,
             StartAgent(AgentKind::ClaudeCode, false),
             SelectTab(0),
+            Paste,
+            ClosePane,
+            CloseTab,
+            ClearScrollback,
+            InsertLastOutputIntoAgent,
         ] {
             assert!(id.shows_terminals(), "{id:?}");
         }

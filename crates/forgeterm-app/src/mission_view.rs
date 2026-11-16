@@ -29,7 +29,8 @@ use crate::theme;
 
 /// Width of one agent card; cards wrap to as many columns as fit.
 pub const CARD_WIDTH: f32 = 470.0;
-/// Samples of CPU history per agent (one per monitor sample, every 2 s).
+/// Samples of CPU history per agent (one per monitor sample, every 2 s while the
+/// dashboard is open).
 pub const CPU_HISTORY: usize = 60;
 /// Finished sessions kept in the list.
 pub const MAX_ENDED: usize = 12;
@@ -46,14 +47,19 @@ pub struct Mission {
     pub heads_busy: bool,
     /// Seconds the dashboard has been open (drives the branch refresh cadence).
     pub ticks: u32,
-    /// CPU % of each agent's process tree, oldest first.
-    pub cpu: HashMap<TermId, VecDeque<f32>>,
+    /// CPU % of each agent's process tree, oldest first, with the pid it was
+    /// measured for (a restarted agent starts a new history).
+    pub cpu: HashMap<TermId, (u32, VecDeque<f32>)>,
     pub ended: VecDeque<Ended>,
 }
 
 impl Mission {
-    pub fn record_cpu(&mut self, id: TermId, value: f32) {
-        let h = self.cpu.entry(id).or_default();
+    pub fn record_cpu(&mut self, id: TermId, pid: u32, value: f32) {
+        let (owner, h) = self.cpu.entry(id).or_insert_with(|| (pid, VecDeque::new()));
+        if *owner != pid {
+            *owner = pid;
+            h.clear();
+        }
         h.push_back(value);
         while h.len() > CPU_HISTORY {
             h.pop_front();
@@ -675,7 +681,7 @@ fn empty_state<'a>(v: &View<'a>) -> Element<'a, Message> {
         column![
             text("No agents running").size(18).color(theme::TEXT),
             text(format!(
-                "Start one in {where_}. It opens in its own tab; this dashboard follows it live."
+                "Start one in {where_}. It opens in its own tab; Ctrl+Shift+D brings you back here."
             ))
             .size(12)
             .color(theme::TEXT_MUTED),
@@ -1009,10 +1015,13 @@ mod tests {
     fn histories_are_bounded() {
         let mut m = Mission::default();
         for i in 0..(CPU_HISTORY + 10) {
-            m.record_cpu(1, i as f32);
+            m.record_cpu(1, 42, i as f32);
         }
-        assert_eq!(m.cpu[&1].len(), CPU_HISTORY);
-        assert_eq!(m.cpu[&1].back(), Some(&((CPU_HISTORY + 9) as f32)));
+        assert_eq!(m.cpu[&1].1.len(), CPU_HISTORY);
+        assert_eq!(m.cpu[&1].1.back(), Some(&((CPU_HISTORY + 9) as f32)));
+        // A restarted agent (new pid) starts a fresh history.
+        m.record_cpu(1, 43, 7.0);
+        assert_eq!(m.cpu[&1].1.iter().copied().collect::<Vec<_>>(), vec![7.0]);
         for _ in 0..(MAX_ENDED + 3) {
             m.record_ended(Ended {
                 kind: AgentKind::Codex,

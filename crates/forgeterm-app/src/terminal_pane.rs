@@ -211,6 +211,8 @@ impl TerminalPane {
             Err(err) => {
                 tracing::error!(shell = %self.shell.program, "failed to start session: {err:#}");
                 self.status = Status::Failed(format!("{err:#}"));
+                self.started_at = None;
+                self.ended_at = None;
                 Task::none()
             }
         }

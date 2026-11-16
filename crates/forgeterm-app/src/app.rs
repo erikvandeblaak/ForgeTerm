@@ -860,13 +860,10 @@ impl App {
                 generation,
                 event,
             } => {
-                // Mission Control covers the panes: nothing there is "seen", but
-                // agent terminals keep refreshing for their live preview.
-                let shown = !self.mission.visible && self.workspace.is_visible(id);
-                let preview = self.mission.visible
-                    && self.terminals.get(&id).is_some_and(|t| t.agent.is_some());
-                let visible = shown || preview;
-                let seen = shown && self.window_focused;
+                // Mission Control covers the panes: nothing there is visible or
+                // "seen"; agent previews refresh once per second (MissionTick).
+                let visible = !self.mission.visible && self.workspace.is_visible(id);
+                let seen = visible && self.window_focused;
                 let Some(terminal) = self.terminals.get_mut(&id) else {
                     return Task::none();
                 };
@@ -955,6 +952,9 @@ impl App {
             }
             Message::MissionTick => {
                 self.mission.ticks = self.mission.ticks.wrapping_add(1);
+                for t in self.terminals.values_mut().filter(|t| t.agent.is_some()) {
+                    t.refresh_if_dirty(&self.palette);
+                }
                 if self.mission.ticks.is_multiple_of(5) {
                     return self.read_mission_heads();
                 }
@@ -2348,6 +2348,9 @@ impl App {
             self.refresh_visible();
             return Task::none();
         }
+        // Samples are only taken while it is open: an old history would join
+        // measurements minutes apart as if they were consecutive.
+        self.mission.cpu.clear();
         // Fresh previews right away (hidden terminals only mark themselves dirty).
         for t in self.terminals.values_mut().filter(|t| t.agent.is_some()) {
             t.refresh(&self.palette);
@@ -2421,7 +2424,7 @@ impl App {
                     elapsed: t.elapsed(now),
                     since_output: t.since_output(now),
                     usage: pid.and_then(|p| usage?.shells.get(&p)),
-                    cpu: self.mission.cpu.get(&id),
+                    cpu: self.mission.cpu.get(&id).map(|(_, h)| h),
                     snapshot: &t.snapshot,
                     cache: &t.preview_cache,
                     selected: self.mission.selected == Some(id),
@@ -2524,14 +2527,15 @@ impl App {
             .filter(|t| t.agent.is_some())
             .filter_map(|t| Some((t.id, t.session()?.pid()?)))
             .collect();
-        for (id, pid) in agents {
+        for &(id, pid) in &agents {
             if let Some(cpu) = sample.shells.get(&pid).and_then(|u| u.cpu_percent) {
-                self.mission.record_cpu(id, cpu);
+                self.mission.record_cpu(id, pid, cpu);
             }
         }
+        // Ended or closed agents keep no (frozen) history.
         self.mission
             .cpu
-            .retain(|id, _| self.terminals.contains_key(id));
+            .retain(|id, _| agents.iter().any(|(a, _)| a == id));
     }
 
     /// Remembers an agent session that is going away, for "recently ended".
