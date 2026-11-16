@@ -451,6 +451,8 @@ Zie `docs/PERFORMANCE.md` voor de cijfers. GUI-controles van de wijzigingen:
 | Q3 | Split + zoom: statusbalk "zoomed (Ctrl+Shift+Enter)" uit de keymap | ✅ |
 | Q4 | Branch "bad..x" aanmaken: fout getoond, naam blijft staan; daarna "feature-x": aangemaakt, veld leeg | ✅ |
 | Q5 | Sneltoets van een niet-toepasselijk commando: doet niets, gaat niet naar de shell | ✅ unit (`is_applicable`) + code |
+| Q6 | Palette "stage all" → *Git: Stage All Changes*: drie bestanden staged (gecontroleerd met `git diff --cached`); "unstage all": leeg, paneel meldt "Unstaged 3 files" | ✅ |
+| Q7 | × van tab 2 (via `CloseTabAt`): tab dicht, "Tab 1/1" | ✅ |
 
 ### Testvalkuilen (geleerd)
 

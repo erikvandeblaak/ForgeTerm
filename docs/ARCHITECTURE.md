@@ -109,6 +109,10 @@ Belangrijke details:
 
 - `commands.rs` is de **centrale registry** (spec §9): elke actie is een `CommandId` met categorie, titel en key bindings (`Keymap`). Geen iced-types; unit-getest (o.a. "geen conflicterende bindings" en "Ctrl+C / AltGr / gewone toetsen worden nooit afgevangen").
 - `App::run_command` is de **enige** plek waar acties worden uitgevoerd. Sneltoetsen, palette, knoppen en de menubalk sturen allemaal een `CommandId`.
+- **Grens command of message (2026-11-16, audit T4):**
+  - Een `CommandId` is alles wat zonder aangeklikt lijstitem zinvol is. Het staat dan ook in de palette, het menu en eventueel onder een sneltoets, met één `is_applicable`. Voorbeelden: tab sluiten (`CloseTabAt(n)`, het ×), plakken (ook met rechts), prompt invoegen/kopiëren/herladen, commit, alles (un)stagen, repository vertrouwen, remote branches tonen.
+  - Een `Message` blijft: een actie op één aangeklikt item (dit bestand stagen, deze branch, deze diff), dialoogknoppen (OK/Annuleren) en invoerstatus (tekstvelden, selectie, keuzelijsten).
+  - Een sneltoets van een niet-toepasselijk command doet niets en gaat ook niet naar het programma (T5).
 - `App::is_applicable` bepaalt wat nu zin heeft; de palette toont alleen die commando's, zodat er nooit een optie verschijnt die niets doet.
 - `fuzzy.rs`: subsequence-matcher met bonussen voor woordbegin en aaneengesloten tekens; levert indices voor highlighting.
 - `palette.rs`: filter/rangschik/recent/zichtbaar-venster-logica (getest) + de overlay-view (`stack` + `opaque`, klik buiten = sluiten).

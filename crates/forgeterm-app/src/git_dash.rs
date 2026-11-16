@@ -1016,7 +1016,7 @@ pub(crate) fn untrusted<'a>(root: &'a Path, programs: &'a [String]) -> Element<'
     }
     col = col.push(action_button(
         "Trust this repository".to_owned(),
-        Some(Message::GitTrust(root.to_path_buf())),
+        Some(Message::Command(CommandId::GitTrustRepository)),
         theme::AMBER,
         true,
     ));

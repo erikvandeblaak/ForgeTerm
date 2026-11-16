@@ -90,7 +90,6 @@ pub enum Message {
     ShellPicked(ShellChoice),
     /// Tab-bar clicks (not recorded as "recent commands").
     SelectTab(usize),
-    CloseTab(usize),
     FocusPane(pane_grid::Pane),
     PaneResized(pane_grid::ResizeEvent),
     Paste,
@@ -152,9 +151,6 @@ pub enum Message {
     PromptsLoaded(forgeterm_prompts::Library),
     PromptSelect(usize),
     PromptEdit(String, iced::widget::text_editor::Action),
-    PromptInsert,
-    PromptCopy,
-    PromptReload,
     PromptClose,
     /// Periodic git status refresh.
     GitTick,
@@ -162,7 +158,6 @@ pub enum Message {
     GitStage(Vec<String>),
     GitUnstage(Vec<String>),
     GitCommitEdit(iced::widget::text_editor::Action),
-    GitCommit,
     /// Result of stage / unstage / commit (message for the panel).
     GitActionDone(Result<String, String>),
     GitShowDiff(String, forgeterm_git::DiffKind),
@@ -183,11 +178,9 @@ pub enum Message {
     GitTrack(String),
     GitNewBranchName(String),
     GitCreateBranch,
-    GitToggleRemotes,
     /// "Open in viewer" in the diff overlay (path relative to the repository root).
     GitOpenInViewer(String),
     /// Trust a repository whose own config names programs (session only).
-    GitTrust(PathBuf),
     Viewer(ViewerMsg),
     /// The window's close button.
     WindowCloseRequested,
@@ -1021,16 +1014,6 @@ impl App {
             // Through the command, so a page covering the terminals (Mission Control,
             // Git Control Center) closes too, also when the active tab is clicked.
             Message::SelectTab(index) => return self.run_command(CommandId::SelectTab(index)),
-            Message::CloseTab(index) => {
-                self.menu = None;
-                let ids = self
-                    .workspace
-                    .tabs
-                    .get(index)
-                    .map(|t| t.terminals().collect())
-                    .unwrap_or_default();
-                return self.request_close(CloseTarget::Tab(ids));
-            }
             Message::WindowCloseRequested => return self.request_close(CloseTarget::Quit),
             Message::CloseChecked(target, programs) => {
                 if programs.is_empty() {
@@ -1379,26 +1362,6 @@ impl App {
                     self.set_prompt_focused(self.prompt_docked);
                 }
             }
-            Message::PromptInsert => return self.insert_prompt(),
-            Message::PromptCopy => {
-                let text = self
-                    .prompt_studio
-                    .as_ref()
-                    .and_then(PromptStudio::rendered)
-                    .map(|r| r.text);
-                // The floating window closes; the docked panel stays.
-                if !self.prompt_docked {
-                    self.prompt_studio = None;
-                }
-                if let Some(text) = text {
-                    return clipboard::write(text);
-                }
-            }
-            Message::PromptReload => {
-                if self.prompt_studio.is_some() {
-                    return load_prompts(self.prompts_dir());
-                }
-            }
             Message::PromptClose => {
                 self.prompt_studio = None;
                 self.set_prompt_focused(false);
@@ -1600,10 +1563,6 @@ impl App {
             }
             Message::GitStage(paths) => return self.git_action(GitAction::Stage(paths)),
             Message::GitUnstage(paths) => return self.git_action(GitAction::Unstage(paths)),
-            Message::GitCommit => {
-                let message = self.git.commit_message.text();
-                return self.git_action(GitAction::Commit(message));
-            }
             Message::GitCommitEdit(action) => self.git.commit_message.perform(action),
             Message::GitActionDone(result) => {
                 self.git.action_running = false;
@@ -1688,7 +1647,6 @@ impl App {
                     return self.git_action(GitAction::Create(name));
                 }
             }
-            Message::GitToggleRemotes => self.git.show_remotes = !self.git.show_remotes,
             Message::GitOpenInViewer(rel) => {
                 if let Some(root) = self.git.root().cloned() {
                     self.git.diff = None;
@@ -1696,10 +1654,6 @@ impl App {
                 }
             }
             Message::Viewer(msg) => return self.viewer_msg(msg),
-            Message::GitTrust(root) => {
-                self.git.trusted.insert(root);
-                return self.refresh_git(true);
-            }
             Message::FileDropped(path) => {
                 self.drop_hover = false;
                 self.insert_paths(&[path]);
@@ -1742,7 +1696,7 @@ impl App {
                     s.write(bytes);
                 }
             }
-            TermMsg::Paste => return Task::done(Message::Paste),
+            TermMsg::Paste => return self.run_command(CommandId::Paste),
             TermMsg::OpenUrl(url) => {
                 if let Err(e) = open_url(&url) {
                     self.notice = Some(e);
@@ -2385,6 +2339,60 @@ impl App {
                 };
                 return Task::batch([self.refresh_git(true), self.load_git_dash(true), compare]);
             }
+            CommandId::CloseTabAt(index) => {
+                let ids = self
+                    .workspace
+                    .tabs
+                    .get(index)
+                    .map(|t| t.terminals().collect())
+                    .unwrap_or_default();
+                return self.request_close(CloseTarget::Tab(ids));
+            }
+            CommandId::InsertPrompt => return self.insert_prompt(),
+            CommandId::CopyPrompt => {
+                let text = self
+                    .prompt_studio
+                    .as_ref()
+                    .and_then(PromptStudio::rendered)
+                    .map(|r| r.text);
+                // The floating window closes; the docked panel stays.
+                if !self.prompt_docked {
+                    self.prompt_studio = None;
+                }
+                if let Some(text) = text {
+                    return clipboard::write(text);
+                }
+            }
+            CommandId::ReloadPrompts => {
+                if self.prompt_studio.is_some() {
+                    return load_prompts(self.prompts_dir());
+                }
+            }
+            CommandId::GitCommit => {
+                if self.git.can_commit() {
+                    let message = self.git.commit_message.text();
+                    return self.git_action(GitAction::Commit(message));
+                }
+            }
+            CommandId::GitStageAll => {
+                let paths = self.git.stage_all_paths();
+                if !paths.is_empty() {
+                    return self.git_action(GitAction::Stage(paths));
+                }
+            }
+            CommandId::GitUnstageAll => {
+                let paths = self.git.unstage_all_paths();
+                if !paths.is_empty() {
+                    return self.git_action(GitAction::Unstage(paths));
+                }
+            }
+            CommandId::GitTrustRepository => {
+                if let Some(Repo::Untrusted { root, .. }) = self.git.repo.as_ref() {
+                    self.git.trusted.insert(root.clone());
+                    return self.refresh_git(true);
+                }
+            }
+            CommandId::GitToggleRemoteBranches => self.git.show_remotes = !self.git.show_remotes,
             CommandId::ToggleCompare => {
                 self.compare.visible = !self.compare.visible;
                 if !self.compare.visible {
@@ -2605,6 +2613,31 @@ impl App {
             CommandId::OpenPromptsFolder => self.prompts_dir().is_some(),
             CommandId::GitShowHistory => self.git.root().is_some(),
             CommandId::ToggleGitDashboard | CommandId::ToggleCompare => true,
+            CommandId::CloseTabAt(i) => i < self.workspace.tabs.len(),
+            CommandId::InsertPrompt => {
+                self.prompt_studio
+                    .as_ref()
+                    .and_then(PromptStudio::rendered)
+                    .is_some_and(|r| r.missing.is_empty() && !r.text.is_empty())
+                    && focused.is_some_and(TerminalPane::is_running)
+            }
+            CommandId::CopyPrompt => self
+                .prompt_studio
+                .as_ref()
+                .and_then(PromptStudio::rendered)
+                .is_some_and(|r| !r.text.is_empty()),
+            CommandId::ReloadPrompts => self.prompt_studio.is_some(),
+            CommandId::GitCommit => self.git.can_commit(),
+            CommandId::GitStageAll => {
+                !self.git.action_running && !self.git.stage_all_paths().is_empty()
+            }
+            CommandId::GitUnstageAll => {
+                !self.git.action_running && !self.git.unstage_all_paths().is_empty()
+            }
+            CommandId::GitTrustRepository => {
+                matches!(self.git.repo, Some(Repo::Untrusted { .. }))
+            }
+            CommandId::GitToggleRemoteBranches => self.git.root().is_some(),
             CommandId::CompareSwap => self.compare.visible && self.compare.paths().is_some(),
             CommandId::CompareOpenTests => {
                 self.compare.paths().is_some() && !self.compare.test_command.trim().is_empty()
@@ -4518,7 +4551,7 @@ impl App {
                 .padding([5, 4])
                 .style(|_, _| button::Style::default());
             let close = button(text("×").size(13).color(theme::TEXT_MUTED))
-                .on_press(Message::CloseTab(index))
+                .on_press(Message::Command(CommandId::CloseTabAt(index)))
                 .padding([1, 6])
                 .style(|_, status| ghost_button(status, theme::CORAL));
             tabs = tabs.push(
