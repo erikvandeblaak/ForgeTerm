@@ -79,6 +79,58 @@ pub fn parse_worktrees(text: &str) -> Vec<Worktree> {
     list
 }
 
+/// Default folder for a new worktree: beside the repository, never inside it —
+/// `<parent>/<repo>-worktrees/<branch>`, with `/` and characters Windows does not
+/// allow in file names turned into `-`. `None` for a root without parent or name.
+pub fn default_worktree_path(root: &Path, branch: &str) -> Option<PathBuf> {
+    let name = root.file_name()?.to_string_lossy().into_owned();
+    let parent = root.parent()?;
+    let slug: String = branch
+        .trim()
+        .chars()
+        .map(|c| match c {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '-',
+            c if c.is_control() => '-',
+            c => c,
+        })
+        .collect();
+    let slug = slug.trim_matches(['-', '.', ' ']);
+    if slug.is_empty() {
+        return None;
+    }
+    Some(parent.join(format!("{name}-worktrees")).join(slug))
+}
+
+/// Creates `branch` at HEAD and checks it out in a new worktree at `path`
+/// (`git worktree add -b <branch> -- <path>`). Like the git command it runs the
+/// repository's checkout hook and filters, so callers only offer it for a trusted
+/// repository. Never forces: an existing folder or branch is an error.
+pub fn add_worktree(root: &Path, path: &Path, branch: &str) -> Result<(), String> {
+    let branch = branch.trim();
+    crate::validate_branch_name(root, branch)?;
+    if !path.is_absolute() {
+        return Err("the worktree folder must be an absolute path".into());
+    }
+    if path.exists() {
+        return Err(format!("{} already exists", path.display()));
+    }
+    let p = path.to_string_lossy();
+    git(
+        root,
+        &["worktree", "add", "-b", branch, "--", &p],
+        crate::COMMIT_TIMEOUT,
+    )?
+    .check()
+}
+
+/// Removes a linked worktree (`git worktree remove -- <path>`), never forced: git
+/// refuses a worktree with changes or untracked files, and that refusal is the
+/// error. The branch stays.
+pub fn remove_worktree(root: &Path, path: &Path) -> Result<(), String> {
+    let p = path.to_string_lossy();
+    git(root, &["worktree", "remove", "--", &p], READ_TIMEOUT)?.check()
+}
+
 /// Lines added and removed in one file; `None` for binary files.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileStat {
@@ -167,6 +219,21 @@ mod tests {
         // A bare main repository, no trailing terminator.
         let bare = parse_worktrees("worktree /srv/x.git\0bare");
         assert!(bare[0].bare && bare[0].head.is_none());
+    }
+
+    #[test]
+    fn default_paths_sit_beside_the_repository() {
+        let root = Path::new("/work/shop");
+        assert_eq!(
+            default_worktree_path(root, "agent/claude-1"),
+            Some(PathBuf::from("/work/shop-worktrees/agent-claude-1"))
+        );
+        assert_eq!(
+            default_worktree_path(root, " fix/a:b|c "),
+            Some(PathBuf::from("/work/shop-worktrees/fix-a-b-c"))
+        );
+        assert_eq!(default_worktree_path(root, "///"), None);
+        assert_eq!(default_worktree_path(Path::new("/"), "x"), None);
     }
 
     #[test]

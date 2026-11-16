@@ -112,6 +112,35 @@ pub fn worktree_of(dir: &Path, worktrees: &[PathBuf]) -> Option<usize> {
         .map(|(i, _)| i)
 }
 
+/// Whether a worktree may be removed from ForgeTerm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Removal {
+    /// Offered (git still refuses one with changes or untracked files).
+    Allowed,
+    /// A terminal of this window is in it: on Windows its folder cannot be deleted
+    /// then (git would delete the files and fail on the folder), elsewhere the
+    /// shell would sit in a deleted folder.
+    InUse,
+    /// The main or shown worktree, a bare or locked one, or one not read.
+    Never,
+}
+
+/// The one rule for the "Remove…" button and `CommandId::RemoveWorktree`.
+pub fn removal(is_main: bool, is_current: bool, info: &WorktreeInfo, terminals: usize) -> Removal {
+    let readable = matches!(
+        info.changes,
+        WorktreeChanges::Count { .. } | WorktreeChanges::Current
+    );
+    let w = &info.worktree;
+    if is_main || is_current || w.bare || w.locked.is_some() || !readable {
+        Removal::Never
+    } else if terminals > 0 {
+        Removal::InUse
+    } else {
+        Removal::Allowed
+    }
+}
+
 /// Lines added and removed by `path` in `stats`.
 fn counts(stats: &Result<Vec<FileStat>, String>, path: &str) -> Option<(Option<u32>, Option<u32>)> {
     stats
@@ -134,6 +163,8 @@ pub struct View<'a> {
     pub repo: Option<&'a Repo>,
     pub dash: &'a GitDash,
     pub agents: Vec<AgentAt>,
+    /// Folder of every terminal in this window (shells too): blocks removing.
+    pub terminal_dirs: Vec<PathBuf>,
     /// The focused terminal's folder (for the empty state).
     pub dir: Option<&'a Path>,
     pub now: Instant,
@@ -186,8 +217,15 @@ fn found<'a>(
         .unwrap_or_default();
     let main = row![
         container(working_tree(status, data)).width(Length::FillPortion(3)),
-        container(worktrees_card(root, status, data, &wt_paths, &v.agents))
-            .width(Length::FillPortion(2)),
+        container(worktrees_card(
+            root,
+            status,
+            data,
+            &wt_paths,
+            &v.agents,
+            &v.terminal_dirs,
+        ))
+        .width(Length::FillPortion(2)),
     ]
     .spacing(16);
     page = page.push(main);
@@ -200,8 +238,9 @@ fn found<'a>(
     page.push(lower)
         .push(
             text(
-                "Read-only overview; nothing here changes the repository. Stage and commit \
-                 in the Git panel (Ctrl+Shift+G opens it beside this page). Esc closes.",
+                "An overview: only adding or removing a worktree (each asks first) changes \
+                 the repository here. Stage and commit in the Git panel (Ctrl+Shift+G opens \
+                 it beside this page). Esc closes.",
             )
             .size(11)
             .color(theme::DISABLED),
@@ -296,6 +335,17 @@ fn header<'a>(
             Some(Message::Command(CommandId::GitShowHistory)),
             theme::CYAN,
             false,
+        ),
+        with_tip(
+            action_button(
+                "Agent in new worktree…".to_owned(),
+                Some(Message::Command(CommandId::NewAgentWorktree)),
+                theme::CYAN,
+                false,
+            ),
+            "New branch in its own folder beside the repository, with an agent \
+             started in it (asks first)"
+                .to_owned(),
         ),
         with_tip(
             action_button(
@@ -612,6 +662,7 @@ fn worktrees_card<'a>(
     data: Option<&'a DashData>,
     wt_paths: &[PathBuf],
     agents: &[AgentAt],
+    terminal_dirs: &[PathBuf],
 ) -> Element<'a, Message> {
     let mut list = column![card_title("WORKTREES")].spacing(10);
     let worktrees = match data.map(|d| &d.worktrees) {
@@ -628,11 +679,19 @@ fn worktrees_card<'a>(
             None => elsewhere += 1,
         }
     }
+    let mut terminals = vec![0usize; worktrees.len()];
+    for d in terminal_dirs {
+        if let Some(i) = worktree_of(d, wt_paths) {
+            terminals[i] += 1;
+        }
+    }
     let root_key = path_key(root);
     for (i, info) in worktrees.iter().enumerate() {
+        let is_current = path_key(&info.worktree.path) == root_key;
         list = list.push(worktree_row(
+            removal(i == 0, is_current, info, terminals[i]),
             info,
-            path_key(&info.worktree.path) == root_key,
+            is_current,
             status,
             &per[i],
         ));
@@ -653,6 +712,7 @@ fn worktrees_card<'a>(
 }
 
 fn worktree_row<'a>(
+    removal: Removal,
     info: &'a WorktreeInfo,
     is_current: bool,
     status: &'a Status,
@@ -755,6 +815,29 @@ fn worktree_row<'a>(
             ),
             "New tab with your default shell in this worktree".to_owned(),
         ));
+        // A linked worktree no terminal here is in can go (git refuses a dirty one).
+        let (press, tip) = match removal {
+            Removal::Never => (None, None),
+            Removal::InUse => (
+                None,
+                Some("A terminal of this window is in this worktree: close it first"),
+            ),
+            Removal::Allowed => (
+                Some(Message::Command(CommandId::RemoveWorktree(worktree_id(
+                    &w.path,
+                )))),
+                Some(
+                    "Removes the folder (asks first; git refuses if it has changes). \
+                     The branch is kept.",
+                ),
+            ),
+        };
+        if let Some(tip) = tip {
+            actions = actions.push(with_tip(
+                action_button("Remove…".to_owned(), press, theme::CORAL, false),
+                tip.to_owned(),
+            ));
+        }
     }
     col = col.push(actions);
     container(col)
@@ -995,6 +1078,81 @@ mod tests {
         let wts = vec![PathBuf::from("C:/Work/Shop")];
         assert_eq!(worktree_of(Path::new(r"c:\work\shop\src"), &wts), Some(0));
         assert_eq!(path_key(Path::new(r"C:\A\B\")), "c:/a/b");
+    }
+
+    #[test]
+    fn only_idle_linked_worktrees_can_be_removed() {
+        let info = |changes: WorktreeChanges, bare: bool, locked: Option<&str>| WorktreeInfo {
+            worktree: Worktree {
+                path: PathBuf::from("C:/work/shop-worktrees/agent-claude-1"),
+                head: Some("abc".to_owned()),
+                branch: Some("agent/claude-1".to_owned()),
+                detached: false,
+                bare,
+                locked: locked.map(str::to_owned),
+                prunable: None,
+            },
+            changes,
+        };
+        let clean = info(
+            WorktreeChanges::Count {
+                changes: 0,
+                conflicts: 0,
+            },
+            false,
+            None,
+        );
+        assert_eq!(removal(false, false, &clean, 0), Removal::Allowed);
+        // Any terminal of this window in it (a shell too) blocks it.
+        assert_eq!(removal(false, false, &clean, 1), Removal::InUse);
+        // Never the main or the shown worktree.
+        assert_eq!(removal(true, false, &clean, 0), Removal::Never);
+        assert_eq!(removal(false, true, &clean, 0), Removal::Never);
+        // Never bare, locked, or one whose state was not read.
+        assert_eq!(
+            removal(
+                false,
+                false,
+                &info(
+                    WorktreeChanges::Count {
+                        changes: 0,
+                        conflicts: 0
+                    },
+                    true,
+                    None
+                ),
+                0
+            ),
+            Removal::Never
+        );
+        assert_eq!(
+            removal(
+                false,
+                false,
+                &info(
+                    WorktreeChanges::Count {
+                        changes: 0,
+                        conflicts: 0
+                    },
+                    false,
+                    Some("")
+                ),
+                0
+            ),
+            Removal::Never
+        );
+        for c in [
+            WorktreeChanges::Paused,
+            WorktreeChanges::Missing,
+            WorktreeChanges::NotLocal,
+            WorktreeChanges::NotRead,
+            WorktreeChanges::Error("x".to_owned()),
+        ] {
+            assert_eq!(
+                removal(false, false, &info(c, false, None), 0),
+                Removal::Never
+            );
+        }
     }
 
     #[test]

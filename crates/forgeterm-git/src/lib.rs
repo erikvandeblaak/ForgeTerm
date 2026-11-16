@@ -32,7 +32,10 @@ pub use refs::{
 };
 pub use run::{Output, git};
 pub use status::{Branch, Change, Entry, Status, parse_status};
-pub use worktree::{FileStat, Worktree, numstat, parse_numstat, parse_worktrees, worktrees};
+pub use worktree::{
+    FileStat, Worktree, add_worktree, default_worktree_path, numstat, parse_numstat,
+    parse_worktrees, remove_worktree, worktrees,
+};
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -717,5 +720,57 @@ mod tests {
         run(root, &["worktree", "remove", &wt_s]);
         assert_eq!(worktrees(root).unwrap().len(), 1);
         let _ = fs::remove_dir_all(&wt);
+    }
+
+    #[test]
+    fn add_and_remove_worktrees_never_force() {
+        let Some(repo) = Repo::new("addwt") else {
+            return;
+        };
+        let root = &repo.0;
+        let run =
+            |dir: &Path, args: &[&str]| git(dir, args, READ_TIMEOUT).unwrap().check().unwrap();
+        repo.write(
+            "a.txt", "1
+",
+        );
+        run(root, &["add", "-A"]);
+        run(root, &["commit", "-q", "-m", "first"]);
+        let wt =
+            std::env::temp_dir().join(format!("forgeterm-git-addwt-tree-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&wt);
+
+        // Refused before git runs: bad names, relative or existing folders.
+        assert!(add_worktree(root, &wt, "-x").is_err());
+        assert!(add_worktree(root, &wt, "bad..name").is_err());
+        assert!(add_worktree(root, Path::new("relative/wt"), "ok").is_err());
+        let e = add_worktree(root, root, "agent/x").unwrap_err();
+        assert!(e.contains("exists"), "{e}");
+
+        add_worktree(root, &wt, "agent/claude-1").unwrap();
+        assert_eq!(head(&wt).unwrap().name, "agent/claude-1");
+        assert_eq!(worktrees(root).unwrap().len(), 2);
+        // The branch exists now: a second worktree with it is git's error.
+        let wt2 = wt.with_extension("two");
+        let _ = fs::remove_dir_all(&wt2);
+        assert!(add_worktree(root, &wt2, "agent/claude-1").is_err());
+        assert!(!wt2.exists());
+
+        // Untracked file: git refuses to remove it (no --force), the folder stays.
+        fs::write(wt.join("new.txt"), "x").unwrap();
+        let err = remove_worktree(root, &wt).unwrap_err();
+        assert!(!err.is_empty());
+        assert!(wt.join("new.txt").exists());
+        fs::remove_file(wt.join("new.txt")).unwrap();
+        remove_worktree(root, &wt).unwrap();
+        assert!(!wt.exists());
+        assert_eq!(worktrees(root).unwrap().len(), 1);
+        // The branch is kept.
+        assert!(
+            branches(root)
+                .unwrap()
+                .iter()
+                .any(|b| b.name == "agent/claude-1")
+        );
     }
 }

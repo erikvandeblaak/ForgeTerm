@@ -413,6 +413,8 @@ Prestatiebudgetten (doel, nog te bewaken in CI): venster < 300 ms, idle geheugen
 
 ### Testvalkuilen (geleerd)
 
+- **Virusscanner en git-tests (2026-11-16):** in 1 van ongeveer 14 runs van de volledige git-suite faalde `status_does_not_run_submodule_filters` met "Permission denied" tijdens de submodule-clone (Norton houdt een vers bestand even vast). Los 8/8 en daarna 5/5 suites groen. Geen codefout; bij herhaling: opnieuw draaien.
+
 - Start ForgeTerm voor tests **zonder** `NO_COLOR` in de omgeving (Claude Code zet `NO_COLOR=1`; PowerShell schakelt dan kleuren uit — correct gedrag, maar verwarrend).
 - `SendKeys` met een US-International-layout maakt van `'`+`C` een `Ç` (dode toets) — geen ForgeTerm-bug.
 

@@ -87,6 +87,10 @@ pub enum CommandId {
     ToggleGitPanel,
     /// Git Control Center: the repository overview in the main area.
     ToggleGitDashboard,
+    /// Create a worktree on a new branch and start an agent in it (asks first).
+    NewAgentWorktree,
+    /// Remove a linked worktree (asks first; never forced), by its stable id.
+    RemoveWorktree(u64),
     /// New tab in a worktree of the Git Control Center's list, by its stable id
     /// (`git_dash::worktree_id`): a list reloaded meanwhile can never redirect it.
     WorktreeTerminal(u64),
@@ -158,6 +162,7 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::GitRefresh,
     CommandId::GitShowHistory,
     CommandId::ToggleGitDashboard,
+    CommandId::NewAgentWorktree,
     CommandId::About,
     CommandId::Website,
     CommandId::Quit,
@@ -177,6 +182,7 @@ impl CommandId {
                 | TerminalGit(_)
                 | StopTerminal(_)
                 | WorktreeTerminal(_)
+                | RemoveWorktree(_)
         )
     }
 
@@ -260,7 +266,7 @@ impl CommandId {
             | TogglePromptStudioDock
             | OpenPromptsFolder => "AI",
             ToggleGitPanel | GitRefresh | GitShowHistory | ToggleGitDashboard
-            | WorktreeTerminal(_) => "Git",
+            | NewAgentWorktree | RemoveWorktree(_) | WorktreeTerminal(_) => "Git",
             About | Website | KeyboardShortcuts => "Help",
             Quit => "App",
         }
@@ -344,6 +350,8 @@ impl CommandId {
             GitShowHistory => "git_history",
             ToggleGitDashboard => "git_dashboard",
             WorktreeTerminal(_) => "worktree_terminal",
+            NewAgentWorktree => "agent_worktree",
+            RemoveWorktree(_) => "remove_worktree",
             ToggleViewer => "toggle_viewer",
             ViewSelectedFile => "view_selected_file",
             ToggleMonitor => "toggle_monitor",
@@ -442,6 +450,8 @@ impl CommandId {
             GitShowHistory => "Show History and Activity",
             ToggleGitDashboard => "Git Control Center (Dashboard)",
             WorktreeTerminal(_) => "New Tab in Worktree",
+            NewAgentWorktree => "Start Agent in a New Worktree…",
+            RemoveWorktree(_) => "Remove Worktree…",
             ReloadSettings => "Reload Settings",
             About => "About ForgeTerm",
             Website => "Open Website (vandeblaak.com)",

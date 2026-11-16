@@ -21,6 +21,7 @@ mod terminal_view;
 mod theme;
 mod viewer_view;
 mod workspace;
+mod worktree_form;
 
 use tracing_subscriber::EnvFilter;
 
