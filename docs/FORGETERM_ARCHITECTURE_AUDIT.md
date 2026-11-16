@@ -119,7 +119,7 @@ Goed al: wakeup-coalescing, verborgen panes kosten bijna niets, viewer cachet pe
   - de clipboard-CRLF-conversie, de home-dir-lookup, de 22 px rijhoogte (3×) en de modal-scrim (6×);
   - `viewer_view::to_color` dupliceert `theme::to_color`.
 - **Achterhaalde markeringen:** `#![allow(dead_code)]` in `theme.rs` en een verkeerd geplaatst sectiecommentaar.
-- **Docs-drift:**
+- ✅ **Docs-drift** weggewerkt 2026-11-16 (kop, §3-boom, §7 platform/Linux, CI-sectie, testaantallen). Oorspronkelijk:
   - ARCHITECTURE-kop zegt nog "Fase 1", §7 "Linux nog niet gevalideerd", §3-boom mist ±15 bestanden, en er staat een verwijzing naar `links` (moet `url` zijn);
   - testaantallen in ROADMAP/TEST_PLAN (142 vs. 177);
   - CI ontbreekt in de docs.

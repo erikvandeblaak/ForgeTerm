@@ -1,7 +1,7 @@
 # ForgeTerm — Architecture
 
-Status: **Fase 1 (Fundament) — verticale slice werkt op Windows 11.**
-Laatste update: 2026-11-10.
+Status: **fase 1–6 grotendeels af** (terminal, werkruimte, AI-werkplek, Mission Control, Git, Compare Worktrees); zie ROADMAP voor de stand per onderdeel. Windows 11 in de GUI getest; Linux in WSL Ubuntu 24.04 (tests + GUI onder WSLg), een echte Mint-desktop nog niet.
+Laatste update: 2026-11-16.
 
 ## 1. Doel van de architectuur
 
@@ -40,16 +40,26 @@ ForgeTerm/
 │   │   ├── src/shell.rs          # shelldetectie + ShellKind (pwsh, powershell, cmd, Git Bash, WSL / $SHELL, bash, zsh, fish)
 │   │   ├── src/quote.rs          # paden quoten per shell (+ /c/… en /mnt/c/… conversie), unit-getest
 │   │   ├── src/cwd.rs            # OSC 7 / OSC 9;9-scanner (werkmap-meldingen), unit-getest
-│   │   ├── src/integration.rs    # shell-integratie: args/env zodat shells hun map melden
+│   │   ├── src/integration.rs    # shell-integratie: args/env zodat shells hun map en commando's melden
+│   │   ├── src/osc.rs            # scanner voor OSC-reeksen die alacritty niet afhandelt (133/633, 7501, 9;9, 7)
+│   │   ├── src/marks.rs          # commandomarkeringen (OSC 133/633): prompts, commando's, exitcodes
+│   │   ├── src/status.rs         # OSC 7501: status die een programma zelf meldt
+│   │   ├── src/url.rs            # links in de uitvoer (alleen http/https openbaar)
+│   │   ├── src/filelink.rs       # bestandsverwijzingen (`pad:regel`) in de uitvoer
+│   │   ├── src/search.rs         # zoeken in de terminal (letterlijke tekst)
+│   │   ├── src/headless.rs       # emulator zonder PTY: voor benches en snapshot-tests
 │   │   ├── tests/pty_roundtrip.rs# end-to-end test met echte shell
 │   │   ├── tests/quote_real_shells.rs # gequote paden met lastige namen door elke geïnstalleerde shell laten lezen
 │   │   ├── tests/cwd_tracking.rs # elke geïnstalleerde shell in PTY: cd → juiste map gemeld
+│   │   ├── tests/command_marks.rs# commandomarkeringen en statusvragen met een echte shell
+│   │   ├── benches/terminal.rs   # emulator, snapshot, scans, zoeken (docs/PERFORMANCE.md)
 │   │   └── examples/probe.rs     # diagnose: dump gestylede cellen van een programma
+│   ├── forgeterm-fs/             # padveiligheid zonder dependencies: lokaal pad, geen link naar een netwerkshare
 │   ├── forgeterm-explorer/       # bestandsboom-model, GUI-vrij, unit-getest
 │   ├── forgeterm-agents/         # AI-agents: detectie, versie, start-commando, projectcontext; unit-getest
 │   ├── forgeterm-prompts/        # Prompt Studio-sjablonen: parsen, variabelen, invullen; unit-getest
-│   ├── forgeterm-git/            # Git via de CLI: status (porcelain v2), diff, log, stage/unstage, commit; tests tegen echte git
-│   ├── forgeterm-viewer/         # Code-viewer: laden, decoderen, kleuren (syntect, pure-Rust regex), zoeken; unit-getest
+│   ├── forgeterm-git/            # Git via de CLI: status (porcelain v2), diff, log, branches, worktrees, vergelijken; tests tegen echte git
+│   ├── forgeterm-viewer/         # Code-viewer: laden, decoderen, kleuren (syntect, pure-Rust regex), zoeken; unit-getest + bench
 │   ├── forgeterm-system/         # Procesinfo (sysinfo): programma's die een shell nog draait; tests met echte processen
 │   ├── forgeterm-settings/       # settings.toml: tolerant laden, template, pad; unit-getest
 │   └── forgeterm-app/            # GUI (binary `forgeterm`)
@@ -66,6 +76,16 @@ ForgeTerm/
 │       ├── src/palette.rs        # Command Palette (logica getest + overlay-view)
 │       ├── src/menu.rs           # menubalk: structuur uit de registry, navigatie (getest), dropdown
 │       ├── src/explorer_view.rs  # zijpaneel van de bestandsverkenner
+│       ├── src/ai_view.rs        # AI-werkplek (agents, projectcontext)
+│       ├── src/prompt_studio.rs  # Prompt Studio (zwevend of gedockt)
+│       ├── src/mission_view.rs   # Mission Control
+│       ├── src/git_view.rs       # Git-paneel, diff- en historie-overlays
+│       ├── src/git_dash.rs       # Git Control Center
+│       ├── src/worktree_form.rs  # agent in een nieuwe worktree + verwijderbevestiging
+│       ├── src/compare_view.rs   # Compare Worktrees
+│       ├── src/monitor_view.rs   # monitorpaneel
+│       ├── src/viewer_view.rs    # code-viewer
+│       ├── src/icon.rs           # vensterpictogram
 │       ├── src/terminal_pane.rs  # één terminal: sessie, snapshot, levenscyclus, titel
 │       ├── src/terminal_view.rs  # canvas-renderer + muisafhandeling
 │       ├── src/glyphs.rs         # pixel-exacte box-drawing/blok-tekens
@@ -332,6 +352,18 @@ Door de reviewer gecontroleerd en in orde bevonden: OSC 52 lezen geweigerd, tite
 
 ## 7. Platformgrenzen
 
-Alle platformspecifieke code zit nu in `shell.rs` (`#[cfg(windows)]` / `#[cfg(unix)]`) en in alacritty's `tty`. Bij het eerste platformspecifieke onderdeel buiten de engine (GPU-metrics, bestandsbeheer) komt `forgeterm-platform` met traits per functie.
+- **De grote platformverschillen** zitten in `shell.rs` (welke shells, hoe ze starten) en in alacritty's `tty` (ConPTY tegen een echte PTY).
+- **Daarnaast** staan er kleine `#[cfg]`-takken op ongeveer twintig plaatsen. Voorbeelden: padregels (drive-letters, UNC, hoofdletters), geen consolevenster bij git op Windows, CRLF op het klembord, Ctrl+V alleen op Windows, en bestanden openen met het OS.
+- Elke tak is klein en blijft bij de code waar hij over gaat. Een aparte `forgeterm-platform`-crate komt er pas met het eerste grotere onderdeel, zoals GPU-metingen (P3).
+- **Linux** is getest in WSL Ubuntu 24.04, de basis van Linux Mint 22:
+  - build en alle tests, inclusief echte PTY's met `/bin/sh` en bash;
+  - de GUI onder WSLg, via `FORGETERM_SCREENSHOT`;
+  - een echte Mint-desktop (Cinnamon/X11) nog niet.
+- **Vóór elke merge** draait `cargo clippy --target x86_64-unknown-linux-gnu`, zodat ook de Unix-takken compileren. Zie TEST_PLAN.
 
-Linux is **nog niet gevalideerd** (geen Linux-machine getest). Wel compileert de hele workspace (incl. tests) voor `x86_64-unknown-linux-gnu` zonder clippy-waarschuwingen; daarbij bleek dat iced's `x11`/`wayland`-features ontbraken (de app zou op Linux niet gebouwd hebben) — nu toegevoegd. Zie TEST_PLAN.
+### CI
+
+- `.github/workflows/ci.yml` draait bij elke push naar `master` en elke pull request.
+- Op `windows-latest` en `ubuntu-24.04` draaien `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings` en `cargo test --workspace`.
+- Op Ubuntu worden eerst de bouwbibliotheken geïnstalleerd (xkbcommon, wayland, fontconfig).
+- De prestatiebudgetten uit TEST_PLAN worden nog niet in CI bewaakt.
