@@ -14,9 +14,17 @@ use forgeterm_terminal::{
 };
 
 fn spawn(shell: &ShellSpec) -> (Session, mpsc::Receiver<SessionEvent>) {
+    spawn_with(shell, &[])
+}
+
+fn spawn_with(shell: &ShellSpec, env: &[(&str, &str)]) -> (Session, mpsc::Receiver<SessionEvent>) {
     let (tx, rx) = mpsc::channel();
     let config = SessionConfig {
         shell: Some(shell.clone()),
+        env: env
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
         working_directory: Some(std::env::temp_dir()),
         size: GridSize::new(100, 30, 8, 16),
         ..Default::default()
@@ -74,7 +82,25 @@ fn installed_shells_mark_prompts_and_commands() {
         if !integrated {
             continue;
         }
-        let (session, rx) = spawn(&shell);
+        // pwsh 7 strips escape sequences from the prompt under NO_COLOR
+        // (`$PSStyle.OutputRendering = 'PlainText'`): the marks must survive that.
+        let mut envs: Vec<&[(&str, &str)]> = vec![&[]];
+        if shell.kind == ShellKind::PowerShell {
+            envs.push(&[("NO_COLOR", "1")]);
+        }
+        for env in envs {
+            check_shell(&shell, env);
+            verified.push(format!("{} {env:?}", shell.name));
+        }
+    }
+    println!("command marks verified in: {verified:?}");
+}
+
+/// Prompt marks, the last command's output and exit code, and prompt navigation in
+/// one shell started with `env` (added to the inherited environment).
+fn check_shell(shell: &ShellSpec, env: &[(&str, &str)]) {
+    {
+        let (session, rx) = spawn_with(shell, env);
         wait(&rx, &format!("{}: first prompt mark", shell.name), || {
             session.has_prompt_marks()
         });
@@ -154,9 +180,7 @@ fn installed_shells_mark_prompts_and_commands() {
         assert_eq!(session.snapshot(&Palette::default()).display_offset, 0);
 
         session.input(b"exit\r".to_vec());
-        verified.push(shell.name.clone());
     }
-    println!("command marks verified in: {verified:?}");
 }
 
 #[test]
