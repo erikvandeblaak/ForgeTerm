@@ -194,7 +194,11 @@ Include ~/.ssh/other
         let spec = ssh_spec(Path::new("/usr/bin/ssh"), &host);
         assert_eq!(spec.args, ["--", "web"]);
         assert_eq!(spec.name, "SSH: web");
-        assert_eq!(spec.kind, ShellKind::Ssh);
+        assert_eq!(spec.kind, ShellKind::Remote);
+        assert_eq!(
+            ShellKind::from_program(r"C:\Program Files\Docker\Docker\resources\bin\docker.exe"),
+            ShellKind::Remote
+        );
     }
 
     #[test]

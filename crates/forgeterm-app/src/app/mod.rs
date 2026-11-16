@@ -174,6 +174,10 @@ pub enum Message {
     TermFindClose,
     DismissNotice,
     MonitorSampled(Box<forgeterm_system::Sample>),
+    /// `docker ps -a` finished; `explicit`: the user asked (errors become a notice).
+    DockerListed(Result<Vec<forgeterm_docker::Container>, String>, bool),
+    /// `docker start/stop` finished (what was done, for the notice).
+    DockerDone(Result<(), String>, String),
     /// Once per second while Mission Control is open (runtimes, branch refresh).
     MissionTick,
     WorktreeFormAgent(AgentKind),
@@ -255,9 +259,17 @@ pub struct HistoryData {
     activity: Result<forgeterm_git::Activity, String>,
 }
 
-/// Entry of the "new tab with shell…" dropdown.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// What ForgeTerm knows about Docker: the CLI and the last container list.
+#[derive(Default)]
+pub struct Docker {
+    program: Option<PathBuf>,
+    containers: Vec<forgeterm_docker::Container>,
+    loading: bool,
+    loaded_at: Option<std::time::Instant>,
+}
+
 /// An entry of the "New tab with…" picker: a shell or an SSH host.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShellChoice {
     command: CommandId,
     name: String,
@@ -272,6 +284,7 @@ impl fmt::Display for ShellChoice {
 pub struct App {
     /// The OpenSSH client, if installed.
     ssh_program: Option<PathBuf>,
+    docker: Docker,
     /// `Host` entries of `~/.ssh/config` (read only).
     ssh_hosts: Vec<forgeterm_terminal::ssh::SshHost>,
     ssh_config_mtime: Option<SystemTime>,
@@ -366,6 +379,7 @@ struct PendingInsert {
 mod ai;
 mod close;
 mod compare;
+mod docker;
 mod git;
 mod handle;
 mod input;
@@ -442,6 +456,10 @@ impl App {
             compare: Compare::default(),
             pending_inserts: Vec::new(),
             ssh_program: forgeterm_terminal::ssh::find_ssh(),
+            docker: Docker {
+                program: forgeterm_docker::find_docker(),
+                ..Docker::default()
+            },
             ssh_hosts: Vec::new(),
             ssh_config_mtime: None,
         };

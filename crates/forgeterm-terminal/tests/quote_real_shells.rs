@@ -55,7 +55,7 @@ fn read_with(shell: &ShellSpec, quoted: &str) -> Option<String> {
         // Starting WSL boots a Linux distribution; not done from a unit test run.
         ShellKind::Wsl => return None,
         // Needs another machine; never a detected shell.
-        ShellKind::Ssh => return None,
+        ShellKind::Remote => return None,
     }
     let out = cmd.output().expect("shell starts");
     assert!(

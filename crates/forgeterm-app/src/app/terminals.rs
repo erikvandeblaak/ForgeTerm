@@ -21,9 +21,9 @@ impl App {
         let cwd = Some(cwd.unwrap_or_else(|| self.start_dir.clone()));
         let options = SessionOptions {
             scrollback: self.settings.terminal.scrollback,
-            // Agents and SSH sessions run their own program, not a local shell.
+            // Agents, SSH and container sessions run their own program, not a local shell.
             shell_integration: agent.is_none()
-                && shell.kind != ShellKind::Ssh
+                && shell.kind != ShellKind::Remote
                 && self.settings.terminal.shell_integration,
         };
         let mut pane = TerminalPane::new(id, shell, cwd, options, &self.palette);
@@ -117,8 +117,8 @@ impl App {
             .workspace
             .focused()
             .and_then(|id| self.terminals.get(&id))
-            // An agent or SSH pane splits into a local shell (no second login).
-            .filter(|t| t.agent.is_none() && t.shell.kind != ShellKind::Ssh)
+            // An agent, SSH or container pane splits into a local shell.
+            .filter(|t| t.agent.is_none() && t.shell.kind != ShellKind::Remote)
             .map(|t| t.shell.clone())
             .or_else(|| self.shell_at(None));
         let Some(shell) = shell else {

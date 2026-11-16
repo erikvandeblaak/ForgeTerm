@@ -15,9 +15,10 @@ pub enum ShellKind {
     GitBash,
     /// WSL: POSIX quoting, `/mnt/c/...` paths.
     Wsl,
-    /// The OpenSSH client: a shell on another machine (POSIX quoting; no shell
-    /// integration; its directory reports are about the remote file system).
-    Ssh,
+    /// A shell elsewhere: the OpenSSH client (another machine) or `docker` (a
+    /// container). POSIX quoting; no shell integration; its directory reports are
+    /// about another file system.
+    Remote,
 }
 
 impl ShellKind {
@@ -34,7 +35,7 @@ impl ShellKind {
             "cmd" => Self::Cmd,
             "fish" => Self::Fish,
             "wsl" => Self::Wsl,
-            "ssh" => Self::Ssh,
+            "ssh" | "docker" => Self::Remote,
             // System32\bash.exe is the WSL launcher, not Git Bash.
             "bash" if normalized.contains("/windows/system32/") => Self::Wsl,
             "bash" | "sh" if normalized.contains("/git/") => Self::GitBash,

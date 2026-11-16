@@ -982,6 +982,7 @@ dependencies = [
  "anyhow",
  "embed-resource",
  "forgeterm-agents",
+ "forgeterm-docker",
  "forgeterm-explorer",
  "forgeterm-fs",
  "forgeterm-git",
@@ -995,6 +996,10 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
 ]
+
+[[package]]
+name = "forgeterm-docker"
+version = "0.2.0"
 
 [[package]]
 name = "forgeterm-explorer"

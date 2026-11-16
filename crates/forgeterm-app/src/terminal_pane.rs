@@ -164,10 +164,10 @@ impl TerminalPane {
 
     /// Where this terminal is: the directory the shell last reported, else the one
     /// it was started in (agents and shells without integration never report one).
-    /// `None` for SSH: its shell works on another machine, so no local folder (new
+    /// `None` for SSH and containers: their shell works elsewhere, so no local folder (new
     /// tabs, explorer, Git panel, status bar) may follow it.
     pub fn directory(&self) -> Option<&Path> {
-        if self.shell.kind == forgeterm_terminal::ShellKind::Ssh {
+        if self.shell.kind == forgeterm_terminal::ShellKind::Remote {
             return None;
         }
         self.process_directory()
@@ -329,9 +329,9 @@ impl TerminalPane {
                     return Outcome::Attention;
                 }
             }
-            // An SSH session's directory is on the other machine: never use it
+            // An SSH or container session's directory is in another file system: never use it
             // for local tabs, the explorer or file links.
-            SessionEvent::Cwd(_) if self.shell.kind == forgeterm_terminal::ShellKind::Ssh => {}
+            SessionEvent::Cwd(_) if self.shell.kind == forgeterm_terminal::ShellKind::Remote => {}
             SessionEvent::Cwd(path) => {
                 let path = PathBuf::from(path);
                 if self.cwd.as_ref() != Some(&path) {

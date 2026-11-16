@@ -131,13 +131,12 @@ Stap 1–4 gedaan (branch `feature/p2-performance`, 2026-11-16): metingen en bes
 
 - ✅ **GPU-provider** in `forgeterm-system` (2026-11-16): NVML (Windows + Linux) en amdgpu-sysfs, met "niet beschikbaar" en de reden als standaard. Nog open: AMD ADLX en Intel op Windows.
 - ✅ **SSH-profielen** (2026-11-16): de `Host`-items uit `~/.ssh/config` (alleen lezen) als "New SSH Tab: …" in palette, File-menu en de tab-kiezer; de OpenSSH-client draait als programma in de tab (geen eigen crypto, wachtwoorden en host-keys vraagt `ssh` zelf). Geen shell-integratie; de mapmeldingen van de externe machine worden genegeerd; opsplitsen en sessieherstel geven een lokale shell. Nog open: SFTP/bestanden.
-- **Docker:** optioneel via de `docker`-CLI (detectie zoals agents); containers bekijken, logs, terminal openen; start/stop alleen op klik.
+- ✅ **Docker** (2026-11-16): optioneel via de `docker`-CLI (`forgeterm-docker`); containers in de palette, shell en logs als tab, start/stop alleen op klik; nooit verwijderen. Getest met Docker Desktop 29.9.2 en een wegwerpcontainer.
 - **Updates:** ondertekende releases (code signing), SHA-256 in release notes, geen automatisch installeren.
 
 ## Eerstvolgende stappen
 
 Stand 2026-11-16: P0, P1 (milestones 1–4) en P2 zijn gemerged, net als de thema's. P2-stappen 5, 6 en 8 zijn gedaan (zie de audit, T2–T8, §8 en docs-drift).
 
-1. P3: Docker via de CLI (vraagt Docker Desktop aan voor de test).
 2. Ondertekende releases: vraagt een code-signing-certificaat (beslissing van Erik).
 3. Release-fase 7: nieuwe installer, test op een echte Linux Mint-desktop (vraagt Erik).

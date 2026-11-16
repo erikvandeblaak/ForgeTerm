@@ -57,6 +57,18 @@ impl CommandPalette {
     }
 
     /// Appends typed text (used for keys that arrive before the input has focus).
+    /// New entries (for example containers that arrived after opening); the query
+    /// and, when still listed, the selected command are kept.
+    pub fn set_entries(&mut self, entries: Vec<Entry>) {
+        let selected = self.selected();
+        self.entries = entries;
+        self.filter();
+        if let Some(i) = selected.and_then(|id| self.results.iter().position(|m| m.entry.id == id))
+        {
+            self.selected = i;
+        }
+    }
+
     pub fn push_query(&mut self, text: &str) {
         let mut query = std::mem::take(&mut self.query);
         query.push_str(text);

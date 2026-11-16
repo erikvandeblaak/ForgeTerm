@@ -487,7 +487,10 @@ impl App {
             .map_or_else(String::new, |t| {
                 format!("↑ {} / {}", t.snapshot.display_offset, t.snapshot.history)
             });
-        let git_summary: Element<'_, Message> = match self.git.summary() {
+        // An SSH or container shell works elsewhere: the local repository's status
+        // would look like the remote side's.
+        let remote = focused.is_some_and(|t| t.shell.kind == ShellKind::Remote);
+        let git_summary: Element<'_, Message> = match self.git.summary().filter(|_| !remote) {
             Some((summary, color)) => mouse_area(
                 text(summary)
                     .size(theme::size::SMALL)

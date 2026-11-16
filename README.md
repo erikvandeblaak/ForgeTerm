@@ -56,6 +56,7 @@ A terminal that runs AI agents has to be predictable. ForgeTerm puts the tools y
 | **Explorer and session** | A file tree that follows your shell's folder, usable by keyboard. Double-click puts the path in the terminal, quoted correctly for that shell. Tabs, splits and folders come back at the next start. |
 | **Monitor** | CPU and memory of the system and of each terminal's whole process tree, with three minutes of history. GPU load, VRAM and temperature for NVIDIA GPUs (through the driver) and AMD GPUs on Linux; other GPUs show *not available* with the reason. |
 | **Themes** | Midnight, Graphite, Arctic (light), Cyber and High Contrast, for the window, the terminals and the code viewer. Switch in *View › Theme* without a restart; every theme's contrast is tested. |
+| **Docker** | With the `docker` CLI installed, your containers appear in the command palette: a shell in a running container or its live log in a new tab, start and stop. Nothing is ever removed. |
 | **SSH profiles** | The hosts in your `~/.ssh/config` appear as *New SSH Tab* in the palette and the File menu. The tab runs your own OpenSSH client: ForgeTerm has no SSH code of its own and never sees a password. |
 | **Tab badges** | A tab shows *needs you*, *done*, *failed*, *working* or *bell* when a program asks for attention; the taskbar flashes when the window is in the background. |
 
@@ -153,7 +154,7 @@ Packages: `pwsh scripts\package-windows.ps1` builds the zip and, with [NSIS 3](h
 
 ### Project layout
 
-ForgeTerm is a Cargo workspace of ten crates. The terminal engine contains no GUI code, so it can be tested on its own, and the workspace denies `unsafe` code apart from two documented places.
+ForgeTerm is a Cargo workspace of eleven crates. The terminal engine contains no GUI code, so it can be tested on its own, and the workspace denies `unsafe` code apart from two documented places.
 
 | Crate | Purpose |
 |---|---|
@@ -166,6 +167,7 @@ ForgeTerm is a Cargo workspace of ten crates. The terminal engine contains no GU
 | `forgeterm-explorer` | file tree; never changes the file system |
 | `forgeterm-settings` | `settings.toml`: tolerant loading, template |
 | `forgeterm-fs` | path safety: local paths only, no links to network shares |
+| `forgeterm-docker` | Docker through the `docker` CLI: list, start, stop; shell and log commands |
 | `forgeterm-system` | CPU and memory per terminal (sysinfo, read only), GPU usage (NVML, amdgpu sysfs) |
 
 More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/TEST_PLAN.md](docs/TEST_PLAN.md) (in Dutch).
