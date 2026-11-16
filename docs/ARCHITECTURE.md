@@ -185,6 +185,24 @@ Alleen gedocumenteerde interfaces (Claude Code-documentatie op code.claude.com, 
 - **History** (`history.rs`): `git log --format` met %x1f/%x1e-scheiding (300 commits), `git show --format=fuller --stat --patch` (alleen hex-hash geaccepteerd), activiteit = `git log --since=<unix>` → authored-tijden → lokale kalenderdag via `chrono` (`daily_counts` is puur en getest). Grafiekkleur `CHART_CYAN` (#26A6B6) gevalideerd met de dataviz-validator tegen het donkere oppervlak; één reeks dus geen legenda, tooltip per staaf (datum + aantal), alleen max en de datumuiteinden gelabeld.
 - **Lijsten** max 150 rijen per sectie, diffs max 5000 regels (gemarkeerd als afgekapt).
 
+## 4i2. Git Control Center
+
+- **Wat het is:** een alleen-lezen overzicht van de repository van de gefocuste terminal, in het hoofdgebied (zoals Mission Control; de twee sluiten elkaar uit). Het Git-zijpaneel mag ernaast open voor stage en commit.
+- **Data** (`App::load_git_dash` → `load_dashboard`, achtergrondthread):
+  - `worktrees` (`git worktree list --porcelain -z`);
+  - `numstat` staged en unstaged (`git diff --numstat -z`; renames, binaire bestanden);
+  - `activity` (30 dagen), `history` (8) en `branches`.
+  - De status zelf komt van het paneel (`GitState`), dus geen dubbele `git status`.
+- **Andere worktrees:** elk krijgt een eigen trustcheck (`repo_programs`) vóór er een `status` op draait (max. 12), en alleen als de map lokaal is en bestaat. Anders: *Paused*, *Missing* of *NotRead*.
+- **Verversen:** bij openen, bij *Refresh*, en na elke paneel-refresh. Dat laatste alleen als de status veranderde sinds de vorige load, de repository wisselde, of de data ouder is dan 10 s (commits of worktrees van elders). Nooit meer dan één load tegelijk.
+- **Agents per worktree:** de map waarin ForgeTerm de agent startte, gekoppeld aan de diepste worktree die hem bevat (`git_dash::worktree_of`, getest; op Windows hoofdletter- en scheidingsteken-ongevoelig). Dat is betrouwbaar. "Welke agent veranderde welk bestand" niet, en dat wordt dus ook niet getoond.
+- **Acties** (alles via commands):
+  - `ToggleGitDashboard` (Ctrl+Shift+H), `WorktreeTerminal(n)` (nieuwe tab in die worktree), `GitRefresh`, `GitShowHistory`, `ToggleGitPanel`;
+  - `GoToTerminal` (agentbadge);
+  - een klik op een bestand opent de bestaande diff-overlay.
+  - Een klik op een tab gaat nu ook via `CommandId::SelectTab`, zodat een dashboard dat de terminals bedekt, sluit.
+- **Submodules** (audit S1): `status`, `diff` en `numstat` gebruiken `--ignore-submodules=all`. De config van een submodule valt buiten `repo_programs` en kon via `git status` een clean-filter laten draaien (gereproduceerd; de test faalt zonder de fix). Gevolg: wijzigingen ín submodules verschijnen niet meer in status en dashboard.
+
 ## 4j. Code-viewer
 
 - **Laden** (`forgeterm-viewer::load`, achtergrondthread): max 8 MB; NUL in de eerste 8 KB zonder UTF-16-BOM = binair (geweigerd); UTF-8, UTF-8-BOM, UTF-16 LE/BE, anders lossy (zichtbaar in de statusregel). Twee versies per regel: het origineel (kopiëren) en een weergaveregel (tabs naar 4 kolommen, besturingstekens naar U+2400-symbolen, afgekapt op 2000 kolommen). Een ESC-reeks in een bestand wordt dus getoond, nooit geïnterpreteerd.

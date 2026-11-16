@@ -67,7 +67,9 @@ Datum: 2026-11-16. Bron: `docs/FORGETERM_ARCHITECTURE_AUDIT.md` (bevindingen T*,
 - "Needs you", "Working" en "Done" in de GUI: ConPTY gooit het OSC 7501-queryantwoord weg, en Claude Code meldt in onze test niets. Wel unit-getest.
 - Linux GUI niet uitgevoerd; alleen clippy voor het Linux-target.
 
-## P1 — Milestone 2: Git Control Center als dashboard
+## P1 — Milestone 2: Git Control Center als dashboard ✅ (branch `feature/git-dashboard`, 2026-11-16)
+
+Geleverd: alles hieronder behalve de syntaxgekleurde diff op een canvas (de bestaande diff-overlay wordt gebruikt). S1 (submodules) is meteen meegenomen. Zie ARCHITECTURE §4i2 en TEST_PLAN GD1–GD10.
 
 **Doel:** een visueel overzicht van de repository, en van wat agents erin veranderen.
 

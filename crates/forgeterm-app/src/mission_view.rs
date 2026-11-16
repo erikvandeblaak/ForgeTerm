@@ -252,7 +252,7 @@ fn header<'a>(v: &View<'a>, attention: usize) -> Element<'a, Message> {
 }
 
 /// Summary pill; `lit` = coloured, else muted.
-fn chip<'a>(label: String, color: Color, lit: bool) -> Element<'a, Message> {
+pub fn chip<'a>(label: String, color: Color, lit: bool) -> Element<'a, Message> {
     let fg = if lit { color } else { theme::TEXT_MUTED };
     container(
         row![text("●").size(9).color(fg), text(label).size(12).color(fg)]
@@ -576,7 +576,7 @@ fn card_view(c: Card<'_>) -> Element<'_, Message> {
     card.into()
 }
 
-fn agent_badge<'a>(kind: AgentKind) -> Element<'a, Message> {
+pub fn agent_badge<'a>(kind: AgentKind) -> Element<'a, Message> {
     let (glyph, color) = match kind {
         AgentKind::ClaudeCode => ("✶", theme::AMBER),
         AgentKind::Codex => ("◎", theme::CYAN),
@@ -624,7 +624,7 @@ fn status_pill<'a>(s: Status, live: f32) -> Element<'a, Message> {
     .into()
 }
 
-fn tag<'a>(label: &'a str, color: Color) -> Element<'a, Message> {
+pub fn tag<'a>(label: &'a str, color: Color) -> Element<'a, Message> {
     container(text(label).size(10).color(color))
         .padding([1, 6])
         .style(move |_| container::Style {
@@ -638,7 +638,7 @@ fn tag<'a>(label: &'a str, color: Color) -> Element<'a, Message> {
         .into()
 }
 
-fn stat_label<'a>(s: &'a str) -> Element<'a, Message> {
+pub fn stat_label<'a>(s: &'a str) -> Element<'a, Message> {
     text(s).size(10).color(theme::TEXT_MUTED).into()
 }
 
@@ -748,7 +748,7 @@ fn ended_list(ended: &VecDeque<Ended>, now: Instant) -> Element<'_, Message> {
         .into()
 }
 
-fn with_tip<'a>(content: impl Into<Element<'a, Message>>, tip: String) -> Element<'a, Message> {
+pub fn with_tip<'a>(content: impl Into<Element<'a, Message>>, tip: String) -> Element<'a, Message> {
     tooltip(
         content,
         container(text(tip).size(11).color(theme::TEXT))
@@ -770,14 +770,15 @@ fn with_tip<'a>(content: impl Into<Element<'a, Message>>, tip: String) -> Elemen
 }
 
 /// `primary`: filled accent style; otherwise quiet until hovered.
-fn action_button<'a>(
+pub fn action_button<'a>(
     label: String,
     msg: Option<Message>,
     accent: Color,
     primary: bool,
 ) -> Element<'a, Message> {
     let enabled = msg.is_some();
-    button(text(label).size(12))
+    // Labels never wrap: a two-line button breaks the row's rhythm.
+    button(text(label).size(12).wrapping(text::Wrapping::None))
         .padding([5, 12])
         .on_press_maybe(msg)
         .style(move |_, status| {

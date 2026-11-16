@@ -722,7 +722,7 @@ fn branches_block(git: &GitState) -> Element<'_, Message> {
 const CHART_HEIGHT: f32 = 72.0;
 
 /// Commits per day as bars (one series, so no legend: the title names it).
-fn activity_chart(activity: &Activity) -> Element<'_, Message> {
+pub fn activity_chart(activity: &Activity) -> Element<'_, Message> {
     let max = activity.days.iter().map(|(_, n)| *n).max().unwrap_or(0);
     let title = format!(
         "Commits per day · last {} days · {} total",

@@ -85,6 +85,10 @@ pub enum CommandId {
     TogglePromptStudioDock,
     OpenPromptsFolder,
     ToggleGitPanel,
+    /// Git Control Center: the repository overview in the main area.
+    ToggleGitDashboard,
+    /// New tab in worktree `n` of the Git Control Center's list.
+    WorktreeTerminal(usize),
     GitRefresh,
     GitShowHistory,
     About,
@@ -152,6 +156,7 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::ToggleGitPanel,
     CommandId::GitRefresh,
     CommandId::GitShowHistory,
+    CommandId::ToggleGitDashboard,
     CommandId::About,
     CommandId::Website,
     CommandId::Quit,
@@ -176,6 +181,7 @@ impl CommandId {
                 | FocusPane(_)
                 | RestartShell
                 | StartAgent(..)
+                | WorktreeTerminal(_)
                 | NewTabInSelectedFolder
                 | FindInTerminal
                 | PreviousCommand
@@ -236,7 +242,8 @@ impl CommandId {
             | OpenPromptStudio
             | TogglePromptStudioDock
             | OpenPromptsFolder => "AI",
-            ToggleGitPanel | GitRefresh | GitShowHistory => "Git",
+            ToggleGitPanel | GitRefresh | GitShowHistory | ToggleGitDashboard
+            | WorktreeTerminal(_) => "Git",
             About | Website | KeyboardShortcuts => "Help",
             Quit => "App",
         }
@@ -318,6 +325,8 @@ impl CommandId {
             ToggleGitPanel => "toggle_git_panel",
             GitRefresh => "git_refresh",
             GitShowHistory => "git_history",
+            ToggleGitDashboard => "git_dashboard",
+            WorktreeTerminal(_) => "worktree_terminal",
             ToggleViewer => "toggle_viewer",
             ViewSelectedFile => "view_selected_file",
             ToggleMonitor => "toggle_monitor",
@@ -414,6 +423,8 @@ impl CommandId {
             KeyboardShortcuts => "Keyboard Shortcuts",
             GitRefresh => "Refresh Git Status",
             GitShowHistory => "Show History and Activity",
+            ToggleGitDashboard => "Git Control Center (Dashboard)",
+            WorktreeTerminal(_) => "New Tab in Worktree",
             ReloadSettings => "Reload Settings",
             About => "About ForgeTerm",
             Website => "Open Website (vandeblaak.com)",
@@ -574,6 +585,7 @@ impl Default for Keymap {
             (b(CS, Char('d')), ToggleMissionControl),
             (b(CS, Char('i')), OpenPromptStudio),
             (b(CS, Char('g')), ToggleGitPanel),
+            (b(CS, Char('h')), ToggleGitDashboard),
             (b(CS, Char('o')), ToggleViewer),
             (b(CS, Char('f')), FindInTerminal),
             (b(CS, Char('m')), ToggleMonitor),
