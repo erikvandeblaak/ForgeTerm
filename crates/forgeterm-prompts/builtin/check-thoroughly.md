@@ -1,5 +1,5 @@
 ---
-name: Grondig controleren en doorgaan
-description: Alles grondig checken, controleren en testen; zelfstandig doorgaan tot je mij nodig hebt
+name: Check thoroughly and keep going
+description: Check, verify and test everything thoroughly; keep working until you really need me
 ---
-Check, controleer en test alles heel grondig in {{project}}. Ga door totdat je mij echt nodig hebt.
+Check, verify and test everything very thoroughly. Keep going until you really need me.
