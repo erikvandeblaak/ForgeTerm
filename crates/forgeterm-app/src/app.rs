@@ -36,6 +36,7 @@ use crate::terminal_pane::{Outcome, SessionOptions, Status, TermId, TermMsg, Ter
 use crate::terminal_view::{Metrics, TerminalCanvas};
 use crate::viewer_view::{self, Viewer, ViewerMsg, ViewerTab};
 use crate::workspace::Workspace;
+use crate::worktree_form::{self, WorktreeForm};
 use crate::{explorer_view, keys, theme};
 
 const LOGO: &[u8] = include_bytes!("../../../assets/branding/forgeterm-logo.svg");
@@ -199,6 +200,15 @@ pub enum Message {
     MonitorSampled(Box<forgeterm_system::Sample>),
     /// Once per second while Mission Control is open (runtimes, branch refresh).
     MissionTick,
+    WorktreeFormAgent(AgentKind),
+    WorktreeFormBranch(String),
+    WorktreeFormSubmit,
+    WorktreeFormCancel,
+    /// `git worktree add` finished: the new folder, or git's error.
+    WorktreeCreated(Result<PathBuf, String>),
+    WorktreeRemoveConfirm,
+    WorktreeRemoveCancel,
+    WorktreeRemoved(Result<(), String>),
     /// Git Control Center data, read in the background.
     GitDashLoaded(Box<DashData>),
     /// Checked-out branch per project root, read in the background.
@@ -320,6 +330,9 @@ pub struct App {
     monitor: Monitor,
     mission: Mission,
     git_dash: GitDash,
+    worktree_form: Option<WorktreeForm>,
+    /// Worktree removal waiting for confirmation: (repository root, folder, branch).
+    pending_worktree_remove: Option<(PathBuf, PathBuf, Option<String>)>,
     shortcuts_open: bool,
 }
 
@@ -376,6 +389,8 @@ impl App {
             monitor: Monitor::default(),
             mission: Mission::default(),
             git_dash: GitDash::default(),
+            worktree_form: None,
+            pending_worktree_remove: None,
             shortcuts_open: false,
         };
         app.menus = menu::menus(app.shells.len());
@@ -807,6 +822,13 @@ impl App {
 
     /// Starts an agent in the focused shell's project root, as a new tab or split.
     fn start_agent(&mut self, kind: AgentKind, split: bool) -> Task<Message> {
+        let here = self.focused_cwd().unwrap_or_else(|| self.start_dir.clone());
+        let root = forgeterm_agents::project_root(&here).0;
+        self.start_agent_in(kind, root, split)
+    }
+
+    /// Starts an agent in `root` (a project root or worktree), as a new tab or split.
+    fn start_agent_in(&mut self, kind: AgentKind, root: PathBuf, split: bool) -> Task<Message> {
         let Some(agent) = self.found_agent(kind) else {
             return Task::none();
         };
@@ -818,8 +840,6 @@ impl App {
             }
         };
         let shell = ShellSpec::new(kind.name(), launch.program, launch.args);
-        let here = self.focused_cwd().unwrap_or_else(|| self.start_dir.clone());
-        let root = forgeterm_agents::project_root(&here).0;
         if split {
             self.restore_zoom();
         }
@@ -1266,6 +1286,73 @@ impl App {
                     return self.load_git_dash(false);
                 }
             }
+            Message::WorktreeFormAgent(kind) => {
+                let existing = self.branch_names();
+                if let Some(f) = &mut self.worktree_form {
+                    if worktree_form::is_suggestion(&f.branch) {
+                        f.branch = worktree_form::suggest_branch(kind, &existing);
+                    }
+                    f.kind = kind;
+                }
+            }
+            Message::WorktreeFormBranch(branch) => {
+                if let Some(f) = &mut self.worktree_form {
+                    f.branch = branch;
+                    f.error = None;
+                }
+            }
+            Message::WorktreeFormSubmit => {
+                let Some(f) = self.worktree_form.as_mut().filter(|f| !f.busy) else {
+                    return Task::none();
+                };
+                let Some(path) = forgeterm_git::default_worktree_path(&f.root, &f.branch) else {
+                    f.error = Some("Type a branch name.".to_owned());
+                    return Task::none();
+                };
+                f.busy = true;
+                f.error = None;
+                let (root, branch) = (f.root.clone(), f.branch.trim().to_owned());
+                return background(
+                    move || forgeterm_git::add_worktree(&root, &path, &branch).map(|()| path),
+                    Message::WorktreeCreated,
+                );
+            }
+            Message::WorktreeFormCancel => {
+                if self.worktree_form.as_ref().is_some_and(|f| !f.busy) {
+                    self.worktree_form = None;
+                }
+            }
+            Message::WorktreeCreated(Ok(path)) => {
+                let Some(form) = self.worktree_form.take() else {
+                    return Task::none();
+                };
+                self.mission.visible = false;
+                self.git_dash.visible = false;
+                self.refresh_visible();
+                let start = self.start_agent_in(form.kind, path, false);
+                return Task::batch([start, self.refresh_git(true)]);
+            }
+            Message::WorktreeCreated(Err(e)) => {
+                if let Some(f) = &mut self.worktree_form {
+                    f.busy = false;
+                    f.error = Some(e);
+                }
+            }
+            Message::WorktreeRemoveConfirm => {
+                if let Some((root, path, _)) = self.pending_worktree_remove.take() {
+                    return background(
+                        move || forgeterm_git::remove_worktree(&root, &path),
+                        Message::WorktreeRemoved,
+                    );
+                }
+            }
+            Message::WorktreeRemoveCancel => self.pending_worktree_remove = None,
+            Message::WorktreeRemoved(result) => {
+                if let Err(e) = result {
+                    self.notice = Some(format!("git did not remove the worktree: {e}"));
+                }
+                return self.load_git_dash(true);
+            }
             Message::GitDashLoaded(data) => {
                 self.git_dash.busy = false;
                 self.git_dash.data = Some(*data);
@@ -1458,6 +1545,24 @@ impl App {
             };
         }
 
+        // The worktree dialog: Esc cancels; Enter submits through the branch field
+        // (or here when the field does not have the keyboard); nothing else leaks.
+        if self.worktree_form.is_some() {
+            return match key {
+                keyboard::Key::Named(Named::Escape) => self.update(Message::WorktreeFormCancel),
+                keyboard::Key::Named(Named::Enter) if !captured => {
+                    self.update(Message::WorktreeFormSubmit)
+                }
+                _ => Task::none(),
+            };
+        }
+        if self.pending_worktree_remove.is_some() {
+            return match key {
+                keyboard::Key::Named(Named::Enter) => self.update(Message::WorktreeRemoveConfirm),
+                keyboard::Key::Named(Named::Escape) => self.update(Message::WorktreeRemoveCancel),
+                _ => Task::none(),
+            };
+        }
         // Modal overlays own the keyboard while open.
         if self.shortcuts_open {
             if matches!(key, keyboard::Key::Named(Named::Escape | Named::Enter)) {
@@ -2054,6 +2159,34 @@ impl App {
                 self.mission.visible = false;
                 return Task::batch([self.refresh_git(true), self.load_git_dash(true)]);
             }
+            CommandId::NewAgentWorktree => {
+                let Some(Repo::Found { root, .. }) = self.git.repo.as_ref() else {
+                    return Task::none();
+                };
+                let Some(kind) = AgentKind::ALL
+                    .into_iter()
+                    .find(|k| self.found_agent(*k).is_some())
+                else {
+                    return Task::none();
+                };
+                let branch = worktree_form::suggest_branch(kind, &self.branch_names());
+                self.worktree_form = Some(WorktreeForm {
+                    root: root.clone(),
+                    kind,
+                    branch,
+                    error: None,
+                    busy: false,
+                });
+                return Task::batch([
+                    iced::widget::operation::focus(worktree_form::BRANCH_INPUT_ID),
+                    iced::widget::operation::select_all(worktree_form::BRANCH_INPUT_ID),
+                ]);
+            }
+            CommandId::RemoveWorktree(id) => {
+                if let Some(target) = self.removable_worktree(id) {
+                    self.pending_worktree_remove = Some(target);
+                }
+            }
             CommandId::WorktreeTerminal(i) => {
                 if let Some(path) = self.worktree_path(i) {
                     return self.new_tab(None, Some(path));
@@ -2199,6 +2332,13 @@ impl App {
             CommandId::OpenPromptsFolder => self.prompts_dir().is_some(),
             CommandId::GitShowHistory => self.git.root().is_some(),
             CommandId::ToggleGitDashboard => true,
+            CommandId::NewAgentWorktree => {
+                matches!(self.git.repo, Some(Repo::Found { .. }))
+                    && AgentKind::ALL
+                        .iter()
+                        .any(|k| self.found_agent(*k).is_some())
+            }
+            CommandId::RemoveWorktree(id) => self.removable_worktree(id).is_some(),
             CommandId::WorktreeTerminal(i) => self.worktree_path(i).is_some(),
             CommandId::ToggleViewer | CommandId::ToggleMonitor | CommandId::KeyboardShortcuts => {
                 true
@@ -2418,6 +2558,46 @@ impl App {
         usable.then(|| info.worktree.path.clone())
     }
 
+    /// Branch names known from the dashboard or the Git panel (for suggestions).
+    fn branch_names(&self) -> Vec<String> {
+        let from = |b: &Result<Vec<forgeterm_git::BranchRef>, String>| {
+            b.as_ref()
+                .map(|l| l.iter().map(|b| b.name.clone()).collect::<Vec<_>>())
+                .ok()
+        };
+        self.git_dash
+            .data
+            .as_ref()
+            .and_then(|d| from(&d.branches))
+            .or_else(|| self.git.branches.as_ref().and_then(from))
+            .unwrap_or_default()
+    }
+
+    /// A linked worktree that may be removed: not the main one, not the one shown,
+    /// readable, and no agent of this window working in it.
+    fn removable_worktree(&self, id: u64) -> Option<(PathBuf, PathBuf, Option<String>)> {
+        let data = self.git_dash.data.as_ref()?;
+        let list = data.worktrees.as_ref().ok()?;
+        let (index, info) = list
+            .iter()
+            .enumerate()
+            .find(|(_, i)| git_dash::worktree_id(&i.worktree.path) == id)?;
+        let w = &info.worktree;
+        let shown = git_dash::path_key(&w.path) == git_dash::path_key(&data.root);
+        let busy_agent = self.terminals.values().any(|t| {
+            t.agent.is_some()
+                && t.directory().is_some_and(|d| {
+                    git_dash::worktree_of(d, std::slice::from_ref(&w.path)).is_some()
+                })
+        });
+        let readable = matches!(
+            info.changes,
+            WorktreeChanges::Count { .. } | WorktreeChanges::Current
+        );
+        (index > 0 && !shown && !w.bare && readable && !busy_agent)
+            .then(|| (data.root.clone(), w.path.clone(), w.branch.clone()))
+    }
+
     /// Reloads the dashboard's data when it is open and out of date: a different
     /// status than at the last load (a commit, stage or edit), another repository,
     /// or older than 10 s (other worktrees, commits made elsewhere). `force`: always.
@@ -2583,6 +2763,7 @@ impl App {
             agents: &self.agents,
             start_root,
             now,
+            worktree_ok: self.is_applicable(CommandId::NewAgentWorktree),
         })
     }
 
@@ -3683,6 +3864,12 @@ impl App {
         }
         if self.shortcuts_open {
             layers = layers.push(self.view_shortcuts());
+        }
+        if let Some(form) = &self.worktree_form {
+            layers = layers.push(worktree_form::view(form, &self.agents));
+        }
+        if let Some((_, path, branch)) = &self.pending_worktree_remove {
+            layers = layers.push(worktree_form::view_remove(path, branch.as_deref()));
         }
         if let Some((target, programs)) = &self.pending_close {
             layers = layers.push(view_close_confirm(target, programs));

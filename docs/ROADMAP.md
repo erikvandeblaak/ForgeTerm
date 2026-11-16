@@ -51,7 +51,7 @@ Monitor-paneel (Ctrl+Shift+M): CPU en geheugen van het systeem met 3 minuten his
 
 Code-viewer met syntaxkleuring, minimap (code glance), tabbladen, zoeken, kopiëren en automatisch herladen ✅ Windows · bewerken/opslaan ⬜ (bewust later).
 
-**Git Control Center-dashboard** (Ctrl+Shift+H): tegels, werkboom met regels +/− per bestand, worktrees met wijzigingen en agents, activiteit, commits, branches ✅ Windows (2026-11-16) · submodules worden niet meer betreden (security) ✅ · Git-paneel: statusbalk (branch, ahead/behind, wijzigingen), paneel met diff, stage/unstage, commit, recente commits ✅ Windows · branches (wisselen met bevestiging, nieuw, volgen) ✅ Windows · history + commitdetails ✅ Windows · Git Activity Chart (commits per dag, 30 dagen) ✅ Windows · push/pull/discard ⬜ (bewust terminal) · layouts ✅ (sessie herstellen) · sneltoetsbeheer ✅ (`[keys]` + Help → Keyboard Shortcuts).
+**Agent in nieuwe worktree** (formulier, `git worktree add -b`, agent start erin; verwijderen met bevestiging, nooit geforceerd) ✅ unit (echte git) · **Git Control Center-dashboard** (Ctrl+Shift+H): tegels, werkboom met regels +/− per bestand, worktrees met wijzigingen en agents, activiteit, commits, branches ✅ Windows (2026-11-16) · submodules worden niet meer betreden (security) ✅ · Git-paneel: statusbalk (branch, ahead/behind, wijzigingen), paneel met diff, stage/unstage, commit, recente commits ✅ Windows · branches (wisselen met bevestiging, nieuw, volgen) ✅ Windows · history + commitdetails ✅ Windows · Git Activity Chart (commits per dag, 30 dagen) ✅ Windows · push/pull/discard ⬜ (bewust terminal) · layouts ✅ (sessie herstellen) · sneltoetsbeheer ✅ (`[keys]` + Help → Keyboard Shortcuts).
 
 ## Fase 7 — Release
 

@@ -205,6 +205,22 @@ Alleen gedocumenteerde interfaces (Claude Code-documentatie op code.claude.com, 
   - Een klik op een tab gaat nu ook via `CommandId::SelectTab`, zodat een dashboard dat de terminals bedekt, sluit.
 - **Submodules** (audit S1): `status`, `diff` en `numstat` gebruiken `--ignore-submodules=all`. De config van een submodule valt buiten `repo_programs` en kon via `git status` een clean-filter laten draaien (gereproduceerd; de test faalt zonder de fix). Gevolg: wijzigingen ín submodules verschijnen niet meer in status en dashboard.
 
+## 4i3. Agent in een nieuwe worktree
+
+- **Waarvoor:** meerdere agents laten werken zonder dat ze elkaars werkboom raken. Elke agent krijgt een eigen branch in een eigen map.
+- **Formulier** (`worktree_form.rs`; `CommandId::NewAgentWorktree` vanuit het Git-menu, de palette, het Git Control Center en Mission Control):
+  - kies een agent;
+  - een voorgestelde branch `agent/<claude|codex>-<n>`: de eerste die nog niet bestaat. Wissel je van agent zonder de naam aan te passen, dan wisselt het voorstel mee;
+  - het doelpad als voorbeeld.
+- **Map:** `forgeterm_git::default_worktree_path` geeft `<ouder>/<repo>-worktrees/<branch>`, naast de repository en nooit erin. `/` en tekens die Windows niet toestaat worden `-` (getest).
+- **Aanmaken:** `add_worktree` valideert de naam (`check-ref-format`, geen `-`), eist een absoluut pad dat nog niet bestaat en voert dan `git worktree add -b <branch> -- <pad>` uit, nooit met `--force`. Dat draait op een achtergrondthread; een fout van git verschijnt in het formulier. Daarna start de agent in de nieuwe map in een eigen tab (`start_agent_in`).
+- **Alleen in een vertrouwde repository** (`Repo::Found`): een checkout voert filters en de `post-checkout`-hook van de repository uit, net als het git-commando. Het formulier zegt dat.
+- **Verwijderen** (`CommandId::RemoveWorktree(id)`, met bevestiging):
+  - alleen een gekoppelde worktree die niet de getoonde is, leesbaar is en waarin geen agent van dit venster werkt;
+  - `git worktree remove -- <pad>`, zonder `--force`: git weigert bij wijzigingen of onbekende bestanden, en die weigering verschijnt als melding;
+  - de branch blijft bestaan.
+- **Getest tegen echte git:** ongeldige namen, relatieve en bestaande paden, een bestaande branch, verwijderen geweigerd bij een onbekend bestand, de branch blijft na verwijderen.
+
 ## 4j. Code-viewer
 
 - **Laden** (`forgeterm-viewer::load`, achtergrondthread): max 8 MB; NUL in de eerste 8 KB zonder UTF-16-BOM = binair (geweigerd); UTF-8, UTF-8-BOM, UTF-16 LE/BE, anders lossy (zichtbaar in de statusregel). Twee versies per regel: het origineel (kopiëren) en een weergaveregel (tabs naar 4 kolommen, besturingstekens naar U+2400-symbolen, afgekapt op 2000 kolommen). Een ESC-reeks in een bestand wordt dus getoond, nooit geïnterpreteerd.

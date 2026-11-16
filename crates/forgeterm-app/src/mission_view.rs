@@ -118,6 +118,8 @@ pub struct View<'a> {
     /// Project root a new agent would start in.
     pub start_root: Option<&'a Path>,
     pub now: Instant,
+    /// "Agent in a new worktree" is possible (trusted repository, agent found).
+    pub worktree_ok: bool,
 }
 
 pub fn status_color(s: Status) -> Color {
@@ -226,6 +228,20 @@ fn header<'a>(v: &View<'a>, attention: usize) -> Element<'a, Message> {
     for (kind, state) in v.agents {
         starts = starts.push(start_button(*kind, state, v.start_root));
     }
+    starts = starts.push(with_tip(
+        action_button(
+            "+ In new worktree…".to_owned(),
+            v.worktree_ok
+                .then_some(Message::Command(CommandId::NewAgentWorktree)),
+            theme::CYAN,
+            false,
+        ),
+        if v.worktree_ok {
+            "New branch in its own folder, so agents work side by side".to_owned()
+        } else {
+            "Needs a Git repository (trusted) and an installed agent".to_owned()
+        },
+    ));
 
     container(
         row![

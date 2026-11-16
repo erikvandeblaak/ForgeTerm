@@ -142,6 +142,7 @@ pub fn menus(shell_count: usize) -> Vec<Menu> {
             title: "Git",
             items: vec![
                 C(ToggleGitDashboard),
+                C(NewAgentWorktree),
                 C(ToggleGitPanel),
                 C(GitRefresh),
                 Sep,

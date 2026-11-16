@@ -87,7 +87,9 @@ Geleverd: alles hieronder behalve de syntaxgekleurde diff op een canvas (de best
   - unit tests voor de worktree-parser;
   - GUI-screenshots met een wegwerp-repo met 2 worktrees.
 
-## P1 — Milestone 3: Worktree per agent (Parallel AI, deel 1)
+## P1 — Milestone 3: Worktree per agent (Parallel AI, deel 1) ✅ (branch `feature/agent-worktrees`, 2026-11-16)
+
+Besluit (standaard, aan te passen): worktrees komen in `<repo>-worktrees/<branch>` naast de repository; nog geen instelling. Zie ARCHITECTURE §4i3.
 
 - "Start agent in nieuwe worktree…":
   - naam valideren (`check-ref-format`);

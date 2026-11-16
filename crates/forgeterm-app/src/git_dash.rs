@@ -299,6 +299,17 @@ fn header<'a>(
         ),
         with_tip(
             action_button(
+                "Agent in new worktree…".to_owned(),
+                Some(Message::Command(CommandId::NewAgentWorktree)),
+                theme::CYAN,
+                false,
+            ),
+            "New branch in its own folder beside the repository, with an agent \
+             started in it (asks first)"
+                .to_owned(),
+        ),
+        with_tip(
+            action_button(
                 "Stage & commit".to_owned(),
                 Some(Message::Command(CommandId::ToggleGitPanel)),
                 theme::CYAN,
@@ -631,6 +642,7 @@ fn worktrees_card<'a>(
     let root_key = path_key(root);
     for (i, info) in worktrees.iter().enumerate() {
         list = list.push(worktree_row(
+            i == 0,
             info,
             path_key(&info.worktree.path) == root_key,
             status,
@@ -653,6 +665,7 @@ fn worktrees_card<'a>(
 }
 
 fn worktree_row<'a>(
+    is_main: bool,
     info: &'a WorktreeInfo,
     is_current: bool,
     status: &'a Status,
@@ -755,6 +768,26 @@ fn worktree_row<'a>(
             ),
             "New tab with your default shell in this worktree".to_owned(),
         ));
+        // A linked worktree nobody here works in can go (git refuses a dirty one).
+        let readable = matches!(
+            info.changes,
+            WorktreeChanges::Count { .. } | WorktreeChanges::Current
+        );
+        if !is_main && !is_current && agents.is_empty() && readable {
+            actions = actions.push(with_tip(
+                action_button(
+                    "Remove…".to_owned(),
+                    Some(Message::Command(CommandId::RemoveWorktree(worktree_id(
+                        &w.path,
+                    )))),
+                    theme::CORAL,
+                    false,
+                ),
+                "Removes the folder (asks first; git refuses if it has changes). \
+                 The branch is kept."
+                    .to_owned(),
+            ));
+        }
     }
     col = col.push(actions);
     container(col)
