@@ -49,7 +49,7 @@ impl App {
         let terminals = self
             .terminals
             .values()
-            .filter_map(TerminalPane::directory)
+            .filter_map(TerminalPane::process_directory)
             .filter(|d| git_dash::worktree_of(d, &paths) == Some(index))
             .count();
         (git_dash::removal(index == 0, shown, info, terminals) == git_dash::Removal::Allowed)
@@ -110,7 +110,7 @@ impl App {
             terminal_dirs: self
                 .terminals
                 .values()
-                .filter_map(|t| t.directory().map(Path::to_path_buf))
+                .filter_map(|t| t.process_directory().map(Path::to_path_buf))
                 .collect(),
             panel_hint: self.keymap.hint(CommandId::ToggleGitPanel),
             compare_hint: self.keymap.hint(CommandId::ToggleCompare),

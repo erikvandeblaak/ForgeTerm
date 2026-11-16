@@ -161,6 +161,7 @@ ForgeTerm is a Cargo workspace of nine crates. The terminal engine contains no G
 | `forgeterm-viewer` | file loading, syntax highlighting (syntect), search |
 | `forgeterm-explorer` | file tree; never changes the file system |
 | `forgeterm-settings` | `settings.toml`: tolerant loading, template |
+| `forgeterm-terminal::ssh` | SSH profiles: `Host` entries of `~/.ssh/config` (read only), run with the OpenSSH client |
 | `forgeterm-system` | CPU and memory per terminal (sysinfo, read only), GPU usage (NVML, amdgpu sysfs) |
 
 More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/TEST_PLAN.md](docs/TEST_PLAN.md) (in Dutch).

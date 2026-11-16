@@ -15,6 +15,9 @@ pub enum ShellKind {
     GitBash,
     /// WSL: POSIX quoting, `/mnt/c/...` paths.
     Wsl,
+    /// The OpenSSH client: a shell on another machine (POSIX quoting; no shell
+    /// integration; its directory reports are about the remote file system).
+    Ssh,
 }
 
 impl ShellKind {
@@ -31,6 +34,7 @@ impl ShellKind {
             "cmd" => Self::Cmd,
             "fish" => Self::Fish,
             "wsl" => Self::Wsl,
+            "ssh" => Self::Ssh,
             // System32\bash.exe is the WSL launcher, not Git Bash.
             "bash" if normalized.contains("/windows/system32/") => Self::Wsl,
             "bash" | "sh" if normalized.contains("/git/") => Self::GitBash,
@@ -61,7 +65,7 @@ impl ShellSpec {
 }
 
 /// Finds an executable on `PATH` (honours `PATHEXT` semantics for `.exe` on Windows).
-fn find_in_path(program: &str) -> Option<PathBuf> {
+pub(crate) fn find_in_path(program: &str) -> Option<PathBuf> {
     let candidate = Path::new(program);
     if candidate.is_absolute() {
         return candidate.is_file().then(|| candidate.to_path_buf());

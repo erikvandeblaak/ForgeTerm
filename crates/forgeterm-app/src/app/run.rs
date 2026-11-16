@@ -27,6 +27,7 @@ impl App {
                 return iced::widget::operation::focus(command_palette::INPUT_ID);
             }
             CommandId::NewTab => return self.new_tab(None, None),
+            CommandId::NewSshTab(i) => return self.new_ssh_tab(i),
             CommandId::NewTabWithShell(i) => {
                 if i < self.shells.len() {
                     return self.new_tab(Some(i), None);
@@ -518,6 +519,7 @@ impl App {
             | CommandId::SplitRight
             | CommandId::SplitDown => focused.is_some(),
             CommandId::NewTabWithShell(i) => i < self.shells.len(),
+            CommandId::NewSshTab(i) => self.ssh_program.is_some() && i < self.ssh_hosts.len(),
             CommandId::SelectTab(i) => i < self.workspace.tabs.len() && i != self.workspace.active,
             CommandId::OpenPromptsFolder => self.prompts_dir().is_some(),
             CommandId::GitShowHistory => self.git.root().is_some(),
@@ -627,6 +629,10 @@ impl App {
                 format!("Theme: {} (current)", t.name())
             }
             CommandId::SetTheme(t) => format!("Theme: {}", t.name()),
+            CommandId::NewSshTab(i) => self.ssh_hosts.get(i).map_or_else(
+                || id.static_title().to_owned(),
+                |h| format!("New SSH Tab: {} ({})", h.alias, h.target()),
+            ),
             CommandId::StartAgent(kind, false) => format!("Start {kind} in Project"),
             CommandId::StartAgent(kind, true) => format!("Start {kind} in Split"),
             CommandId::GoToTerminal(t) => match self.terminals.get(&t) {
@@ -686,6 +692,10 @@ impl App {
                 let id = CommandId::StartAgent(kind, split);
                 entries.push(entry(id, self.command_title(id)));
             }
+        }
+        for i in 0..self.ssh_hosts.len() {
+            let id = CommandId::NewSshTab(i);
+            entries.push(entry(id, self.command_title(id)));
         }
         for t in ThemeChoice::ALL {
             let id = CommandId::SetTheme(t);

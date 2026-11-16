@@ -472,6 +472,16 @@ Zie `docs/PERFORMANCE.md` voor de cijfers. GUI-controles van de wijzigingen:
 | TH10 | Linux (WSLg, `FORGETERM_SCREENSHOT`): Arctic met verkenner; bash-prompt (groen/blauw), tekst en statusbalk leesbaar | ✅ |
 | TH11 | Onafhankelijke review: een afgelopen terminal die openblijft (exitcode ≠ 0) hield na een themawissel de oude kleuren. Nu bewaart het paneel het scherm (`EndedScreen`) en tekent het opnieuw in het nieuwe palet; een paneel zonder shell krijgt een leeg beeld in de nieuwe kleuren (`ended_screen_redraws_in_a_new_palette`). GUI: `exit 3` in PowerShell, daarna Arctic: tekst en melding "exited with code 3" in de nieuwe kleuren | ✅ |
 
+### SSH-profielen (2026-11-16, Windows 11, `USERPROFILE` naar een testmap met `.ssh/config`)
+
+| # | Stap | Resultaat |
+|---|---|---|
+| SH1 | Palette "ssh": "New SSH Tab: localhost (tester@localhost:22)" en "devbox (erik@devbox.invalid)"; `Host *` staat er niet | ✅ |
+| SH2 | File-menu: de twee hosts onder de shells | ✅ |
+| SH3 | "New SSH Tab: localhost": tab "SSH: localhost", ssh meldt "Connection refused" (geen server), paneel blijft open met exitcode 255 | ✅ |
+| SH4 | Statusbalk van de SSH-tab toonde de lokale map en git-status → nu geen lokale map voor SSH-panelen (wel meegeteld bij "worktree in gebruik") | ✅ na fix (unit + code) |
+| SH5 | Parser: wildcards, negaties, `Match`, `Include`, `-optie` als alias, eerste waarde wint, `--` vóór de alias (unit) | ✅ |
+
 ### Testvalkuilen (geleerd)
 
 - **Focus testen met echte invoer (2026-11-16):** `SetForegroundWindow`/`ShowWindow` vanuit een ander proces geeft in winit géén `Focused(false)`; Alt+Tab of Win+↓ via `keybd_event` wel.

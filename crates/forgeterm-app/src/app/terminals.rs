@@ -21,7 +21,10 @@ impl App {
         let cwd = Some(cwd.unwrap_or_else(|| self.start_dir.clone()));
         let options = SessionOptions {
             scrollback: self.settings.terminal.scrollback,
-            shell_integration: agent.is_none() && self.settings.terminal.shell_integration,
+            // Agents and SSH sessions run their own program, not a local shell.
+            shell_integration: agent.is_none()
+                && shell.kind != ShellKind::Ssh
+                && self.settings.terminal.shell_integration,
         };
         let mut pane = TerminalPane::new(id, shell, cwd, options, &self.palette);
         pane.agent = agent;
@@ -65,13 +68,57 @@ impl App {
         Task::none()
     }
 
+    /// A new tab running the OpenSSH client for host `index` of `~/.ssh/config`.
+    /// ssh asks for passwords and host keys itself, in the terminal.
+    pub(super) fn new_ssh_tab(&mut self, index: usize) -> Task<Message> {
+        let (Some(program), Some(host)) = (self.ssh_program.clone(), self.ssh_hosts.get(index))
+        else {
+            return Task::none();
+        };
+        let spec = forgeterm_terminal::ssh::ssh_spec(&program, host);
+        let id = self.spawn_terminal(spec, Some(self.start_dir.clone()));
+        self.workspace.push_tab(id);
+        Task::none()
+    }
+
+    /// Reads `~/.ssh/config` again and rebuilds the menus.
+    pub(super) fn load_ssh_hosts(&mut self) {
+        let path = forgeterm_terminal::ssh::config_path().filter(|p| {
+            forgeterm_terminal::is_local_path(&p.to_string_lossy())
+                && forgeterm_fs::resolves_locally(p)
+        });
+        self.ssh_config_mtime = path.as_deref().and_then(file_mtime);
+        self.ssh_hosts = path
+            .as_deref()
+            .map(forgeterm_terminal::ssh::read_hosts)
+            .unwrap_or_default();
+        let ssh_count = if self.ssh_program.is_some() {
+            self.ssh_hosts.len()
+        } else {
+            0
+        };
+        self.menus = menu::menus(self.shells.len(), ssh_count);
+    }
+
+    /// The settings tick: reload the hosts when the file changed (or appeared).
+    pub(super) fn load_ssh_hosts_if_changed(&mut self) {
+        let mtime = forgeterm_terminal::ssh::config_path()
+            .filter(|p| forgeterm_terminal::is_local_path(&p.to_string_lossy()))
+            .as_deref()
+            .and_then(file_mtime);
+        if mtime != self.ssh_config_mtime {
+            self.load_ssh_hosts();
+        }
+    }
+
     pub(super) fn split(&mut self, axis: Axis) -> Task<Message> {
         // A split starts the same shell as the pane it splits.
         let shell = self
             .workspace
             .focused()
             .and_then(|id| self.terminals.get(&id))
-            .filter(|t| t.agent.is_none())
+            // An agent or SSH pane splits into a local shell (no second login).
+            .filter(|t| t.agent.is_none() && t.shell.kind != ShellKind::Ssh)
             .map(|t| t.shell.clone())
             .or_else(|| self.shell_at(None));
         let Some(shell) = shell else {

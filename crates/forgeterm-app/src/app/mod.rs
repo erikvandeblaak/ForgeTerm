@@ -9,7 +9,8 @@ use forgeterm_agents::{Agent, AgentKind, ProjectContext};
 use forgeterm_explorer::{Listing, Tree, list_dir};
 use forgeterm_settings::{Settings, ThemeChoice};
 use forgeterm_terminal::{
-    Palette, SessionEvent, ShellSpec, detect_shells, paste_needs_confirmation, quote_path,
+    Palette, SessionEvent, ShellKind, ShellSpec, detect_shells, paste_needs_confirmation,
+    quote_path,
 };
 use iced::keyboard::{self, key::Named};
 use iced::widget::canvas::Canvas;
@@ -256,8 +257,9 @@ pub struct HistoryData {
 
 /// Entry of the "new tab with shell…" dropdown.
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// An entry of the "New tab with…" picker: a shell or an SSH host.
 pub struct ShellChoice {
-    index: usize,
+    command: CommandId,
     name: String,
 }
 
@@ -268,6 +270,11 @@ impl fmt::Display for ShellChoice {
 }
 
 pub struct App {
+    /// The OpenSSH client, if installed.
+    ssh_program: Option<PathBuf>,
+    /// `Host` entries of `~/.ssh/config` (read only).
+    ssh_hosts: Vec<forgeterm_terminal::ssh::SshHost>,
+    ssh_config_mtime: Option<SystemTime>,
     terminals: HashMap<TermId, TerminalPane>,
     workspace: Workspace,
     next_id: TermId,
@@ -434,8 +441,11 @@ impl App {
             side: None,
             compare: Compare::default(),
             pending_inserts: Vec::new(),
+            ssh_program: forgeterm_terminal::ssh::find_ssh(),
+            ssh_hosts: Vec::new(),
+            ssh_config_mtime: None,
         };
-        app.menus = menu::menus(app.shells.len());
+        app.load_ssh_hosts();
         app.load_settings(true);
         let terminal = app.restore_or_new_tab();
         let root = app.explorer.root().to_path_buf();

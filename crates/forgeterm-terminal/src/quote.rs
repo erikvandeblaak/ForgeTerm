@@ -18,7 +18,7 @@ pub fn quote_path(kind: ShellKind, path: &str) -> String {
     match kind {
         ShellKind::PowerShell => quote_powershell(&path),
         ShellKind::Cmd => quote_cmd(&path),
-        ShellKind::Posix => quote_posix(&path),
+        ShellKind::Posix | ShellKind::Ssh => quote_posix(&path),
         ShellKind::Fish => quote_fish(&path),
         ShellKind::GitBash => quote_posix(&windows_to_msys(&path)),
         ShellKind::Wsl => quote_posix(&windows_to_wsl(&path)),

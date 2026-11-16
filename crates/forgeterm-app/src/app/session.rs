@@ -115,7 +115,9 @@ impl App {
         let default_program = self.shell_at(None).map(|s| s.program);
         let pane_spec = |id: &TermId| -> Option<PaneSpec> {
             let t = self.terminals.get(id)?;
-            let shell = if t.agent.is_some() {
+            // Agents and SSH sessions come back as the default local shell: nothing
+            // is started or connected automatically.
+            let shell = if t.agent.is_some() || t.shell.kind == ShellKind::Ssh {
                 default_program.clone()?
             } else {
                 t.shell.program.clone()

@@ -32,13 +32,18 @@ pub struct Menu {
     pub items: Vec<Item>,
 }
 
-/// The menu structure. `shell_count` adds one "New Tab with …" entry per detected shell.
-pub fn menus(shell_count: usize) -> Vec<Menu> {
+/// The menu structure. `shell_count` adds one "New Tab with …" entry per detected
+/// shell, `ssh_count` one "New SSH Tab: …" entry per host of `~/.ssh/config`.
+pub fn menus(shell_count: usize, ssh_count: usize) -> Vec<Menu> {
     use CommandId::*;
     use Item::{Command as C, Separator as Sep};
 
     let mut file = vec![C(NewTab)];
     file.extend((0..shell_count).map(|i| C(NewTabWithShell(i))));
+    if ssh_count > 0 {
+        file.push(Sep);
+        file.extend((0..ssh_count).map(|i| C(NewSshTab(i))));
+    }
     file.extend([
         Sep,
         C(InsertSelectedPath),
@@ -415,7 +420,7 @@ mod tests {
 
     #[test]
     fn every_static_command_is_in_a_menu() {
-        let all: Vec<CommandId> = menus(2)
+        let all: Vec<CommandId> = menus(2, 0)
             .iter()
             .flat_map(|m| m.items.iter())
             .filter_map(|i| match i {
@@ -433,7 +438,7 @@ mod tests {
 
     #[test]
     fn separators_only_between_groups() {
-        for menu in menus(3) {
+        for menu in menus(3, 0) {
             let items = &menu.items;
             assert_ne!(items.first(), Some(&Item::Separator), "{}", menu.title);
             assert_ne!(items.last(), Some(&Item::Separator), "{}", menu.title);
@@ -449,7 +454,7 @@ mod tests {
 
     #[test]
     fn dropdown_positions_follow_title_widths() {
-        let m = menus(0);
+        let m = menus(0, 0);
         assert_eq!(dropdown_x(&m, 0), TITLES_X);
         assert_eq!(dropdown_x(&m, 1), TITLES_X + title_width("File"));
         assert!(dropdown_x(&m, 3) > dropdown_x(&m, 2));

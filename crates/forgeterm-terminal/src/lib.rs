@@ -22,6 +22,7 @@ mod search;
 mod session;
 mod shell;
 mod snapshot;
+pub mod ssh;
 pub mod status;
 mod url;
 
