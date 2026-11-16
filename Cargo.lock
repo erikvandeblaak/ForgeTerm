@@ -1044,7 +1044,6 @@ dependencies = [
  "criterion",
  "forgeterm-fs",
  "polling",
- "thiserror 2.0.21",
  "tracing",
 ]
 
