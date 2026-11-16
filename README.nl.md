@@ -138,6 +138,7 @@ ForgeTerm leest `%APPDATA%\ForgeTerm\settings.toml` (Linux: `$XDG_CONFIG_HOME/fo
 
 | Instelling | Standaard | Betekenis |
 |---|---|---|
+| `appearance.theme` | `"midnight"` | `midnight`, `graphite`, `arctic` (licht), `cyber`, `high-contrast`; *View → Theme* probeert er een voor de sessie |
 | `terminal.font_size` | 14 | 8–32 |
 | `terminal.scrollback` | 10000 | regels per terminal (0–100000), voor nieuwe terminals |
 | `terminal.default_shell` | eerste gevonden | naam zoals in "New tab with…", bv. `"Git Bash"` |

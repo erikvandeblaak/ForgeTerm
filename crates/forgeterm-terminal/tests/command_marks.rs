@@ -245,3 +245,44 @@ fn color_query_follows_set_palette() {
     });
     session.input(b"exit\r".to_vec());
 }
+
+/// After the program ends, its screen can still be drawn in other colors (a theme
+/// change): the text stays, the colors follow the palette.
+#[test]
+fn ended_screen_redraws_in_a_new_palette() {
+    let shell = detect_shells().into_iter().next().expect("a shell");
+    let (session, rx) = spawn(&shell);
+    wait(&rx, "first prompt", || {
+        session.has_prompt_marks() || session.snapshot(&Palette::default()).text().trim().len() > 1
+    });
+    session.input(b"echo forge-ended\r".to_vec());
+    wait(&rx, "output", || {
+        session
+            .snapshot(&Palette::default())
+            .text()
+            .matches("forge-ended")
+            .count()
+            >= 2
+    });
+    session.input(b"exit\r".to_vec());
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        match rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(SessionEvent::Exited(_)) => break,
+            _ => assert!(Instant::now() < deadline, "no exit"),
+        }
+    }
+    let screen = session.ended_screen();
+    drop(session);
+    let dark = screen.snapshot(&Palette::default());
+    let light = Palette {
+        background: forgeterm_terminal::Rgb::hex(0xF7F9FC),
+        foreground: forgeterm_terminal::Rgb::hex(0x1B2431),
+        ..Palette::default()
+    };
+    let lit = screen.snapshot(&light);
+    assert!(lit.text().contains("forge-ended"));
+    assert_eq!(lit.text(), dark.text());
+    assert_eq!(lit.background, light.background);
+    assert_ne!(lit.background, dark.background);
+}

@@ -845,6 +845,31 @@ impl Session {
     }
 }
 
+/// The screen a session left when its program ended: no PTY, no process, only the
+/// emulator state, so the pane can still be drawn (for example in a new theme).
+pub struct EndedScreen {
+    term: Arc<FairMutex<Term<Listener>>>,
+    reported: Arc<Mutex<Reported>>,
+}
+
+impl EndedScreen {
+    pub fn snapshot(&self, palette: &Palette) -> Snapshot {
+        let term = self.term.lock();
+        let reported = self.reported.lock().unwrap_or_else(|e| e.into_inner());
+        build_snapshot(&term, palette, Some(&reported.commands))
+    }
+}
+
+impl Session {
+    /// Keeps the screen for after the session is dropped.
+    pub fn ended_screen(&self) -> EndedScreen {
+        EndedScreen {
+            term: self.term.clone(),
+            reported: self.reported.clone(),
+        }
+    }
+}
+
 /// Finds the next (`older`: previous) match of `query` (literal text) from the
 /// current selection or the cursor, selects it and scrolls it into view.
 pub(crate) fn search_in<T: EventListener>(

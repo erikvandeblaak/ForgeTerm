@@ -170,7 +170,7 @@ More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/ROADMAP.md](docs/ROA
 ForgeTerm is young (version 0.1). Tested on Windows 11 with PowerShell 7, Windows PowerShell, cmd, Git Bash, Claude Code and Codex. Linux is built and tested in WSL with Ubuntu 24.04, the base of Linux Mint 22, but not yet on a real Mint desktop.
 
 - The installer is not code-signed.
-- One theme (Forge Dark) and no font choice yet.
+- No font choice yet (five color themes, see `appearance.theme`).
 - Emoji are monochrome.
 - No IME (Chinese or Japanese input). Dead keys (US-International) do work.
 - No macOS version.

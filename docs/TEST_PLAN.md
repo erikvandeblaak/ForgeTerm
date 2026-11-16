@@ -468,6 +468,8 @@ Zie `docs/PERFORMANCE.md` voor de cijfers. GUI-controles van de wijzigingen:
 | TH7 | Unix: een programma dat OSC 11 vraagt krijgt na `set_palette` de nieuwe achtergrond (`color_query_follows_set_palette`, WSL) | ✅ |
 | TH8 | Thema in `settings.toml` wijzigen terwijl ForgeTerm draait: Midnight → Cyber zonder herstart. Onbekende naam: melding "is not a theme; using midnight. Themes: …" en terug naar de standaard, zoals bij andere ongeldige waarden | ✅ |
 | TH9 | Gevonden tijdens deze test: About en Keyboard Shortcuts via de palette gingen meteen weer dicht (de Enter van het invoerveld sloot ze). Nu blijven ze open; Esc en een echte Enter sluiten ze. Quit via de palette met een draaiend programma vraagt nog steeds eerst | ✅ na fix |
+| TH10 | Linux (WSLg, `FORGETERM_SCREENSHOT`): Arctic met verkenner; bash-prompt (groen/blauw), tekst en statusbalk leesbaar | ✅ |
+| TH11 | Onafhankelijke review: een afgelopen terminal die openblijft (exitcode ≠ 0) hield na een themawissel de oude kleuren. Nu bewaart het paneel het scherm (`EndedScreen`) en tekent het opnieuw in het nieuwe palet; een paneel zonder shell krijgt een leeg beeld in de nieuwe kleuren (`ended_screen_redraws_in_a_new_palette`). GUI-controle hiervan nog niet gedaan | ✅ (test) |
 
 ### Testvalkuilen (geleerd)
 
