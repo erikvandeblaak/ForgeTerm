@@ -11,6 +11,7 @@ mod glyphs;
 mod icon;
 mod keys;
 mod menu;
+mod mission_view;
 mod monitor_view;
 mod palette;
 mod prompt_studio;

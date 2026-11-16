@@ -72,6 +72,14 @@ pub enum CommandId {
     AiRefresh,
     /// Start an agent in the project root (`true` = in a split).
     StartAgent(AgentKind, bool),
+    /// Mission Control: the dashboard of all agents in this window.
+    ToggleMissionControl,
+    /// Mission Control card actions on one terminal (its `TermId`): show it, show
+    /// its folder in the explorer, show it with the Git panel, end it (asks first).
+    GoToTerminal(u64),
+    TerminalFolder(u64),
+    TerminalGit(u64),
+    StopTerminal(u64),
     OpenPromptStudio,
     /// Prompt Studio as a panel beside the terminal, or as a floating window.
     TogglePromptStudioDock,
@@ -135,6 +143,7 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::NewTabInSelectedFolder,
     CommandId::OpenSettings,
     CommandId::ReloadSettings,
+    CommandId::ToggleMissionControl,
     CommandId::ToggleAiPanel,
     CommandId::AiRefresh,
     CommandId::OpenPromptStudio,
@@ -149,6 +158,35 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
 ];
 
 impl CommandId {
+    /// Commands that create, show or act on a visible terminal. Mission Control
+    /// covers the terminals, so it closes first: a new pane only starts at its
+    /// first layout, which needs it on screen.
+    pub fn shows_terminals(self) -> bool {
+        use CommandId::*;
+        matches!(
+            self,
+            NewTab
+                | NewTabWithShell(_)
+                | NextTab
+                | PreviousTab
+                | SelectTab(_)
+                | SplitRight
+                | SplitDown
+                | TogglePaneZoom
+                | FocusPane(_)
+                | RestartShell
+                | StartAgent(..)
+                | NewTabInSelectedFolder
+                | FindInTerminal
+                | PreviousCommand
+                | NextCommand
+                | ScrollToTop
+                | ScrollToBottom
+                | ScrollPageUp
+                | ScrollPageDown
+        )
+    }
+
     pub fn category(self) -> &'static str {
         use CommandId::*;
         match self {
@@ -180,6 +218,11 @@ impl CommandId {
             ToggleAiPanel
             | AiRefresh
             | StartAgent(..)
+            | ToggleMissionControl
+            | GoToTerminal(_)
+            | TerminalFolder(_)
+            | TerminalGit(_)
+            | StopTerminal(_)
             | InsertLastOutputIntoAgent
             | OpenPromptStudio
             | TogglePromptStudioDock
@@ -215,6 +258,12 @@ impl CommandId {
                 };
                 return format!("start_{agent}{}", if split { "_split" } else { "" });
             }
+            // Per-terminal actions exist only for live terminals: not bindable.
+            GoToTerminal(_) => "go_to_terminal",
+            TerminalFolder(_) => "terminal_folder",
+            TerminalGit(_) => "terminal_git",
+            StopTerminal(_) => "stop_terminal",
+            ToggleMissionControl => "mission_control",
             CommandPalette => "command_palette",
             NewTab => "new_tab",
             CloseTab => "close_tab",
@@ -341,6 +390,11 @@ impl CommandId {
             ToggleAiPanel => "Toggle AI Workspace",
             AiRefresh => "Refresh Agents and Project Context",
             StartAgent(..) => "Start Agent",
+            ToggleMissionControl => "Mission Control (Agents Dashboard)",
+            GoToTerminal(_) => "Go to Terminal",
+            TerminalFolder(_) => "Show Terminal Folder in Explorer",
+            TerminalGit(_) => "Show Terminal with Git Panel",
+            StopTerminal(_) => "Stop Terminal",
             OpenPromptStudio => "Prompt Studio",
             TogglePromptStudioDock => "Prompt Studio Beside Terminal / Floating",
             OpenPromptsFolder => "Open Prompts Folder",
@@ -508,6 +562,7 @@ impl Default for Keymap {
             (b(CS, Char('e')), ToggleExplorer),
             (b(C, Char(',')), OpenSettings),
             (b(CS, Char('a')), ToggleAiPanel),
+            (b(CS, Char('d')), ToggleMissionControl),
             (b(CS, Char('i')), OpenPromptStudio),
             (b(CS, Char('g')), ToggleGitPanel),
             (b(CS, Char('o')), ToggleViewer),
@@ -728,6 +783,37 @@ mod tests {
         }
         // Round trip through the display text.
         assert_eq!(p(&p("Ctrl+Alt+F3").to_string()), p("Ctrl+Alt+F3"));
+    }
+
+    #[test]
+    fn mission_control_gets_out_of_the_way_of_terminal_commands() {
+        use CommandId::*;
+        for id in [
+            NewTab,
+            SplitRight,
+            StartAgent(AgentKind::ClaudeCode, false),
+            SelectTab(0),
+        ] {
+            assert!(id.shows_terminals(), "{id:?}");
+        }
+        // Panels and the dashboard's own actions keep it open (Go to / Changes
+        // close it themselves; Files and Stop work beside it).
+        for id in [
+            ToggleMissionControl,
+            ToggleExplorer,
+            ToggleMonitor,
+            TerminalFolder(1),
+            StopTerminal(1),
+            CommandPalette,
+        ] {
+            assert!(!id.shows_terminals(), "{id:?}");
+        }
+        // Not bindable, so not part of the round trip below.
+        assert_eq!(CommandId::from_config_name("go_to_terminal"), None);
+        assert_eq!(
+            CommandId::from_config_name("mission_control"),
+            Some(ToggleMissionControl)
+        );
     }
 
     #[test]

@@ -120,7 +120,7 @@ pub fn menus(shell_count: usize) -> Vec<Menu> {
         Menu {
             title: "AI",
             items: {
-                let mut ai = vec![C(ToggleAiPanel), C(AiRefresh), Sep];
+                let mut ai = vec![C(ToggleMissionControl), C(ToggleAiPanel), C(AiRefresh), Sep];
                 for kind in forgeterm_agents::AgentKind::ALL {
                     ai.push(C(StartAgent(kind, false)));
                 }

@@ -7,6 +7,7 @@
 
 mod context;
 mod detect;
+pub mod mission;
 
 pub use context::{ContextItem, ContextKind, ProjectContext, project_root, scan_context};
 pub use detect::{Agent, LaunchCommand, launch_command, locate, query_version};

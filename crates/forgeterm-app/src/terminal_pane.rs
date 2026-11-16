@@ -1,6 +1,7 @@
 //! One terminal inside a tab: its session, render state and lifecycle.
 
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use forgeterm_terminal::status::{ProgramState, StatusRecord};
 use forgeterm_terminal::{
@@ -99,6 +100,14 @@ pub struct TerminalPane {
     dirty: bool,
     /// A bell rang while the user was not looking at this terminal.
     pub bell: bool,
+    /// When the current session started (Mission Control runtime).
+    started_at: Option<Instant>,
+    /// When it ended (the runtime stops counting).
+    ended_at: Option<Instant>,
+    /// When the terminal last produced output (a wakeup from the I/O thread).
+    last_output: Option<Instant>,
+    /// Mission Control's miniature of this terminal (cleared with every snapshot).
+    pub preview_cache: Cache,
     /// The shell starts on the first layout, at the pane's real size: a shell that
     /// draws its prompt at a placeholder size and is resized right after ends up with
     /// a wrong cursor position (PowerShell then types over its own prompt).
@@ -131,6 +140,10 @@ impl TerminalPane {
             agent: None,
             dirty: false,
             bell: false,
+            started_at: None,
+            ended_at: None,
+            last_output: None,
+            preview_cache: Cache::new(),
             awaiting_size: true,
         }
     }
@@ -183,6 +196,9 @@ impl TerminalPane {
             Ok(session) => {
                 self.session = Some(session);
                 self.status = Status::Running;
+                self.started_at = Some(Instant::now());
+                self.ended_at = None;
+                self.last_output = None;
                 self.title = None;
                 self.bell = false;
                 self.refresh(palette);
@@ -225,6 +241,7 @@ impl TerminalPane {
             }
             self.modes = modes;
             self.cache.clear();
+            self.preview_cache.clear();
         }
         self.dirty = false;
     }
@@ -249,6 +266,7 @@ impl TerminalPane {
         }
         match event {
             SessionEvent::Wakeup => {
+                self.last_output = Some(Instant::now());
                 if visible {
                     self.refresh(palette);
                 } else {
@@ -286,6 +304,7 @@ impl TerminalPane {
                 self.refresh(palette);
                 self.session = None;
                 self.status = Status::Exited(code);
+                self.ended_at = Some(Instant::now());
                 // Like most terminals: a clean exit closes the pane, a failure stays
                 // visible so the user can read what happened.
                 if code == Some(0) {
@@ -318,6 +337,27 @@ impl TerminalPane {
         }
         self.refresh(palette);
         Task::none()
+    }
+
+    /// Mission Control: the process as the dashboard sees it.
+    pub fn process(&self) -> forgeterm_agents::mission::Process {
+        use forgeterm_agents::mission::Process;
+        match &self.status {
+            _ if self.awaiting_size => Process::Starting,
+            Status::Running => Process::Running,
+            Status::Exited(code) => Process::Exited(*code),
+            Status::Failed(_) => Process::FailedToStart,
+        }
+    }
+
+    /// How long the current (or last) session ran, as of `now`.
+    pub fn elapsed(&self, now: Instant) -> Option<Duration> {
+        let end = self.ended_at.unwrap_or(now);
+        self.started_at.map(|s| end.saturating_duration_since(s))
+    }
+
+    pub fn since_output(&self, now: Instant) -> Option<Duration> {
+        self.last_output.map(|t| now.saturating_duration_since(t))
     }
 
     /// The most important status a program in this terminal reported (OSC 7501).

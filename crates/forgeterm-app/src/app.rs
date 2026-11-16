@@ -27,6 +27,7 @@ use crate::ai_view::{self, AgentState};
 use crate::commands::{CommandId, Dir, Keymap, STATIC_COMMANDS};
 use crate::git_view::{self, DiffView, GitState, HistoryView, Repo, Snapshot};
 use crate::menu::{self, Menu, MenuState};
+use crate::mission_view::{self, EndKind, Ended, Mission};
 use crate::monitor_view::{self, Monitor};
 use crate::palette::{self as command_palette, CommandPalette, Entry};
 use crate::prompt_studio::PromptStudio;
@@ -193,6 +194,10 @@ pub enum Message {
     TermFindClose,
     DismissNotice,
     MonitorSampled(Box<forgeterm_system::Sample>),
+    /// Once per second while Mission Control is open (runtimes, branch refresh).
+    MissionTick,
+    /// Checked-out branch per project root, read in the background.
+    MissionHeads(Vec<(PathBuf, Option<forgeterm_git::Head>)>),
     /// Test hook (FORGETERM_SCREENSHOT): capture the rendered frame.
     DebugScreenshot,
     DebugScreenshotTaken(iced::window::Screenshot),
@@ -308,6 +313,7 @@ pub struct App {
     /// The session file text last written, to save only on changes.
     saved_session: Option<String>,
     monitor: Monitor,
+    mission: Mission,
     shortcuts_open: bool,
 }
 
@@ -362,6 +368,7 @@ impl App {
             notice: None,
             saved_session: None,
             monitor: Monitor::default(),
+            mission: Mission::default(),
             shortcuts_open: false,
         };
         app.menus = menu::menus(app.shells.len());
@@ -554,6 +561,7 @@ impl App {
             self.workspace.tabs[tab_index].panes.restore();
         }
         self.workspace.remove_terminal(id);
+        self.note_ended(id);
         self.terminals.remove(&id);
         if self.pending_paste.as_ref().is_some_and(|(t, _)| *t == id) {
             self.pending_paste = None;
@@ -563,6 +571,7 @@ impl App {
 
     fn close_tab(&mut self, index: usize) -> Task<Message> {
         for id in self.workspace.remove_tab(index) {
+            self.note_ended(id);
             self.terminals.remove(&id);
         }
         self.after_layout_change()
@@ -741,7 +750,12 @@ impl App {
         } else {
             Subscription::none()
         };
-        Subscription::batch([events, settings, git, close, screenshot, explorer])
+        let mission = if self.mission.visible {
+            iced::time::every(Duration::from_secs(1)).map(|_| Message::MissionTick)
+        } else {
+            Subscription::none()
+        };
+        Subscription::batch([events, settings, git, close, screenshot, explorer, mission])
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -846,8 +860,13 @@ impl App {
                 generation,
                 event,
             } => {
-                let visible = self.workspace.is_visible(id);
-                let seen = visible && self.window_focused;
+                // Mission Control covers the panes: nothing there is "seen", but
+                // agent terminals keep refreshing for their live preview.
+                let shown = !self.mission.visible && self.workspace.is_visible(id);
+                let preview = self.mission.visible
+                    && self.terminals.get(&id).is_some_and(|t| t.agent.is_some());
+                let visible = shown || preview;
+                let seen = shown && self.window_focused;
                 let Some(terminal) = self.terminals.get_mut(&id) else {
                     return Task::none();
                 };
@@ -930,7 +949,20 @@ impl App {
             }
             Message::TermFindClose => self.term_find = None,
             Message::DismissNotice => self.notice = None,
-            Message::MonitorSampled(sample) => self.monitor.record(*sample),
+            Message::MonitorSampled(sample) => {
+                self.record_mission_cpu(&sample);
+                self.monitor.record(*sample);
+            }
+            Message::MissionTick => {
+                self.mission.ticks = self.mission.ticks.wrapping_add(1);
+                if self.mission.ticks.is_multiple_of(5) {
+                    return self.read_mission_heads();
+                }
+            }
+            Message::MissionHeads(heads) => {
+                self.mission.heads_busy = false;
+                self.mission.heads.extend(heads);
+            }
             Message::DebugScreenshot => {
                 return iced::window::latest()
                     .and_then(iced::window::screenshot)
@@ -1548,6 +1580,9 @@ impl App {
         if let Some(task) = self.app_shortcut(&key, mods) {
             return task;
         }
+        if self.mission.visible {
+            return self.mission_key(&key, mods);
+        }
 
         let Some(focused) = self.workspace.focused() else {
             return Task::none();
@@ -1715,6 +1750,10 @@ impl App {
     /// The single place where commands are executed.
     pub fn run_command(&mut self, id: CommandId) -> Task<Message> {
         self.menu = None;
+        if self.mission.visible && id.shows_terminals() {
+            self.mission.visible = false;
+            self.refresh_visible();
+        }
         if id != CommandId::CommandPalette {
             self.recent_commands.retain(|c| *c != id);
             self.recent_commands.insert(0, id);
@@ -1906,6 +1945,33 @@ impl App {
                 return detect_agents();
             }
             CommandId::StartAgent(kind, split) => return self.start_agent(kind, split),
+            CommandId::ToggleMissionControl => return self.toggle_mission(),
+            CommandId::GoToTerminal(id) => self.go_to_terminal(id),
+            CommandId::TerminalFolder(id) => {
+                let Some(dir) = self
+                    .terminals
+                    .get(&id)
+                    .and_then(TerminalPane::directory)
+                    .filter(|d| d.to_str().is_some_and(forgeterm_terminal::is_local_path))
+                    .map(Path::to_path_buf)
+                else {
+                    return Task::none();
+                };
+                self.explorer_visible = true;
+                self.ai_visible = false;
+                self.git_visible = false;
+                self.monitor.visible = false;
+                return load_dir(self.explorer.set_root(dir));
+            }
+            CommandId::TerminalGit(id) => {
+                self.go_to_terminal(id);
+                self.git_visible = true;
+                self.explorer_visible = false;
+                self.ai_visible = false;
+                self.monitor.visible = false;
+                return self.refresh_git(true);
+            }
+            CommandId::StopTerminal(id) => return self.request_close(CloseTarget::Pane(id)),
             CommandId::ToggleMonitor => {
                 self.monitor.visible = !self.monitor.visible;
                 if self.monitor.visible {
@@ -2098,7 +2164,15 @@ impl App {
             | CommandId::Quit
             | CommandId::ToggleExplorer
             | CommandId::ToggleAiPanel
+            | CommandId::ToggleMissionControl
             | CommandId::AiRefresh => true,
+            CommandId::GoToTerminal(id)
+            | CommandId::TerminalGit(id)
+            | CommandId::StopTerminal(id) => self.terminals.contains_key(&id),
+            CommandId::TerminalFolder(id) => self
+                .terminals
+                .get(&id)
+                .is_some_and(|t| t.directory().is_some()),
             CommandId::StartAgent(kind, _) => self.found_agent(kind).is_some(),
             CommandId::OpenSettings | CommandId::ReloadSettings => self.settings_path.is_some(),
             CommandId::ExplorerToggleHidden
@@ -2266,6 +2340,231 @@ impl App {
         opaque(mouse_area(backdrop).on_press(Message::ShortcutsClose))
     }
 
+    // ---- mission control ------------------------------------------------------------
+
+    fn toggle_mission(&mut self) -> Task<Message> {
+        self.mission.visible = !self.mission.visible;
+        if !self.mission.visible {
+            self.refresh_visible();
+            return Task::none();
+        }
+        // Fresh previews right away (hidden terminals only mark themselves dirty).
+        for t in self.terminals.values_mut().filter(|t| t.agent.is_some()) {
+            t.refresh(&self.palette);
+        }
+        let order = self.mission_order();
+        if !self.mission.selected.is_some_and(|id| order.contains(&id)) {
+            self.mission.selected = order.first().copied();
+        }
+        Task::batch(
+            [self.read_mission_heads()]
+                .into_iter()
+                .chain(self.sample_monitor()),
+        )
+    }
+
+    fn go_to_terminal(&mut self, id: TermId) {
+        if !self.terminals.contains_key(&id) {
+            return;
+        }
+        self.mission.visible = false;
+        self.mission.selected = Some(id);
+        self.focus_terminal(id);
+        self.refresh_visible();
+    }
+
+    /// Agent terminals in dashboard order: most urgent first, then tab order.
+    fn mission_order(&self) -> Vec<TermId> {
+        let now = std::time::Instant::now();
+        self.mission_cards(now).iter().map(|c| c.id).collect()
+    }
+
+    fn mission_cards(&self, now: std::time::Instant) -> Vec<mission_view::Card<'_>> {
+        use forgeterm_agents::mission::{Reported, classify};
+        use forgeterm_terminal::status::ProgramState;
+        let focused = self.workspace.focused();
+        let usage = self.monitor.last.as_ref();
+        let mut cards = Vec::new();
+        for (tab, t_ids) in self
+            .workspace
+            .tabs
+            .iter()
+            .enumerate()
+            .map(|(i, tab)| (i, tab.terminals().collect::<Vec<_>>()))
+        {
+            for id in t_ids {
+                let Some(t) = self.terminals.get(&id) else {
+                    continue;
+                };
+                let (Some(kind), Some(root)) = (t.agent, t.directory()) else {
+                    continue;
+                };
+                let record = t.program_status();
+                let reported = record.as_ref().map(|r| match r.state {
+                    ProgramState::Working => Reported::Working,
+                    ProgramState::Blocked => Reported::Blocked,
+                    ProgramState::Idle => Reported::Idle,
+                    ProgramState::Done => Reported::Done,
+                    ProgramState::Error => Reported::Error,
+                });
+                let message = record.and_then(|r| r.msg.or(r.title));
+                let pid = t.session().and_then(|s| s.pid());
+                cards.push(mission_view::Card {
+                    id,
+                    kind,
+                    tab,
+                    title: t.display_title(),
+                    root,
+                    head: self.mission.heads.get(root).and_then(Option::as_ref),
+                    status: classify(&t.process(), reported, t.bell),
+                    message,
+                    elapsed: t.elapsed(now),
+                    since_output: t.since_output(now),
+                    usage: pid.and_then(|p| usage?.shells.get(&p)),
+                    cpu: self.mission.cpu.get(&id),
+                    snapshot: &t.snapshot,
+                    cache: &t.preview_cache,
+                    selected: self.mission.selected == Some(id),
+                    focused: focused == Some(id),
+                });
+            }
+        }
+        // Stable: equal urgency keeps tab order.
+        cards.sort_by_key(|c| c.status.urgency());
+        cards
+    }
+
+    fn view_mission(&self) -> Element<'_, Message> {
+        let now = std::time::Instant::now();
+        let start_root = self.ai_context.as_ref().map(|c| c.root.as_path());
+        mission_view::view(mission_view::View {
+            cards: self.mission_cards(now),
+            mission: &self.mission,
+            agents: &self.agents,
+            start_root,
+            now,
+        })
+    }
+
+    /// Esc closes, arrows / Tab move the selection, Enter opens the terminal.
+    /// Other keys are swallowed: the terminals are hidden behind the dashboard.
+    fn mission_key(&mut self, key: &keyboard::Key, mods: keyboard::Modifiers) -> Task<Message> {
+        let order = self.mission_order();
+        let pos = self
+            .mission
+            .selected
+            .and_then(|id| order.iter().position(|&o| o == id));
+        let step = |forward: bool| -> Option<TermId> {
+            if order.is_empty() {
+                return None;
+            }
+            let i = match (pos, forward) {
+                (None, _) => 0,
+                (Some(i), true) => (i + 1) % order.len(),
+                (Some(i), false) => (i + order.len() - 1) % order.len(),
+            };
+            Some(order[i])
+        };
+        match key {
+            keyboard::Key::Named(Named::Escape) => return self.toggle_mission(),
+            keyboard::Key::Named(Named::ArrowRight | Named::ArrowDown) => {
+                self.mission.selected = step(true);
+            }
+            keyboard::Key::Named(Named::ArrowLeft | Named::ArrowUp) => {
+                self.mission.selected = step(false);
+            }
+            keyboard::Key::Named(Named::Tab) => self.mission.selected = step(!mods.shift()),
+            keyboard::Key::Named(Named::Enter) => {
+                if let Some(id) = self.mission.selected.filter(|id| order.contains(id)) {
+                    return self.run_command(CommandId::GoToTerminal(id));
+                }
+            }
+            _ => {}
+        }
+        Task::none()
+    }
+
+    /// Reads the branch of every agent's project in the background (no git process).
+    fn read_mission_heads(&mut self) -> Task<Message> {
+        if self.mission.heads_busy {
+            return Task::none();
+        }
+        let mut roots: Vec<PathBuf> = self
+            .terminals
+            .values()
+            .filter(|t| t.agent.is_some())
+            .filter_map(|t| t.directory())
+            .filter(|d| d.to_str().is_some_and(forgeterm_terminal::is_local_path))
+            .map(Path::to_path_buf)
+            .collect();
+        roots.sort();
+        roots.dedup();
+        if roots.is_empty() {
+            return Task::none();
+        }
+        self.mission.heads_busy = true;
+        background(
+            move || {
+                roots
+                    .into_iter()
+                    .map(|r| {
+                        let head = forgeterm_git::head(&r);
+                        (r, head)
+                    })
+                    .collect()
+            },
+            Message::MissionHeads,
+        )
+    }
+
+    fn record_mission_cpu(&mut self, sample: &forgeterm_system::Sample) {
+        let agents: Vec<(TermId, u32)> = self
+            .terminals
+            .values()
+            .filter(|t| t.agent.is_some())
+            .filter_map(|t| Some((t.id, t.session()?.pid()?)))
+            .collect();
+        for (id, pid) in agents {
+            if let Some(cpu) = sample.shells.get(&pid).and_then(|u| u.cpu_percent) {
+                self.mission.record_cpu(id, cpu);
+            }
+        }
+        self.mission
+            .cpu
+            .retain(|id, _| self.terminals.contains_key(id));
+    }
+
+    /// Remembers an agent session that is going away, for "recently ended".
+    fn note_ended(&mut self, id: TermId) {
+        let Some(t) = self.terminals.get(&id) else {
+            return;
+        };
+        let Some(kind) = t.agent else {
+            return;
+        };
+        let how = match &t.status {
+            Status::Running => EndKind::Closed,
+            Status::Exited(code) => EndKind::Exited(*code),
+            Status::Failed(_) => EndKind::FailedToStart,
+        };
+        let now = std::time::Instant::now();
+        let project = t
+            .directory()
+            .and_then(Path::file_name)
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        self.mission.record_ended(Ended {
+            kind,
+            project,
+            ran: t.elapsed(now),
+            at: now,
+            how,
+        });
+        if self.mission.selected == Some(id) {
+            self.mission.selected = None;
+        }
+    }
+
     // ---- monitor --------------------------------------------------------------------
 
     /// (label, shell pid) of every running terminal, in tab order.
@@ -2285,7 +2584,7 @@ impl App {
 
     /// Starts a measurement when the monitor is open and none is running.
     fn sample_monitor(&mut self) -> Option<Task<Message>> {
-        if !self.monitor.visible || self.monitor.busy {
+        if !(self.monitor.visible || self.mission.visible) || self.monitor.busy {
             return None;
         }
         self.monitor.busy = true;
@@ -2515,14 +2814,25 @@ impl App {
                 Some((pid, format!("{} (tab {tab})", t.display_title())))
             })
             .collect();
-        if shells.is_empty() {
+        // An agent runs as the terminal's own process (no child of a shell), so the
+        // process check would not see it: ending a session always asks.
+        let agents: Vec<String> = ids
+            .iter()
+            .filter_map(|id| {
+                let t = self.terminals.get(id).filter(|t| t.is_running())?;
+                let kind = t.agent?;
+                let tab = self.workspace.locate(*id).map_or(0, |(i, _)| i + 1);
+                Some(format!("{kind} session (tab {tab})"))
+            })
+            .collect();
+        if shells.is_empty() && agents.is_empty() {
             return self.perform_close(target);
         }
         background(
             move || {
                 let pids: Vec<u32> = shells.iter().map(|(p, _)| *p).collect();
                 let running = forgeterm_system::running_programs(&pids);
-                let mut found = Vec::new();
+                let mut found = agents;
                 for (pid, label) in &shells {
                     if let Some(programs) = running.get(pid).filter(|p| !p.is_empty()) {
                         let names: Vec<&str> = programs.iter().map(|p| p.name.as_str()).collect();
@@ -2954,7 +3264,7 @@ impl App {
 
     /// Terminals the user is looking at no longer need attention.
     fn acknowledge_seen(&mut self) {
-        if !self.window_focused {
+        if !self.window_focused || self.mission.visible {
             return;
         }
         let Some(tab) = self.workspace.active_tab() else {
@@ -3039,6 +3349,21 @@ impl App {
             ),
             CommandId::StartAgent(kind, false) => format!("Start {kind} in Project"),
             CommandId::StartAgent(kind, true) => format!("Start {kind} in Split"),
+            CommandId::GoToTerminal(t) => match self.terminals.get(&t) {
+                Some(term) => {
+                    let tab = self.workspace.locate(t).map_or(0, |(i, _)| i + 1);
+                    let name = term
+                        .agent
+                        .map_or_else(|| term.display_title(), |k| k.name().to_owned());
+                    let project = term
+                        .directory()
+                        .and_then(Path::file_name)
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    format!("Go to {name} — {project} (tab {tab})")
+                }
+                None => id.static_title().to_owned(),
+            },
             _ => id.static_title().to_owned(),
         }
     }
@@ -3081,6 +3406,10 @@ impl App {
                 let id = CommandId::StartAgent(kind, split);
                 entries.push(entry(id, self.command_title(id)));
             }
+        }
+        for id in self.mission_order() {
+            let id = CommandId::GoToTerminal(id);
+            entries.push(entry(id, self.command_title(id)));
         }
         for (i, tab) in self.workspace.tabs.iter().enumerate() {
             let title = tab
@@ -3138,6 +3467,7 @@ impl App {
             (Some(err), _) => container(text(err.as_str()).color(theme::CORAL))
                 .center(Length::Fill)
                 .into(),
+            (None, _) if self.mission.visible => self.view_mission(),
             (None, Some(tab)) => self.view_panes(tab),
             (None, None) => space::vertical().into(),
         };
