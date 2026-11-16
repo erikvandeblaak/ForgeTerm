@@ -37,6 +37,9 @@ pub struct Listing {
 pub fn list_dir(path: &Path) -> Result<Listing, String> {
     // Read before the entries: a change during the listing then shows up as a
     // newer time on the next check instead of being missed.
+    if !forgeterm_fs::resolves_locally(path) {
+        return Err("not on this computer (a network path, or a link to one)".to_owned());
+    }
     let modified = fs::metadata(path).and_then(|m| m.modified()).ok();
     let read = fs::read_dir(path).map_err(|e| e.to_string())?;
     let mut entries: Vec<Entry> = read
@@ -44,8 +47,17 @@ pub fn list_dir(path: &Path) -> Result<Listing, String> {
         .map(|dirent| {
             let path = dirent.path();
             let name = dirent.file_name().to_string_lossy().into_owned();
-            // `fs::metadata` follows symlinks/junctions, so a link to a folder is a folder.
-            let metadata = fs::metadata(&path).or_else(|_| dirent.metadata()).ok();
+            // `fs::metadata` follows symlinks/junctions, so a link to a folder is a
+            // folder — but only once the link is known to stay on this machine: a
+            // link to `\\server\share` in a cloned repository would otherwise
+            // connect to that server just by being listed. Such a link is shown as
+            // an entry that cannot be opened.
+            let is_link = dirent.file_type().is_ok_and(|t| t.is_symlink());
+            let metadata = if is_link && !forgeterm_fs::resolves_locally(&path) {
+                dirent.metadata().ok()
+            } else {
+                fs::metadata(&path).or_else(|_| dirent.metadata()).ok()
+            };
             let is_dir = metadata.as_ref().is_some_and(fs::Metadata::is_dir);
             let hidden = is_hidden(&name, metadata.as_ref());
             Entry {

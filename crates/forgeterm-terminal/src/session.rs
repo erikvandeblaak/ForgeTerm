@@ -358,6 +358,8 @@ impl<P: EventedReadWrite> io::Read for ScanPty<P> {
         // Checked here, on the I/O thread, so a slow (network) path never stalls the UI.
         if let Some(cwd) = cwd
             && self.last.as_ref() != Some(&cwd)
+            // No symlink/junction on the way may lead to a network share.
+            && forgeterm_fs::resolves_locally(std::path::Path::new(&cwd))
             && std::path::Path::new(&cwd).is_dir()
         {
             self.last = Some(cwd.clone());

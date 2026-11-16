@@ -9,6 +9,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+forgeterm-fs.workspace = true
 
 [lints]
 workspace = true

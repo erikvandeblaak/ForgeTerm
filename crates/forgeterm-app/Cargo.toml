@@ -17,6 +17,7 @@ name = "forgeterm"
 path = "src/main.rs"
 
 [dependencies]
+forgeterm-fs.workspace = true
 forgeterm-terminal.workspace = true
 forgeterm-explorer.workspace = true
 forgeterm-settings.workspace = true

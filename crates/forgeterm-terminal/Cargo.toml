@@ -9,6 +9,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+forgeterm-fs.workspace = true
 alacritty_terminal.workspace = true
 # Same version alacritty_terminal uses; needed to name its PTY trait's types.
 polling = "3.8"
