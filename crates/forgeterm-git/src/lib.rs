@@ -17,6 +17,7 @@
 //! Only `stage`, `unstage` and `commit` change anything, and only when the user
 //! asks; a commit runs the repository's hooks exactly like `git commit` would.
 
+mod compare;
 mod head;
 mod history;
 mod refs;
@@ -24,6 +25,10 @@ mod run;
 mod status;
 mod worktree;
 
+pub use compare::{
+    ChangedFile, MAX_UNTRACKED_COUNTED, Row, RowKind, SideBySide, changes_since, diff_files,
+    merge_base, safe_join, side_by_side,
+};
 pub use head::{Head, head, parse_head};
 pub use history::activity;
 pub use history::{Activity, HistoryEntry, daily_counts, history, parse_history, show_commit};
@@ -772,5 +777,124 @@ mod tests {
                 .iter()
                 .any(|b| b.name == "agent/claude-1")
         );
+    }
+
+    #[test]
+    fn compares_two_worktrees_against_their_merge_base() {
+        let Some(repo) = Repo::new("cmp") else {
+            return;
+        };
+        let root = &repo.0;
+        let run =
+            |dir: &Path, args: &[&str]| git(dir, args, READ_TIMEOUT).unwrap().check().unwrap();
+        repo.write(
+            "a.txt",
+            "one
+two
+three
+",
+        );
+        repo.write(
+            "same.txt", "x
+",
+        );
+        run(root, &["add", "-A"]);
+        run(root, &["commit", "-q", "-m", "base"]);
+        let rev = |dir: &Path| {
+            String::from_utf8(
+                git(dir, &["rev-parse", "HEAD"], READ_TIMEOUT)
+                    .unwrap()
+                    .stdout,
+            )
+            .unwrap()
+            .trim()
+            .to_owned()
+        };
+        let base_head = rev(root);
+        let wa = std::env::temp_dir().join(format!("forgeterm-git-cmp-a-{}", std::process::id()));
+        let wb = std::env::temp_dir().join(format!("forgeterm-git-cmp-b-{}", std::process::id()));
+        for w in [&wa, &wb] {
+            let _ = fs::remove_dir_all(w);
+        }
+        add_worktree(root, &wa, "agent/a").unwrap();
+        add_worktree(root, &wb, "agent/b").unwrap();
+
+        // A: a commit changing a.txt, then an uncommitted edit and an untracked file.
+        fs::write(
+            wa.join("a.txt"),
+            "one
+TWO
+three
+",
+        )
+        .unwrap();
+        run(&wa, &["commit", "-q", "-am", "a1"]);
+        fs::write(
+            wa.join("a.txt"),
+            "one
+TWO
+three
+four
+",
+        )
+        .unwrap();
+        fs::write(
+            wa.join("new.rs"),
+            "fn a() {}
+fn b() {}",
+        )
+        .unwrap();
+        // B: only an uncommitted deletion of a line in a.txt.
+        fs::write(
+            wb.join("a.txt"),
+            "one
+three
+",
+        )
+        .unwrap();
+
+        let (ha, hb) = (rev(&wa), rev(&wb));
+        let base = merge_base(root, &ha, &hb).unwrap();
+        assert_eq!(base, base_head);
+        assert!(merge_base(root, "--all", &hb).is_err());
+
+        let a = changes_since(&wa, &base).unwrap();
+        let paths: Vec<&str> = a.iter().map(|f| f.path.as_str()).collect();
+        assert_eq!(paths, ["a.txt", "new.rs"]);
+        assert_eq!(
+            (a[0].added, a[0].deleted, a[0].untracked),
+            (Some(2), Some(1), false)
+        );
+        assert_eq!(
+            (a[1].added, a[1].deleted, a[1].untracked),
+            (Some(2), Some(0), true)
+        );
+        let b = changes_since(&wb, &base).unwrap();
+        assert_eq!(b.len(), 1);
+        assert_eq!((b[0].added, b[0].deleted), (Some(0), Some(1)));
+
+        // Side by side: A's a.txt against B's.
+        let d = diff_files(root, Some(&wa.join("a.txt")), Some(&wb.join("a.txt"))).unwrap();
+        let sbs = side_by_side(&d.lines);
+        assert!(sbs.rows.iter().any(
+            |r| r.kind == RowKind::Removed && r.left.as_ref().is_some_and(|(_, t)| t == "TWO")
+        ));
+        // Equal files: no lines. Missing on one side: all added.
+        let same =
+            diff_files(root, Some(&wa.join("same.txt")), Some(&wb.join("same.txt"))).unwrap();
+        assert!(same.lines.is_empty());
+        let only_a = diff_files(root, None, Some(&wa.join("new.rs"))).unwrap();
+        assert_eq!(
+            side_by_side(&only_a.lines)
+                .rows
+                .iter()
+                .filter(|r| r.kind == RowKind::Added)
+                .count(),
+            2
+        );
+
+        for w in [&wa, &wb] {
+            let _ = fs::remove_dir_all(w);
+        }
     }
 }

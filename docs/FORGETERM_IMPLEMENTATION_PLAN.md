@@ -98,7 +98,10 @@ Besluit (standaard, aan te passen): worktrees komen in `<repo>-worktrees/<branch
 - **Worktree verwijderen** alleen als hij schoon is (`git worktree remove`, zonder `--force`). Met wijzigingen: weigeren met de lijst.
 - **Besluit nodig (Erik):** waar komen worktrees standaard (`<repo>-worktrees/<branch>` naast de repo?) en wordt dat een instelling?
 
-## P1 — Milestone 4: Vergelijken (Parallel AI, deel 2)
+## P1 — Milestone 4: Vergelijken (Parallel AI, deel 2) ✅ (branch `feature/compare-worktrees`, 2026-11-16)
+
+Geleverd als *Compare Worktrees* (Ctrl+Shift+K), zie ARCHITECTURE §4i4. Besluit: testcommando's worden ingevoegd zonder Enter (zelfde regel als prompts), niet automatisch gestart; de exitcode komt uit shell-integratie.
+
 
 - Twee worktrees naast elkaar:
   - gewijzigde bestanden en diffstat;

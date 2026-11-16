@@ -50,6 +50,7 @@ A terminal that runs AI agents has to be predictable. ForgeTerm puts the tools y
 | **Shell integration** | Every prompt gets a mark in the margin (succeeded, failed, running). Jump between commands with Ctrl+Shift+↑/↓, copy the output of the last command, or put it in your agent's prompt. Never touches your profile or rc files. |
 | **Code viewer** | Read-only viewer with syntax highlighting, line numbers, a minimap, search and copy. Ctrl+click on `src/main.rs:42`, `Program.cs(12,5)` or a Python traceback in the output opens the file at that line. |
 | **Git Control Center** | Ctrl+Shift+H shows the repository at a glance: branch and upstream, staged / unstaged / untracked changes with lines added and removed per file, every worktree with its branch and changes, which agent works in which worktree, commits per day, recent commits and branches. Click a file for its diff, open a terminal in any worktree; the only changes made from here are adding or removing a worktree, each after asking. |
+| **Compare worktrees** | Ctrl+Shift+K puts two worktrees side by side: the files each changed since their common commit (committed, uncommitted and new) with lines added and removed, which files changed in both, and any file in A beside B. Open a terminal in each with the test command typed (you press Enter), see each run's exit code, and put one prompt into both agents without Enter. Counts and exit codes only: no verdict on which side is better. |
 | **Agents side by side** | *Start Agent in a New Worktree…* creates a branch in its own folder beside the repository (`git worktree add`, never forced) and starts Claude Code or Codex there, so each agent works without touching the others. Removing a worktree asks first; git refuses one with changes, and the branch is kept. |
 | **Git panel** | Branch, ahead/behind and changes in the status bar. Diff, stage, unstage, commit, switch branches, history, and commits per day over thirty days. Push and pull are deliberately left to the terminal. |
 | **Explorer and session** | A file tree that follows your shell's folder, usable by keyboard. Double-click puts the path in the terminal, quoted correctly for that shell. Tabs, splits and folders come back at the next start. |
@@ -97,6 +98,7 @@ There is no macOS version.
 | AI workspace | Ctrl+Shift+A |
 | Mission Control (agents dashboard) | Ctrl+Shift+D |
 | Git Control Center | Ctrl+Shift+H |
+| Compare worktrees | Ctrl+Shift+K |
 | Prompt Studio | Ctrl+Shift+I |
 | Explorer | Ctrl+Shift+E |
 | Code viewer | Ctrl+Shift+O |

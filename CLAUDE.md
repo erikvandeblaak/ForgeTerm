@@ -39,9 +39,9 @@ Start de app vanuit een omgeving **zonder** `NO_COLOR` (Claude Code zet die; Pow
 ## Structuur
 
 - `crates/forgeterm-terminal` — Session (PTY + emulator), input-encoding, palet, snapshots, shelldetectie, pad-quoting per shell
-- `crates/forgeterm-agents` — agents vinden (PATH, `~/.local/bin`), `--version` met timeout, `.cmd` via `cmd /d /c`, projectroot + contextbestanden (alleen lezen)
+- `crates/forgeterm-agents` — agents vinden (PATH, `~/.local/bin`), `--version` met timeout, `.cmd` via `cmd /d /c`, projectroot + contextbestanden (alleen lezen), voorstel voor het testcommando
 - `crates/forgeterm-prompts` — Prompt Studio-sjablonen: front matter, `{{variabelen}}`, invullen (waarden letterlijk, nooit een afsluitende Enter), ingebouwd + eigen map
-- `crates/forgeterm-git` — git via de CLI (porcelain v2): status, diff, log, stage/unstage, commit; veilige vaste opties (geen fsmonitor/ext-diff/textconv, geen locks, geen prompts, timeout, geen consolevenster)
+- `crates/forgeterm-git` — git via de CLI (porcelain v2): status, diff, log, stage/unstage, commit; veilige vaste opties (geen fsmonitor/ext-diff/textconv, geen locks, geen prompts, timeout, geen consolevenster); worktrees vergelijken (merge-base, wijzigingen sinds, side-by-side-rijen)
 - `crates/forgeterm-viewer` — code-viewer: bestand veilig laden (limiet, binair, UTF-8/16, CRLF), weergaveregels (tabs, besturingstekens), syntect-kleuring met Forge-thema, kopiëren, zoeken
 - `crates/forgeterm-system` — processen in de terminals (sysinfo, alleen lezen): welke programma's een shell nog draait
 - `crates/forgeterm-settings` — `settings.toml` laden (tolerant, problemen als tekst), template, pad

@@ -4,6 +4,7 @@
 mod ai_view;
 mod app;
 mod commands;
+mod compare_view;
 mod explorer_view;
 mod fuzzy;
 mod git_dash;

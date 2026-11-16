@@ -349,6 +349,15 @@ fn header<'a>(
         ),
         with_tip(
             action_button(
+                "Compare…".to_owned(),
+                Some(Message::Command(CommandId::ToggleCompare)),
+                theme::CYAN,
+                false,
+            ),
+            "Two worktrees side by side: changed files, diffs, tests (Ctrl+Shift+K)".to_owned(),
+        ),
+        with_tip(
+            action_button(
                 "Stage & commit".to_owned(),
                 Some(Message::Command(CommandId::ToggleGitPanel)),
                 theme::CYAN,
@@ -435,7 +444,12 @@ fn tiles<'a>(status: &'a Status, data: Option<&'a DashData>) -> Element<'a, Mess
     .into()
 }
 
-fn tile<'a>(label: &'a str, value: String, sub: String, accent: Color) -> Element<'a, Message> {
+pub(crate) fn tile<'a>(
+    label: &'a str,
+    value: String,
+    sub: String,
+    accent: Color,
+) -> Element<'a, Message> {
     container(
         column![
             row![
@@ -629,7 +643,7 @@ fn file_row<'a>(
 }
 
 /// Green/red split bar, its length relative to the biggest change in the list.
-fn diff_bar<'a>(added: u32, deleted: u32, max: u32) -> Element<'a, Message> {
+pub(crate) fn diff_bar<'a>(added: u32, deleted: u32, max: u32) -> Element<'a, Message> {
     let full = 110.0;
     let total = (added + deleted) as f32;
     let width = (full * total / max as f32).max(if total > 0.0 { 4.0 } else { 0.0 });
@@ -964,7 +978,7 @@ fn branches_card(data: Option<&DashData>) -> Element<'_, Message> {
     card(list)
 }
 
-fn untrusted<'a>(root: &'a Path, programs: &'a [String]) -> Element<'a, Message> {
+pub(crate) fn untrusted<'a>(root: &'a Path, programs: &'a [String]) -> Element<'a, Message> {
     let mut col = column![
         text("Git is paused for this repository")
             .size(18)
@@ -1002,7 +1016,7 @@ fn untrusted<'a>(root: &'a Path, programs: &'a [String]) -> Element<'a, Message>
         .into()
 }
 
-fn message_card<'a>(title: &str, detail: Option<String>) -> Element<'a, Message> {
+pub(crate) fn message_card<'a>(title: &str, detail: Option<String>) -> Element<'a, Message> {
     let mut col = column![text(title.to_owned()).size(18).color(theme::TEXT)].spacing(8);
     if let Some(d) = detail {
         col = col.push(text(d).size(12).color(theme::TEXT_MUTED));
@@ -1014,7 +1028,7 @@ fn message_card<'a>(title: &str, detail: Option<String>) -> Element<'a, Message>
         .into()
 }
 
-fn card<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
+pub(crate) fn card<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     container(content)
         .padding([14, 16])
         .width(Length::Fill)
@@ -1022,7 +1036,7 @@ fn card<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
         .into()
 }
 
-fn card_style(bg: Color) -> impl Fn(&iced::Theme) -> container::Style {
+pub(crate) fn card_style(bg: Color) -> impl Fn(&iced::Theme) -> container::Style {
     move |_| container::Style {
         background: Some(bg.into()),
         border: Border {
@@ -1034,19 +1048,19 @@ fn card_style(bg: Color) -> impl Fn(&iced::Theme) -> container::Style {
     }
 }
 
-fn card_title<'a>(s: &'a str) -> Element<'a, Message> {
+pub(crate) fn card_title<'a>(s: &'a str) -> Element<'a, Message> {
     text(s).size(10).color(theme::TEXT_MUTED).into()
 }
 
-fn muted<'a>(s: &str) -> Element<'a, Message> {
+pub(crate) fn muted<'a>(s: &str) -> Element<'a, Message> {
     text(s.to_owned()).size(11).color(theme::TEXT_MUTED).into()
 }
 
-fn muted_owned<'a>(s: String) -> Element<'a, Message> {
+pub(crate) fn muted_owned<'a>(s: String) -> Element<'a, Message> {
     text(s).size(11).color(theme::TEXT_MUTED).into()
 }
 
-fn plural(n: usize) -> &'static str {
+pub(crate) fn plural(n: usize) -> &'static str {
     if n == 1 { "" } else { "s" }
 }
 

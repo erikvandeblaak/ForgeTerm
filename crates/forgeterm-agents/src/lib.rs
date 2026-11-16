@@ -8,9 +8,11 @@
 mod context;
 mod detect;
 pub mod mission;
+mod project;
 
 pub use context::{ContextItem, ContextKind, ProjectContext, project_root, scan_context};
 pub use detect::{Agent, LaunchCommand, launch_command, locate, query_version};
+pub use project::{test_command, test_command_for};
 
 use std::fmt;
 

@@ -91,6 +91,15 @@ pub enum CommandId {
     NewAgentWorktree,
     /// Remove a linked worktree (asks first; never forced), by its stable id.
     RemoveWorktree(u64),
+    /// Compare Worktrees: two worktrees side by side.
+    ToggleCompare,
+    /// Compare: exchange side A and B.
+    CompareSwap,
+    /// Compare: a tab with a terminal in A beside one in B, test command typed
+    /// in both without Enter.
+    CompareOpenTests,
+    /// Compare: the prompt at both agents' input, without Enter.
+    CompareInsertPrompt,
     /// New tab in a worktree of the Git Control Center's list, by its stable id
     /// (`git_dash::worktree_id`): a list reloaded meanwhile can never redirect it.
     WorktreeTerminal(u64),
@@ -163,6 +172,10 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::GitShowHistory,
     CommandId::ToggleGitDashboard,
     CommandId::NewAgentWorktree,
+    CommandId::ToggleCompare,
+    CommandId::CompareSwap,
+    CommandId::CompareOpenTests,
+    CommandId::CompareInsertPrompt,
     CommandId::About,
     CommandId::Website,
     CommandId::Quit,
@@ -205,6 +218,7 @@ impl CommandId {
                 | RestartShell
                 | StartAgent(..)
                 | WorktreeTerminal(_)
+                | CompareOpenTests
                 | NewTabInSelectedFolder
                 | FindInTerminal
                 | PreviousCommand
@@ -266,7 +280,8 @@ impl CommandId {
             | TogglePromptStudioDock
             | OpenPromptsFolder => "AI",
             ToggleGitPanel | GitRefresh | GitShowHistory | ToggleGitDashboard
-            | NewAgentWorktree | RemoveWorktree(_) | WorktreeTerminal(_) => "Git",
+            | NewAgentWorktree | RemoveWorktree(_) | WorktreeTerminal(_) | ToggleCompare
+            | CompareSwap | CompareOpenTests | CompareInsertPrompt => "Git",
             About | Website | KeyboardShortcuts => "Help",
             Quit => "App",
         }
@@ -352,6 +367,10 @@ impl CommandId {
             WorktreeTerminal(_) => "worktree_terminal",
             NewAgentWorktree => "agent_worktree",
             RemoveWorktree(_) => "remove_worktree",
+            ToggleCompare => "compare_worktrees",
+            CompareSwap => "compare_swap",
+            CompareOpenTests => "compare_open_tests",
+            CompareInsertPrompt => "compare_insert_prompt",
             ToggleViewer => "toggle_viewer",
             ViewSelectedFile => "view_selected_file",
             ToggleMonitor => "toggle_monitor",
@@ -452,6 +471,10 @@ impl CommandId {
             WorktreeTerminal(_) => "New Tab in Worktree",
             NewAgentWorktree => "Start Agent in a New Worktree…",
             RemoveWorktree(_) => "Remove Worktree…",
+            ToggleCompare => "Compare Worktrees",
+            CompareSwap => "Compare: Swap A and B",
+            CompareOpenTests => "Compare: Open Test Terminals (A | B)",
+            CompareInsertPrompt => "Compare: Insert Prompt into Both Agents",
             ReloadSettings => "Reload Settings",
             About => "About ForgeTerm",
             Website => "Open Website (vandeblaak.com)",
@@ -613,6 +636,7 @@ impl Default for Keymap {
             (b(CS, Char('i')), OpenPromptStudio),
             (b(CS, Char('g')), ToggleGitPanel),
             (b(CS, Char('h')), ToggleGitDashboard),
+            (b(CS, Char('k')), ToggleCompare),
             (b(CS, Char('o')), ToggleViewer),
             (b(CS, Char('f')), FindInTerminal),
             (b(CS, Char('m')), ToggleMonitor),
