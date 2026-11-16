@@ -120,6 +120,8 @@ pub struct View<'a> {
     pub now: Instant,
     /// "Agent in a new worktree" is possible (trusted repository, agent found).
     pub worktree_ok: bool,
+    /// The key that opens Mission Control (from the keymap; `None`: unbound).
+    pub back_hint: Option<String>,
 }
 
 pub fn status_color(s: Status) -> Color {
@@ -697,7 +699,11 @@ fn empty_state<'a>(v: &View<'a>) -> Element<'a, Message> {
         column![
             text("No agents running").size(18).color(theme::TEXT),
             text(format!(
-                "Start one in {where_}. It opens in its own tab; Ctrl+Shift+D brings you back here."
+                "Start one in {where_}. It opens in its own tab{}.",
+                v.back_hint
+                    .as_deref()
+                    .map(|k| format!("; {k} brings you back here"))
+                    .unwrap_or_default()
             ))
             .size(12)
             .color(theme::TEXT_MUTED),

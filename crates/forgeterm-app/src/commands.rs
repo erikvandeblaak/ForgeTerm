@@ -91,6 +91,24 @@ pub enum CommandId {
     NewAgentWorktree,
     /// Remove a linked worktree (asks first; never forced), by its stable id.
     RemoveWorktree(u64),
+    /// Close the tab at this index (its × button; asks when programs run).
+    CloseTabAt(usize),
+    /// Prompt Studio: the filled-in prompt at the focused terminal, no Enter.
+    InsertPrompt,
+    /// Prompt Studio: the filled-in prompt to the clipboard.
+    CopyPrompt,
+    /// Prompt Studio: read the template folder again.
+    ReloadPrompts,
+    /// Commit the staged changes with the typed message.
+    GitCommit,
+    /// Stage every changed and untracked file.
+    GitStageAll,
+    /// Unstage everything staged.
+    GitUnstageAll,
+    /// Trust the shown repository (its config runs programs; asks nothing more).
+    GitTrustRepository,
+    /// Show or hide remote branches in the Git panel.
+    GitToggleRemoteBranches,
     /// Compare Worktrees: two worktrees side by side.
     ToggleCompare,
     /// Compare: exchange side A and B.
@@ -172,6 +190,14 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::GitShowHistory,
     CommandId::ToggleGitDashboard,
     CommandId::NewAgentWorktree,
+    CommandId::GitCommit,
+    CommandId::GitStageAll,
+    CommandId::GitUnstageAll,
+    CommandId::GitTrustRepository,
+    CommandId::GitToggleRemoteBranches,
+    CommandId::InsertPrompt,
+    CommandId::CopyPrompt,
+    CommandId::ReloadPrompts,
     CommandId::ToggleCompare,
     CommandId::CompareSwap,
     CommandId::CompareOpenTests,
@@ -196,6 +222,7 @@ impl CommandId {
                 | StopTerminal(_)
                 | WorktreeTerminal(_)
                 | RemoveWorktree(_)
+                | CloseTabAt(_)
         )
     }
 
@@ -243,7 +270,8 @@ impl CommandId {
         use CommandId::*;
         match self {
             CommandPalette | ZoomIn | ZoomOut | ZoomReset | ToggleMonitor => "View",
-            NewTab | NewTabWithShell(_) | CloseTab | NextTab | PreviousTab | SelectTab(_) => "Tab",
+            NewTab | NewTabWithShell(_) | CloseTab | CloseTabAt(_) | NextTab | PreviousTab
+            | SelectTab(_) => "Tab",
             SplitRight | SplitDown | ClosePane | TogglePaneZoom | FocusPane(_) => "Pane",
             RestartShell
             | ClearScrollback
@@ -278,10 +306,26 @@ impl CommandId {
             | InsertLastOutputIntoAgent
             | OpenPromptStudio
             | TogglePromptStudioDock
-            | OpenPromptsFolder => "AI",
-            ToggleGitPanel | GitRefresh | GitShowHistory | ToggleGitDashboard
-            | NewAgentWorktree | RemoveWorktree(_) | WorktreeTerminal(_) | ToggleCompare
-            | CompareSwap | CompareOpenTests | CompareInsertPrompt => "Git",
+            | OpenPromptsFolder
+            | InsertPrompt
+            | CopyPrompt
+            | ReloadPrompts => "AI",
+            ToggleGitPanel
+            | GitRefresh
+            | GitShowHistory
+            | ToggleGitDashboard
+            | NewAgentWorktree
+            | RemoveWorktree(_)
+            | WorktreeTerminal(_)
+            | ToggleCompare
+            | GitCommit
+            | GitStageAll
+            | GitUnstageAll
+            | GitTrustRepository
+            | GitToggleRemoteBranches
+            | CompareSwap
+            | CompareOpenTests
+            | CompareInsertPrompt => "Git",
             About | Website | KeyboardShortcuts => "Help",
             Quit => "App",
         }
@@ -368,6 +412,15 @@ impl CommandId {
             NewAgentWorktree => "agent_worktree",
             RemoveWorktree(_) => "remove_worktree",
             ToggleCompare => "compare_worktrees",
+            CloseTabAt(_) => "close_tab_at",
+            InsertPrompt => "insert_prompt",
+            CopyPrompt => "copy_prompt",
+            ReloadPrompts => "reload_prompts",
+            GitCommit => "git_commit",
+            GitStageAll => "git_stage_all",
+            GitUnstageAll => "git_unstage_all",
+            GitTrustRepository => "git_trust_repository",
+            GitToggleRemoteBranches => "git_toggle_remote_branches",
             CompareSwap => "compare_swap",
             CompareOpenTests => "compare_open_tests",
             CompareInsertPrompt => "compare_insert_prompt",
@@ -472,6 +525,15 @@ impl CommandId {
             NewAgentWorktree => "Start Agent in a New Worktree…",
             RemoveWorktree(_) => "Remove Worktree…",
             ToggleCompare => "Compare Worktrees",
+            CloseTabAt(_) => "Close Tab",
+            InsertPrompt => "Insert Prompt (no Enter)",
+            CopyPrompt => "Copy Prompt",
+            ReloadPrompts => "Reload Prompt Templates",
+            GitCommit => "Commit Staged Changes",
+            GitStageAll => "Stage All Changes",
+            GitUnstageAll => "Unstage All",
+            GitTrustRepository => "Trust This Repository",
+            GitToggleRemoteBranches => "Show/Hide Remote Branches",
             CompareSwap => "Compare: Swap A and B",
             CompareOpenTests => "Compare: Open Test Terminals (A | B)",
             CompareInsertPrompt => "Compare: Insert Prompt into Both Agents",
@@ -733,6 +795,20 @@ impl Keymap {
             .find_map(|(binding, cmd)| (*cmd == id).then_some(*binding))
     }
 
+    /// The primary binding as text ("Ctrl+Shift+W"), for hints in the UI: they
+    /// follow `[keys]`, and a removed binding disappears from the text.
+    pub fn hint(&self, id: CommandId) -> Option<String> {
+        self.binding_for(id).map(|b| b.to_string())
+    }
+
+    /// "Alt+1…Alt+9" for a numbered family (`first`..=`last`), or what is bound.
+    pub fn range_hint(&self, first: CommandId, last: CommandId) -> Option<String> {
+        match (self.hint(first), self.hint(last)) {
+            (Some(a), Some(b)) => Some(format!("{a}…{b}")),
+            (a, b) => a.or(b),
+        }
+    }
+
     /// No two different commands may share a binding.
     #[cfg(test)]
     fn conflicts(&self) -> Vec<(KeyBinding, CommandId, CommandId)> {
@@ -754,6 +830,27 @@ mod tests {
 
     fn key(ctrl: bool, shift: bool, alt: bool, key: KeyCode) -> KeyBinding {
         KeyBinding::new(ctrl, shift, alt, key)
+    }
+
+    #[test]
+    fn hints_follow_the_keymap() {
+        let km = Keymap::default();
+        assert_eq!(
+            km.hint(CommandId::ClosePane).as_deref(),
+            Some("Ctrl+Shift+W")
+        );
+        assert_eq!(
+            km.range_hint(CommandId::SelectTab(0), CommandId::SelectTab(8))
+                .as_deref(),
+            Some("Alt+1…Alt+9")
+        );
+        // A rebound key shows the new one; a removed one disappears from hints.
+        let (km, _) = Keymap::with_overrides(&[
+            ("Ctrl+Alt+W".to_owned(), "close_pane".to_owned()),
+            ("Ctrl+Shift+G".to_owned(), "none".to_owned()),
+        ]);
+        assert_eq!(km.hint(CommandId::ClosePane).as_deref(), Some("Ctrl+Alt+W"));
+        assert_eq!(km.hint(CommandId::ToggleGitPanel), None);
     }
 
     #[test]

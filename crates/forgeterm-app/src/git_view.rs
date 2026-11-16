@@ -84,6 +84,9 @@ pub struct GitState {
     pub action_running: bool,
     /// The running (or last) action is a commit: clear the message on success.
     pub last_action_was_commit: bool,
+    /// The running (or last) action creates a branch: clear the typed name on
+    /// success only, so a refused name can be corrected.
+    pub last_action_was_create: bool,
     /// Outcome of the last action, shown until the next one.
     pub last_action: Option<Result<String, String>>,
     pub commit_message: text_editor::Content,
@@ -166,7 +169,23 @@ impl GitState {
         Some((s, color))
     }
 
-    fn can_commit(&self) -> bool {
+    /// Every changed (unstaged) and untracked file, for "Stage All Changes".
+    pub fn stage_all_paths(&self) -> Vec<String> {
+        self.status().map_or_else(Vec::new, |s| {
+            s.unstaged()
+                .chain(s.untracked())
+                .map(|e| e.path.clone())
+                .collect()
+        })
+    }
+
+    /// Every staged file, for "Unstage All".
+    pub fn unstage_all_paths(&self) -> Vec<String> {
+        self.status()
+            .map_or_else(Vec::new, |s| s.staged().map(|e| e.path.clone()).collect())
+    }
+
+    pub fn can_commit(&self) -> bool {
         !self.action_running
             && !self.commit_message.text().trim().is_empty()
             && self
@@ -200,7 +219,7 @@ pub fn view(git: &GitState) -> Element<'_, Message> {
                 body = body.push(path_text(dir.display().to_string()));
             }
         }
-        Some(Repo::Untrusted { root, programs }) => {
+        Some(Repo::Untrusted { programs, .. }) => {
             body = body.push(
                 text("Automatic Git status is paused for this repository.")
                     .size(13)
@@ -225,7 +244,7 @@ pub fn view(git: &GitState) -> Element<'_, Message> {
             ));
             body = body.push(small_button(
                 "Trust this repository",
-                Some(Message::GitTrust(root.clone())),
+                Some(Message::Command(CommandId::GitTrustRepository)),
                 "Run git status here, including the programs above",
             ));
         }
@@ -507,7 +526,8 @@ fn commit_box<'a>(git: &'a GitState, status: &'a Status) -> Element<'a, Message>
             space::horizontal(),
             small_button(
                 &label,
-                git.can_commit().then_some(Message::GitCommit),
+                git.can_commit()
+                    .then_some(Message::Command(CommandId::GitCommit)),
                 "git commit -m <message>"
             )
         ],
@@ -679,7 +699,7 @@ fn branches_block(git: &GitState) -> Element<'_, Message> {
         );
         list = list.push(
             mouse_area(text(label).size(11).color(theme::TEXT_MUTED))
-                .on_press(Message::GitToggleRemotes),
+                .on_press(Message::Command(CommandId::GitToggleRemoteBranches)),
         );
         if git.show_remotes {
             for b in remote.iter().take(MAX_BRANCHES) {

@@ -8,7 +8,7 @@ Legenda: ✅ klaar en getest · 🟡 deels · ⬜ open. "Getest" betekent: daadw
 |---|---|---|
 | Rust-toolchain + MSVC Build Tools + Windows SDK | ✅ | rustc 1.99.1, VS 2022 Build Tools, SDK 10.0.26100 |
 | Library-onderzoek + architectuur | ✅ | docs/ARCHITECTURE.md |
-| Cross-platform PTY-prototype | ✅ | Windows ConPTY ✅. Linux (WSL Ubuntu 24.04, basis van Mint 22): build + clippy + 142 tests (echte PTY) ✅, GUI onder WSLg ✅. Echte Mint-desktop ⬜ |
+| Cross-platform PTY-prototype | ✅ | Windows ConPTY ✅. Linux (WSL Ubuntu 24.04, basis van Mint 22): build + clippy + alle tests (echte PTY; 220 op 2026-11-16) ✅, GUI onder WSLg ✅. Echte Mint-desktop ⬜ |
 | Terminalemulatie valideren | ✅ | Kleuren 16/256/truecolor, attributen, CJK, combining, alt screen (vim), resize |
 | **Verticale slice: venster → PTY → rendering → shell → Claude Code** | ✅ Windows | Claude Code start, rendert, reageert op pijltjes/Esc |
 

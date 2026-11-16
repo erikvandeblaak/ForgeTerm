@@ -232,8 +232,7 @@ impl TerminalPane {
     /// Takes a fresh snapshot (call only when the terminal is visible).
     pub fn refresh(&mut self, palette: &Palette) {
         if let Some(session) = &self.session {
-            self.snapshot = session.snapshot(palette);
-            let modes = session.modes();
+            let (snapshot, modes) = session.refresh(palette, &self.snapshot);
             if modes.keyboard != self.modes.keyboard {
                 tracing::info!(
                     shell = %self.shell.name,
@@ -242,8 +241,13 @@ impl TerminalPane {
                 );
             }
             self.modes = modes;
-            self.cache.clear();
-            self.preview_cache.clear();
+            tracing::trace!(changed = snapshot.is_some(), "terminal refresh");
+            // Same screen as drawn: keep the cached geometry (no redraw).
+            if let Some(snapshot) = snapshot {
+                self.snapshot = snapshot;
+                self.cache.clear();
+                self.preview_cache.clear();
+            }
         }
         self.dirty = false;
     }

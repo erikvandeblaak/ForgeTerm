@@ -266,7 +266,7 @@ Rust 1.99.1 per gebruiker (rustup, geen sudo); verse clone in het Linux-bestands
 | # | Scenario | Resultaat |
 |---|---|---|
 | LX1 | `cargo fmt --check`, `cargo build`, `cargo clippy --all-targets -D warnings` op Linux | ✅ |
-| LX2 | `cargo test --workspace --no-fail-fast`: 142 tests, incl. echte PTY met `/bin/sh`, cwd-tracking en quoting in echte shells. Eerste run vond 2 tests met Windows-verwachtingen (OSC 9;9 met `C:\\…`, `//host/share`); platformbewust gemaakt | ✅ |
+| LX2 | `cargo test --workspace --no-fail-fast`: 142 tests op 2026-11-10 (220 op 2026-11-16), incl. echte PTY met `/bin/sh`, cwd-tracking en quoting in echte shells. Eerste run vond 2 tests met Windows-verwachtingen (OSC 9;9 met `C:\\…`, `//host/share`); platformbewust gemaakt | ✅ |
 | LX3 | GUI onder WSLg (Wayland, geen GPU-doorvoer voor Mesa: wgpu valt terug op GLES via EGL): venster, menu, tabs, bash-prompt in kleur, statusbalk met `bash`, map (bash-integratie) en git-status `master ↑2 · clean` (klopt met de clone). Vastgelegd met de testhaak `FORGETERM_SCREENSHOT` (het WSLg-venster zelf is van buitenaf niet te fotograferen: zwart of doorzichtig) | ✅ |
 | LX4 | Invoer via het WSLg-venster: `touch /tmp/ft_input_ok; cd crates; ls --color=auto` + Enter → bestand bestaat in Linux, gekleurde uitvoer, statusbalk volgt direct naar `~/forgeterm-linux-test/crates` | ✅ |
 | LX5 | Echte Linux Mint-desktop (Cinnamon, X11) | ⬜ niet getest — WSL is dezelfde Ubuntu-basis maar een andere desktop/compositor |
@@ -431,7 +431,34 @@ Beslissingen hieruit: `WGPU_POWER_PREF=low` en (Windows) `WGPU_BACKEND=dx12` als
 
 Prestatiebudgetten (doel, nog te bewaken in CI): venster < 300 ms, idle geheugen < 175 MB, invoerlatentie < 1 frame.
 
+## Performance (2026-11-16, Windows 11, release)
+
+Zie `docs/PERFORMANCE.md` voor de cijfers. GUI-controles van de wijzigingen:
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| PF1 | Terminal-zoeken: snel "Cargo", "x", Backspace getypt: één zoekopdracht na de pauze, `Cargo.toml` gevonden; "Cargonope": *Not found* | ✅ |
+| PF2 | Alt+Tab weg (echte toetsen): `Unfocused` komt binnen, geen `git status` meer; terug: meteen één keer ingehaald | ✅ (trace) |
+| PF3 | Minimaliseren met Win+↓: idem, 0 ms CPU in 12 s | ✅ (trace) |
+| PF4 | Een TUI met 60 fps en 1 MB uitvoer worden correct getekend na de refresh-wijziging | ✅ |
+
+### Kwaliteit uit de audit (2026-11-16, Windows 11)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| Q1 | `session.toml` is een map (opslaan faalt): melding met pad en gevolg; in het log één waarschuwing in plaats van elke 2 s | ✅ |
+| Q2 | Ctrl+Shift+E, G, M na elkaar: steeds één zijpaneel, het vorige gaat dicht | ✅ |
+| Q3 | Split + zoom: statusbalk "zoomed (Ctrl+Shift+Enter)" uit de keymap | ✅ |
+| Q4 | Branch "bad..x" aanmaken: fout getoond, naam blijft staan; daarna "feature-x": aangemaakt, veld leeg | ✅ |
+| Q5 | Sneltoets van een niet-toepasselijk commando: doet niets, gaat niet naar de shell | ✅ unit (`is_applicable`) + code |
+| Q6 | Palette "stage all" → *Git: Stage All Changes*: drie bestanden staged (gecontroleerd met `git diff --cached`); "unstage all": leeg, paneel meldt "Unstaged 3 files" | ✅ |
+| Q7 | × van tab 2 (via `CloseTabAt`): tab dicht, "Tab 1/1" | ✅ |
+| Q8 | Na het opsplitsen van `app.rs`: Mission Control, Git Control Center, Compare, Esc terug, verkenner, AI-paneel en palette openen; app blijft responsief; dezelfde 222 tests | ✅ |
+
 ### Testvalkuilen (geleerd)
+
+- **Focus testen met echte invoer (2026-11-16):** `SetForegroundWindow`/`ShowWindow` vanuit een ander proces geeft in winit géén `Focused(false)`; Alt+Tab of Win+↓ via `keybd_event` wel.
+- **Synthetische invoer telt als gebruikersactiviteit:** `GetLastInputInfo` ziet ook eigen `keybd_event`s. Wacht vóór elke GUI-stap tot er 20 s geen invoer was, in plaats van één keer te controleren.
 
 - **Tabs niet op coördinaten aanklikken (2026-11-16):** de tabbalk scrolt bij veel tabs, dus een vaste x-positie kan de **×** van een andere tab raken (gebeurd: een tab met twee lege shells ging dicht). Navigeer met Ctrl+(Shift+)Tab, de palette of *Go to*.
 

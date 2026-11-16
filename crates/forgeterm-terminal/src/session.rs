@@ -619,20 +619,45 @@ impl Session {
     }
 
     pub fn modes(&self) -> Modes {
-        let term = self.term.lock();
-        let m = *term.mode();
-        Modes {
-            app_cursor: m.contains(TermMode::APP_CURSOR),
-            bracketed_paste: m.contains(TermMode::BRACKETED_PASTE),
-            mouse_reporting: m.intersects(TermMode::MOUSE_MODE),
-            mouse_motion: m.intersects(TermMode::MOUSE_MOTION | TermMode::MOUSE_DRAG),
-            sgr_mouse: m.contains(TermMode::SGR_MOUSE),
-            alt_screen: m.contains(TermMode::ALT_SCREEN),
-            alternate_scroll: m.contains(TermMode::ALTERNATE_SCROLL),
-            keyboard: ((m & TermMode::KITTY_KEYBOARD_PROTOCOL).bits() >> 18) as u8,
-        }
+        modes_of(&self.term.lock())
     }
 
+    /// For a repaint after output: the modes and, only when it differs from
+    /// `current`, a new snapshot — under one lock. Programs often redraw the same
+    /// screen (synchronized updates, spinners between frames); then nothing needs
+    /// to be drawn again.
+    pub fn refresh(&self, palette: &Palette, current: &Snapshot) -> (Option<Snapshot>, Modes) {
+        self.listener
+            .0
+            .wakeup_pending
+            .store(false, Ordering::Release);
+        let term = self.term.lock();
+        let modes = modes_of(&term);
+        let snapshot = {
+            let reported = self.reported();
+            build_snapshot(&term, palette, Some(&reported.commands))
+        };
+        drop(term);
+        ((snapshot != *current).then_some(snapshot), modes)
+    }
+}
+
+/// The input-relevant modes a program has switched on.
+fn modes_of<T>(term: &Term<T>) -> Modes {
+    let m = *term.mode();
+    Modes {
+        app_cursor: m.contains(TermMode::APP_CURSOR),
+        bracketed_paste: m.contains(TermMode::BRACKETED_PASTE),
+        mouse_reporting: m.intersects(TermMode::MOUSE_MODE),
+        mouse_motion: m.intersects(TermMode::MOUSE_MOTION | TermMode::MOUSE_DRAG),
+        sgr_mouse: m.contains(TermMode::SGR_MOUSE),
+        alt_screen: m.contains(TermMode::ALT_SCREEN),
+        alternate_scroll: m.contains(TermMode::ALTERNATE_SCROLL),
+        keyboard: ((m & TermMode::KITTY_KEYBOARD_PROTOCOL).bits() >> 18) as u8,
+    }
+}
+
+impl Session {
     fn viewport_point(term: &Term<Listener>, col: usize, row: usize) -> Point {
         let offset = term.grid().display_offset();
         let col = col.min(term.columns().saturating_sub(1));
@@ -668,32 +693,8 @@ impl Session {
     /// upwards. The match becomes the selection (so Ctrl+C copies it) and the view
     /// scrolls to it. Wraps around at the ends.
     pub fn search(&self, query: &str, older: bool) -> SearchOutcome {
-        if query.is_empty() {
-            return SearchOutcome::NotFound;
-        }
-        let Ok(mut regex) = RegexSearch::new(&crate::search::escape(query)) else {
-            return SearchOutcome::NotFound;
-        };
         let mut term = self.term.lock();
-        let origin = match term.selection.as_ref().and_then(|s| s.to_range(&*term)) {
-            // Step off the previous match so the next one is found.
-            Some(range) if older => range.start.sub(&*term, Boundary::None, 1),
-            Some(range) => range.end.add(&*term, Boundary::None, 1),
-            None => term.grid().cursor.point,
-        };
-        let direction = if older {
-            Direction::Left
-        } else {
-            Direction::Right
-        };
-        let Some(found) = term.search_next(&mut regex, origin, direction, Side::Left, None) else {
-            return SearchOutcome::NotFound;
-        };
-        let mut selection = Selection::new(SelectionType::Simple, *found.start(), Side::Left);
-        selection.update(*found.end(), Side::Right);
-        term.selection = Some(selection);
-        term.scroll_to_point(*found.start());
-        SearchOutcome::Found
+        search_in(&mut term, query, older)
     }
 
     /// The most important status a program in this terminal reported (OSC 7501).
@@ -822,124 +823,167 @@ impl Session {
             .0
             .wakeup_pending
             .store(false, Ordering::Release);
-
         let term = self.term.lock();
-        let content = term.renderable_content();
-        let cols = term.columns();
-        let rows = term.screen_lines();
-        let offset = content.display_offset;
-        let colors = content.colors;
-        let selection = content.selection;
+        let reported = self.reported();
+        build_snapshot(&term, palette, Some(&reported.commands))
+    }
+}
 
-        let blank = CellView {
-            c: ' ',
-            zerowidth: None,
-            fg: palette.foreground,
-            bg: palette.background,
-            flags: CellFlags::default(),
-        };
-        let mut cells = vec![blank; cols * rows];
+/// Finds the next (`older`: previous) match of `query` (literal text) from the
+/// current selection or the cursor, selects it and scrolls it into view.
+pub(crate) fn search_in<T: EventListener>(
+    term: &mut Term<T>,
+    query: &str,
+    older: bool,
+) -> SearchOutcome {
+    if query.is_empty() {
+        return SearchOutcome::NotFound;
+    }
+    let Ok(mut regex) = RegexSearch::new(&crate::search::escape(query)) else {
+        return SearchOutcome::NotFound;
+    };
+    let origin = match term.selection.as_ref().and_then(|s| s.to_range(&*term)) {
+        // Step off the previous match so the next one is found.
+        Some(range) if older => range.start.sub(&*term, Boundary::None, 1),
+        Some(range) => range.end.add(&*term, Boundary::None, 1),
+        None => term.grid().cursor.point,
+    };
+    let direction = if older {
+        Direction::Left
+    } else {
+        Direction::Right
+    };
+    let Some(found) = term.search_next(&mut regex, origin, direction, Side::Left, None) else {
+        return SearchOutcome::NotFound;
+    };
+    let mut selection = Selection::new(SelectionType::Simple, *found.start(), Side::Left);
+    selection.update(*found.end(), Side::Right);
+    term.selection = Some(selection);
+    term.scroll_to_point(*found.start());
+    SearchOutcome::Found
+}
 
-        for indexed in content.display_iter {
-            let point = indexed.point;
-            let row = point.line.0 + offset as i32;
-            if row < 0 || row as usize >= rows || point.column.0 >= cols {
-                continue;
-            }
-            let cell = indexed.cell;
-            let f = cell.flags;
+/// The visible viewport of `term` as a renderer-friendly snapshot. `commands`
+/// gives prompt marks their state (succeeded, failed, running).
+pub(crate) fn build_snapshot<T: EventListener>(
+    term: &Term<T>,
+    palette: &Palette,
+    commands: Option<&CommandLog>,
+) -> Snapshot {
+    let content = term.renderable_content();
+    let cols = term.columns();
+    let rows = term.screen_lines();
+    let offset = content.display_offset;
+    let colors = content.colors;
+    let selection = content.selection;
 
-            let mut fg = palette.resolve(cell.fg, colors);
-            let mut bg = palette.resolve(cell.bg, colors);
-            if f.contains(Flags::DIM) {
-                fg = fg.dim();
-            }
-            if f.contains(Flags::INVERSE) {
-                std::mem::swap(&mut fg, &mut bg);
-            }
-            if f.contains(Flags::HIDDEN) {
-                fg = bg;
-            }
-            if selection.is_some_and(|s| s.contains(point)) {
-                fg = palette.selection_fg;
-                bg = palette.selection_bg;
-            }
+    let blank = CellView {
+        c: ' ',
+        zerowidth: None,
+        fg: palette.foreground,
+        bg: palette.background,
+        flags: CellFlags::default(),
+    };
+    let mut cells = vec![blank; cols * rows];
 
-            cells[row as usize * cols + point.column.0] = CellView {
-                c: cell.c,
-                zerowidth: cell
-                    .zerowidth()
-                    .map(|z| z.iter().collect::<String>().into_boxed_str()),
-                fg,
-                bg,
-                flags: CellFlags {
-                    bold: f.contains(Flags::BOLD),
-                    italic: f.contains(Flags::ITALIC),
-                    underline: f.intersects(Flags::ALL_UNDERLINES),
-                    strikeout: f.contains(Flags::STRIKEOUT),
-                    wide: f.contains(Flags::WIDE_CHAR),
-                    wide_spacer: f.contains(Flags::WIDE_CHAR_SPACER),
-                },
-            };
+    for indexed in content.display_iter {
+        let point = indexed.point;
+        let row = point.line.0 + offset as i32;
+        if row < 0 || row as usize >= rows || point.column.0 >= cols {
+            continue;
+        }
+        let cell = indexed.cell;
+        let f = cell.flags;
+
+        let mut fg = palette.resolve(cell.fg, colors);
+        let mut bg = palette.resolve(cell.bg, colors);
+        if f.contains(Flags::DIM) {
+            fg = fg.dim();
+        }
+        if f.contains(Flags::INVERSE) {
+            std::mem::swap(&mut fg, &mut bg);
+        }
+        if f.contains(Flags::HIDDEN) {
+            fg = bg;
+        }
+        if selection.is_some_and(|s| s.contains(point)) {
+            fg = palette.selection_fg;
+            bg = palette.selection_bg;
         }
 
-        let cursor = {
-            let c = content.cursor;
-            let row = c.point.line.0 + offset as i32;
-            let shape = match c.shape {
-                AlacCursorShape::Block => Some(CursorShape::Block),
-                AlacCursorShape::Underline => Some(CursorShape::Underline),
-                AlacCursorShape::Beam => Some(CursorShape::Beam),
-                AlacCursorShape::HollowBlock => Some(CursorShape::HollowBlock),
-                AlacCursorShape::Hidden => None,
-            };
-            shape
-                .filter(|_| row >= 0 && (row as usize) < rows)
-                .map(|shape| CursorView {
-                    col: c.point.column.0.min(cols.saturating_sub(1)),
-                    row: row as usize,
-                    shape,
-                    color: palette.cursor,
-                })
+        cells[row as usize * cols + point.column.0] = CellView {
+            c: cell.c,
+            zerowidth: cell
+                .zerowidth()
+                .map(|z| z.iter().collect::<String>().into_boxed_str()),
+            fg,
+            bg,
+            flags: CellFlags {
+                bold: f.contains(Flags::BOLD),
+                italic: f.contains(Flags::ITALIC),
+                underline: f.intersects(Flags::ALL_UNDERLINES),
+                strikeout: f.contains(Flags::STRIKEOUT),
+                wide: f.contains(Flags::WIDE_CHAR),
+                wide_spacer: f.contains(Flags::WIDE_CHAR_SPACER),
+            },
         };
+    }
 
-        let prompt_marks = {
-            let reported = self.reported();
-            (0..rows)
-                .filter_map(|row| {
-                    let line = Line(row as i32 - offset as i32);
-                    let link = prompt_link_at(&term, line)?;
-                    // A prompt over several lines is marked once, at its first line.
-                    if line > term.grid().topmost_line()
-                        && prompt_link_at(&term, line - 1).is_some_and(|prev| prev.0 == link.0)
-                    {
-                        return None;
-                    }
-                    let mark = match link.1.and_then(|id| reported.commands.by_id(id)) {
-                        None => PromptMark::Prompt,
-                        Some(r) => match r.state {
-                            CommandState::AtPrompt => return None,
-                            CommandState::Running => PromptMark::Running,
-                            CommandState::Finished(Some(0)) => PromptMark::Succeeded,
-                            CommandState::Finished(Some(code)) => PromptMark::Failed(code),
-                            CommandState::Finished(None) => PromptMark::Prompt,
-                        },
-                    };
-                    Some((row, mark))
-                })
-                .collect()
+    let cursor = {
+        let c = content.cursor;
+        let row = c.point.line.0 + offset as i32;
+        let shape = match c.shape {
+            AlacCursorShape::Block => Some(CursorShape::Block),
+            AlacCursorShape::Underline => Some(CursorShape::Underline),
+            AlacCursorShape::Beam => Some(CursorShape::Beam),
+            AlacCursorShape::HollowBlock => Some(CursorShape::HollowBlock),
+            AlacCursorShape::Hidden => None,
         };
+        shape
+            .filter(|_| row >= 0 && (row as usize) < rows)
+            .map(|shape| CursorView {
+                col: c.point.column.0.min(cols.saturating_sub(1)),
+                row: row as usize,
+                shape,
+                color: palette.cursor,
+            })
+    };
 
-        Snapshot {
-            cols,
-            rows,
-            cells,
-            cursor,
-            background: palette.background,
-            display_offset: offset,
-            history: term.grid().history_size(),
-            prompt_marks,
-        }
+    let prompt_marks = {
+        (0..rows)
+            .filter_map(|row| {
+                let line = Line(row as i32 - offset as i32);
+                let link = prompt_link_at(term, line)?;
+                // A prompt over several lines is marked once, at its first line.
+                if line > term.grid().topmost_line()
+                    && prompt_link_at(term, line - 1).is_some_and(|prev| prev.0 == link.0)
+                {
+                    return None;
+                }
+                let mark = match link.1.and_then(|id| commands.and_then(|c| c.by_id(id))) {
+                    None => PromptMark::Prompt,
+                    Some(r) => match r.state {
+                        CommandState::AtPrompt => return None,
+                        CommandState::Running => PromptMark::Running,
+                        CommandState::Finished(Some(0)) => PromptMark::Succeeded,
+                        CommandState::Finished(Some(code)) => PromptMark::Failed(code),
+                        CommandState::Finished(None) => PromptMark::Prompt,
+                    },
+                };
+                Some((row, mark))
+            })
+            .collect()
+    };
+
+    Snapshot {
+        cols,
+        rows,
+        cells,
+        cursor,
+        background: palette.background,
+        display_offset: offset,
+        history: term.grid().history_size(),
+        prompt_marks,
     }
 }
 

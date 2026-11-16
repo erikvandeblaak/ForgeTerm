@@ -165,6 +165,9 @@ pub struct View<'a> {
     pub agents: Vec<AgentAt>,
     /// Folder of every terminal in this window (shells too): blocks removing.
     pub terminal_dirs: Vec<PathBuf>,
+    /// Keys of the Git panel and of Compare, for hints (`None`: unbound).
+    pub panel_hint: Option<String>,
+    pub compare_hint: Option<String>,
     /// The focused terminal's folder (for the empty state).
     pub dir: Option<&'a Path>,
     pub now: Instant,
@@ -209,7 +212,8 @@ fn found<'a>(
     data: Option<&'a DashData>,
     v: &View<'a>,
 ) -> Element<'a, Message> {
-    let mut page = column![header(root, status, data, v.now)].spacing(16);
+    let mut page =
+        column![header(root, status, data, v.now, v.compare_hint.as_deref())].spacing(16);
     page = page.push(tiles(status, data));
     let wt_paths: Vec<PathBuf> = data
         .and_then(|d| d.worktrees.as_ref().ok())
@@ -237,11 +241,14 @@ fn found<'a>(
     .spacing(16);
     page.push(lower)
         .push(
-            text(
+            text(format!(
                 "An overview: only adding or removing a worktree (each asks first) changes \
-                 the repository here. Stage and commit in the Git panel (Ctrl+Shift+G opens \
-                 it beside this page). Esc closes.",
-            )
+                 the repository here. Stage and commit in the Git panel{}. Esc closes.",
+                v.panel_hint
+                    .as_deref()
+                    .map(|k| format!(" ({k} opens it beside this page)"))
+                    .unwrap_or_default()
+            ))
             .size(11)
             .color(theme::DISABLED),
         )
@@ -253,6 +260,7 @@ fn header<'a>(
     status: &'a Status,
     data: Option<&'a DashData>,
     now: Instant,
+    compare_hint: Option<&str>,
 ) -> Element<'a, Message> {
     let name = root.file_name().map_or_else(
         || root.display().to_string(),
@@ -354,7 +362,10 @@ fn header<'a>(
                 theme::CYAN,
                 false,
             ),
-            "Two worktrees side by side: changed files, diffs, tests (Ctrl+Shift+K)".to_owned(),
+            format!(
+                "Two worktrees side by side: changed files, diffs, tests{}",
+                compare_hint.map(|k| format!(" ({k})")).unwrap_or_default()
+            ),
         ),
         with_tip(
             action_button(
@@ -1005,7 +1016,7 @@ pub(crate) fn untrusted<'a>(root: &'a Path, programs: &'a [String]) -> Element<'
     }
     col = col.push(action_button(
         "Trust this repository".to_owned(),
-        Some(Message::GitTrust(root.to_path_buf())),
+        Some(Message::Command(CommandId::GitTrustRepository)),
         theme::AMBER,
         true,
     ));

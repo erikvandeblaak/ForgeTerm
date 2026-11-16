@@ -248,7 +248,7 @@ impl PromptStudio {
                     "Open prompts folder",
                     Some(Message::Command(CommandId::OpenPromptsFolder))
                 ),
-                plain_button("↻ Reload", Some(Message::PromptReload)),
+                plain_button("↻ Reload", Some(Message::Command(CommandId::ReloadPrompts))),
             ]
             .spacing(6),
         );
@@ -342,10 +342,13 @@ impl PromptStudio {
         let has_text = rendered.as_ref().is_some_and(|r| !r.text.is_empty());
         let buttons = row![
             space::horizontal(),
-            plain_button("Copy", has_text.then_some(Message::PromptCopy)),
+            plain_button(
+                "Copy",
+                has_text.then_some(Message::Command(CommandId::CopyPrompt))
+            ),
             primary_button(
                 "Insert (no Enter)",
-                (ready && has_target).then_some(Message::PromptInsert)
+                (ready && has_target).then_some(Message::Command(CommandId::InsertPrompt))
             ),
         ]
         .spacing(8)

@@ -19,3 +19,11 @@ tracing.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+# Benchmarks only (docs/PERFORMANCE.md); not part of the app.
+criterion = "0.7"
+
+[[bench]]
+name = "terminal"
+harness = false
