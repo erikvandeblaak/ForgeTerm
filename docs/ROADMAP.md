@@ -41,7 +41,7 @@ Design system ✅ (kleur-, tekst-, ruimte- en radiustokens), thema's ✅ Windows
 
 ## Fase 4 — Analytics
 
-Monitor-paneel (Ctrl+Shift+M): CPU en geheugen van het systeem met 3 minuten historie (sparklines met hover), per terminal CPU/geheugen/processen van de hele procesboom van de shell — gemeten via sysinfo (`forgeterm-system::Sampler`), alleen zolang het paneel open is ✅ · GPU: toont eerlijk "not measured" ⬜ (NVML/ADLX/sysfs) · `forge-monitor` CLI ⬜.
+Monitor-paneel (Ctrl+Shift+M): CPU en geheugen van het systeem met 3 minuten historie (sparklines met hover), per terminal CPU/geheugen/processen van de hele procesboom van de shell — gemeten via sysinfo (`forgeterm-system::Sampler`), alleen zolang het paneel open is ✅ · GPU ✅ NVIDIA via NVML (Windows + WSL getest, RTX 4070 Laptop, 2026-11-16), AMD op Linux via amdgpu-sysfs (unit-getest, geen hardware); AMD/Intel op Windows en Intel op Linux: "not available" met reden ⬜ · `forge-monitor` CLI ⬜.
 
 ## Fase 5 — AI Workspace
 

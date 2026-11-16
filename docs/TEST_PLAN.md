@@ -245,7 +245,8 @@ Let op: Kladblok in Windows 11 opent het bestand als tabblad in een al geopend K
 |---|---|---|
 | M1 | `ping` in de tab, Ctrl+Shift+M → per terminal "2 processes · PING, 94 MB"; Windows zelf (WMI): pwsh + PING.EXE, 94 MB working set | ✅ identiek |
 | M2 | Systeemgeheugen 11.5 / 15.7 GB (73 %); Windows: 11.5 / 15.7 GB | ✅ identiek |
-| M3 | GPU staat er als "not measured" (niet verzonnen) | ✅ |
+| M3 | GPU staat er als "not measured" (niet verzonnen) | ✅ (2026-11-10; vervangen door M3b) |
+| M3b | GPU (2026-11-16, RTX 4070 Laptop): belasting met sparkline, naam, VRAM, temperatuur en bron "NVML"; waarden komen overeen met `nvidia-smi`; ook in Arctic leesbaar. WSL: NVML meet dezelfde GPU (`probe_measures_or_says_why`). amdgpu-sysfs: unit-test met nagemaakte sysfs-map (geen AMD-hardware) | ✅ |
 | M4 | Hover over de geheugen-sparkline → kruisdraad + "74 % · 16 s ago" (eerst niet: canvas tekende niet opnieuw bij muisbeweging; opgelost) | ✅ |
 | M5 | Na `ping`: "1 process · waiting at the prompt"; ForgeTerm hard beëindigd → geen achtergebleven ping | ✅ |
 | I1 | Venstericoon (titelbalk) = logo; `forgeterm.exe` bevat het icoon (ExtractAssociatedIcon toont het F-logo) | ✅ |

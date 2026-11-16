@@ -35,7 +35,7 @@ A terminal that runs AI agents has to be predictable. ForgeTerm puts the tools y
 - **Nothing runs by itself.** Text that ForgeTerm puts in the terminal (a pasted prompt, a path, the output of the last command) never gets an Enter. You decide when it runs.
 - **ForgeTerm never sends a prompt to an agent.** Terminal and agent output is treated as data, not as instructions.
 - **Safe in unknown repositories.** Git never starts programs a repository configures (no fsmonitor, external diff or textconv) and the background status takes no `index.lock`.
-- **No fake features.** What is not measured (for example the GPU) is shown as *not measured*.
+- **No fake features.** What cannot be measured (for example an AMD or Intel GPU on Windows) is shown as *not available*, with the reason.
 
 ## Features
 
@@ -161,7 +161,7 @@ ForgeTerm is a Cargo workspace of nine crates. The terminal engine contains no G
 | `forgeterm-viewer` | file loading, syntax highlighting (syntect), search |
 | `forgeterm-explorer` | file tree; never changes the file system |
 | `forgeterm-settings` | `settings.toml`: tolerant loading, template |
-| `forgeterm-system` | CPU and memory per terminal (sysinfo, read only) |
+| `forgeterm-system` | CPU and memory per terminal (sysinfo, read only), GPU usage (NVML, amdgpu sysfs) |
 
 More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/TEST_PLAN.md](docs/TEST_PLAN.md) (in Dutch).
 
