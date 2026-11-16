@@ -712,6 +712,21 @@ impl Session {
         self.reported().commands.links_prompts
     }
 
+    /// The most recent command that ran (shell integration), with its exit code
+    /// when finished; `None` before any or for shells that do not mark commands.
+    pub fn last_run(&self) -> Option<CommandRecord> {
+        self.reported().commands.last_run().cloned()
+    }
+
+    /// The shell has shown a prompt (shell integration) and runs nothing now.
+    pub fn at_prompt(&self) -> bool {
+        self.reported()
+            .commands
+            .records()
+            .next_back()
+            .is_some_and(|r| r.state == CommandState::AtPrompt)
+    }
+
     fn reported(&self) -> std::sync::MutexGuard<'_, Reported> {
         self.reported.lock().unwrap_or_else(|e| e.into_inner())
     }

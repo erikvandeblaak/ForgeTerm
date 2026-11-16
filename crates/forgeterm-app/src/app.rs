@@ -25,6 +25,7 @@ use iced::{
 
 use crate::ai_view::{self, AgentState};
 use crate::commands::{CommandId, Dir, Keymap, STATIC_COMMANDS};
+use crate::compare_view::{self, Compare};
 use crate::git_dash::{self, DashData, GitDash, WorktreeChanges, WorktreeInfo};
 use crate::git_view::{self, DiffView, GitState, HistoryView, Repo, Snapshot};
 use crate::menu::{self, Menu, MenuState};
@@ -213,6 +214,21 @@ pub enum Message {
     WorktreeRemoveConfirm,
     WorktreeRemoveCancel,
     WorktreeRemoved(Result<(), String>),
+    /// Compare Worktrees data, read in the background.
+    CompareLoaded(Box<compare_view::CompareData>),
+    ComparePickA(compare_view::Choice),
+    ComparePickB(compare_view::Choice),
+    CompareSelect(String),
+    /// (load number, path, side-by-side rows and whether git's diff was cut off).
+    CompareDiffLoaded(
+        u64,
+        String,
+        Result<(forgeterm_git::SideBySide, bool), String>,
+    ),
+    CompareTestCommand(String),
+    ComparePromptEdit(iced::widget::text_editor::Action),
+    /// Twice a second while Compare is open or a test command waits for a prompt.
+    CompareTick,
     /// Git Control Center data, read in the background.
     GitDashLoaded(Box<DashData>),
     /// Checked-out branch per project root, read in the background.
@@ -338,6 +354,15 @@ pub struct App {
     /// Worktree removal waiting for confirmation: (repository root, folder, branch).
     pending_worktree_remove: Option<(PathBuf, PathBuf, Option<String>)>,
     shortcuts_open: bool,
+    compare: Compare,
+    /// Text to type into a new terminal once its shell shows a prompt (never Enter).
+    pending_inserts: Vec<PendingInsert>,
+}
+
+struct PendingInsert {
+    id: TermId,
+    text: String,
+    since: std::time::Instant,
 }
 
 impl App {
@@ -396,6 +421,8 @@ impl App {
             worktree_form: None,
             pending_worktree_remove: None,
             shortcuts_open: false,
+            compare: Compare::default(),
+            pending_inserts: Vec::new(),
         };
         app.menus = menu::menus(app.shells.len());
         app.load_settings(true);
@@ -781,7 +808,14 @@ impl App {
         } else {
             Subscription::none()
         };
-        Subscription::batch([events, settings, git, close, screenshot, explorer, mission])
+        let compare = if self.compare.visible || !self.pending_inserts.is_empty() {
+            iced::time::every(Duration::from_millis(500)).map(|_| Message::CompareTick)
+        } else {
+            Subscription::none()
+        };
+        Subscription::batch([
+            events, settings, git, close, screenshot, explorer, mission, compare,
+        ])
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -1338,6 +1372,7 @@ impl App {
                 };
                 self.mission.visible = false;
                 self.git_dash.visible = false;
+                self.compare.visible = false;
                 self.refresh_visible();
                 if self.found_agent(form.kind).is_none() {
                     self.notice = Some(format!(
@@ -1364,6 +1399,81 @@ impl App {
                 }
             }
             Message::WorktreeRemoveCancel => self.pending_worktree_remove = None,
+            Message::CompareLoaded(data) => {
+                if data.seq != self.compare.seq {
+                    return Task::none();
+                }
+                self.compare.busy = false;
+                if !self.compare.test_command_edited {
+                    self.compare.test_command = data.test_command.unwrap_or_default().to_owned();
+                }
+                if let Some([a, b]) = &data.sides {
+                    self.compare.a = Some(a.worktree.path.clone());
+                    self.compare.b = Some(b.worktree.path.clone());
+                }
+                let still = data.sides.as_ref().is_some_and(|[a, b]| {
+                    let has = |s: &compare_view::Side, p: &str| {
+                        s.files
+                            .as_ref()
+                            .is_ok_and(|f| f.iter().any(|f| f.path == p))
+                    };
+                    self.compare
+                        .selected
+                        .as_deref()
+                        .is_some_and(|p| has(a, p) || has(b, p))
+                });
+                self.compare.data = Some(*data);
+                if let Some(path) = self.compare.selected.clone() {
+                    if still {
+                        // Its contents may have changed: read it again (the old rows
+                        // stay until then).
+                        return self.load_compare_diff(path, false);
+                    }
+                    self.compare.selected = None;
+                    self.compare.diff = None;
+                }
+            }
+            Message::ComparePickA(c) => {
+                if self.compare.b.as_ref() == Some(&c.path) {
+                    self.compare.b = self.compare.a.take();
+                }
+                self.compare.a = Some(c.path);
+                return self.compare_sides_changed();
+            }
+            Message::ComparePickB(c) => {
+                if self.compare.a.as_ref() == Some(&c.path) {
+                    self.compare.a = self.compare.b.take();
+                }
+                self.compare.b = Some(c.path);
+                return self.compare_sides_changed();
+            }
+            Message::CompareSelect(path) => return self.load_compare_diff(path, true),
+            Message::CompareDiffLoaded(seq, path, result) => {
+                if seq == self.compare.seq
+                    && let Some(d) = &mut self.compare.diff
+                    && d.path == path
+                {
+                    d.result = Some(result);
+                }
+            }
+            Message::CompareTestCommand(command) => {
+                self.compare.test_command = command;
+                self.compare.test_command_edited = true;
+            }
+            Message::ComparePromptEdit(action) => self.compare.prompt.perform(action),
+            Message::CompareTick => {
+                self.process_pending_inserts();
+                if self.compare.visible && !self.compare.busy {
+                    let root = self.git.root().cloned();
+                    let stale = self.compare.data.as_ref().is_none_or(|d| {
+                        Some(&d.root) != root.as_ref()
+                            || d.loaded_at.elapsed() > Duration::from_secs(10)
+                    });
+                    if stale {
+                        return self.load_compare();
+                    }
+                }
+            }
             Message::WorktreeRemoved(result) => {
                 match result {
                     Err(e) => self.notice = Some(format!("{REMOVE_FAILED}{e}")),
@@ -1750,6 +1860,13 @@ impl App {
             }
             return Task::none();
         }
+        // Compare has text fields; Esc closes it and nothing reaches the terminals.
+        if self.compare.visible {
+            if matches!(key, keyboard::Key::Named(Named::Escape)) {
+                return self.run_command(CommandId::ToggleCompare);
+            }
+            return Task::none();
+        }
 
         let Some(focused) = self.workspace.focused() else {
             return Task::none();
@@ -1920,6 +2037,7 @@ impl App {
         if self.main_covered() && id.shows_terminals() {
             self.mission.visible = false;
             self.git_dash.visible = false;
+            self.compare.visible = false;
             self.refresh_visible();
         }
         if id.is_recordable() {
@@ -2175,8 +2293,37 @@ impl App {
                 }
             }
             CommandId::GitRefresh => {
-                return Task::batch([self.refresh_git(true), self.load_git_dash(true)]);
+                let compare = if self.compare.visible {
+                    self.load_compare()
+                } else {
+                    Task::none()
+                };
+                return Task::batch([self.refresh_git(true), self.load_git_dash(true), compare]);
             }
+            CommandId::ToggleCompare => {
+                self.compare.visible = !self.compare.visible;
+                if !self.compare.visible {
+                    self.refresh_visible();
+                    return Task::none();
+                }
+                self.mission.visible = false;
+                self.git_dash.visible = false;
+                return Task::batch([self.refresh_git(true), self.load_compare()]);
+            }
+            CommandId::CompareSwap => {
+                if let Some([a, b]) = self.compare.paths() {
+                    self.compare.a = Some(b);
+                    self.compare.b = Some(a);
+                    // The same pair: the file stays selected, its rows swap sides
+                    // once the load is in (`CompareLoaded` reads it again).
+                    if let Some(d) = &mut self.compare.diff {
+                        d.result = None;
+                    }
+                    return self.load_compare();
+                }
+            }
+            CommandId::CompareOpenTests => return self.open_compare_tests(),
+            CommandId::CompareInsertPrompt => self.insert_compare_prompt(),
             CommandId::ToggleGitDashboard => {
                 self.git_dash.visible = !self.git_dash.visible;
                 if !self.git_dash.visible {
@@ -2184,6 +2331,7 @@ impl App {
                     return Task::none();
                 }
                 self.mission.visible = false;
+                self.compare.visible = false;
                 return Task::batch([self.refresh_git(true), self.load_git_dash(true)]);
             }
             CommandId::NewAgentWorktree => {
@@ -2371,7 +2519,16 @@ impl App {
             CommandId::SelectTab(i) => i < self.workspace.tabs.len() && i != self.workspace.active,
             CommandId::OpenPromptsFolder => self.prompts_dir().is_some(),
             CommandId::GitShowHistory => self.git.root().is_some(),
-            CommandId::ToggleGitDashboard => true,
+            CommandId::ToggleGitDashboard | CommandId::ToggleCompare => true,
+            CommandId::CompareSwap => self.compare.visible && self.compare.paths().is_some(),
+            CommandId::CompareOpenTests => {
+                self.compare.paths().is_some() && !self.compare.test_command.trim().is_empty()
+            }
+            CommandId::CompareInsertPrompt => {
+                self.compare.paths().is_some()
+                    && !self.compare.prompt.text().trim().is_empty()
+                    && self.compare_agents().iter().any(|l| !l.is_empty())
+            }
             CommandId::NewAgentWorktree => {
                 matches!(self.git.repo, Some(Repo::Found { .. }))
                     && AgentKind::ALL
@@ -2578,7 +2735,7 @@ impl App {
 
     /// Mission Control or the Git Control Center covers the terminals.
     fn main_covered(&self) -> bool {
-        self.mission.visible || self.git_dash.visible
+        self.mission.visible || self.git_dash.visible || self.compare.visible
     }
 
     // ---- git control center ---------------------------------------------------------
@@ -2667,6 +2824,228 @@ impl App {
         )
     }
 
+    // ---- compare worktrees ----------------------------------------------------------
+
+    /// Reads the Compare page for the shown repository (background).
+    fn load_compare(&mut self) -> Task<Message> {
+        let Some(Repo::Found { root, .. }) = self.git.repo.as_ref() else {
+            return Task::none();
+        };
+        self.compare.seq += 1;
+        self.compare.busy = true;
+        let (seq, root) = (self.compare.seq, root.clone());
+        let (a, b) = (self.compare.a.clone(), self.compare.b.clone());
+        let trusted: Vec<PathBuf> = self.git.trusted.iter().cloned().collect();
+        background(
+            move || Box::new(compare_view::load(seq, root, a, b, &trusted)),
+            Message::CompareLoaded,
+        )
+    }
+
+    /// Other worktrees chosen: the file shown belonged to the old pair.
+    fn compare_sides_changed(&mut self) -> Task<Message> {
+        self.compare.selected = None;
+        self.compare.diff = None;
+        self.load_compare()
+    }
+
+    /// Side-by-side diff of `path` between A and B. `reset`: a new selection
+    /// (show "Reading…"); otherwise the old rows stay until the new ones arrive.
+    fn load_compare_diff(&mut self, path: String, reset: bool) -> Task<Message> {
+        let Some(data) = &self.compare.data else {
+            return Task::none();
+        };
+        let Some([a, b]) = self.compare.paths() else {
+            return Task::none();
+        };
+        let root = data.root.clone();
+        self.compare.selected = Some(path.clone());
+        if reset || self.compare.diff.as_ref().is_none_or(|d| d.path != path) {
+            self.compare.diff = Some(compare_view::DiffState {
+                path: path.clone(),
+                result: None,
+            });
+        }
+        let seq = self.compare.seq;
+        background(
+            move || {
+                let r = compare_view::load_diff(&root, &a, &b, &path);
+                (path, r)
+            },
+            move |(path, r)| Message::CompareDiffLoaded(seq, path, r),
+        )
+    }
+
+    /// Agents of this window per side (deepest worktree of their folder).
+    fn compare_agents(&self) -> [Vec<compare_view::AgentIn>; 2] {
+        let mut out: [Vec<compare_view::AgentIn>; 2] = Default::default();
+        let Some(paths) = self.compare.paths() else {
+            return out;
+        };
+        for (tab, t) in self.workspace.tabs.iter().enumerate() {
+            for id in t.terminals() {
+                if let Some(term) = self.terminals.get(&id)
+                    && let (Some(kind), Some(dir)) = (term.agent, term.directory())
+                    && let Some(side) = git_dash::worktree_of(dir, &paths)
+                {
+                    out[side].push(compare_view::AgentIn { id, kind, tab });
+                }
+            }
+        }
+        out
+    }
+
+    /// A tab with a shell in A beside one in B; the test command is typed into each
+    /// once its prompt shows, never followed by Enter.
+    fn open_compare_tests(&mut self) -> Task<Message> {
+        let Some([a, b]) = self.compare.paths() else {
+            return Task::none();
+        };
+        let command = self.compare.test_command.trim().to_owned();
+        if command.is_empty() {
+            return Task::none();
+        }
+        let Some(shell) = self.shell_at(None) else {
+            self.error = Some("No supported shell was found on this system.".into());
+            return Task::none();
+        };
+        self.compare.visible = false;
+        let ia = self.spawn_terminal(shell.clone(), Some(a));
+        self.workspace.push_tab(ia);
+        let new_b = self.spawn_terminal(shell, Some(b));
+        let split = self
+            .workspace
+            .active_tab_mut()
+            .and_then(|tab| tab.split(Axis::Vertical, new_b));
+        let ib = if split.is_some() {
+            Some(new_b)
+        } else {
+            self.terminals.remove(&new_b);
+            None
+        };
+        let since = std::time::Instant::now();
+        for id in std::iter::once(ia).chain(ib) {
+            self.pending_inserts.push(PendingInsert {
+                id,
+                text: command.clone(),
+                since,
+            });
+        }
+        self.compare.test_terms = [Some(ia), ib];
+        self.focus_terminal(ia);
+        self.after_layout_change()
+    }
+
+    /// Types waiting test commands into shells that are ready (no Enter).
+    fn process_pending_inserts(&mut self) {
+        let now = std::time::Instant::now();
+        for p in std::mem::take(&mut self.pending_inserts) {
+            let Some(t) = self.terminals.get(&p.id) else {
+                continue;
+            };
+            let Some(s) = t.session() else {
+                continue;
+            };
+            if compare_view::ready_for_insert(s.at_prompt(), t.since_output(now)) {
+                self.insert_text_into(p.id, p.text);
+            } else if now.duration_since(p.since) > compare_view::INSERT_GIVE_UP {
+                self.notice = Some(format!(
+                    "{} showed no prompt within {} s: type the test command yourself.",
+                    t.display_title(),
+                    compare_view::INSERT_GIVE_UP.as_secs()
+                ));
+            } else {
+                self.pending_inserts.push(p);
+            }
+        }
+    }
+
+    /// The Compare prompt at the first agent of each side, like a paste, no Enter.
+    fn insert_compare_prompt(&mut self) {
+        let raw = self.compare.prompt.text();
+        let text = raw.trim_end_matches(['\n', '\r']).to_owned();
+        if text.trim().is_empty() {
+            return;
+        }
+        let agents = self.compare_agents();
+        let (mut done, mut skipped) = (Vec::new(), Vec::new());
+        for (label, list) in [("A", &agents[0]), ("B", &agents[1])] {
+            let Some(ag) = list.first() else {
+                skipped.push(format!("{label} has no agent"));
+                continue;
+            };
+            let Some(t) = self.terminals.get(&ag.id) else {
+                continue;
+            };
+            let name = format!("{} (tab {})", ag.kind.name(), ag.tab + 1);
+            match t.session() {
+                Some(_) if paste_needs_confirmation(&text, t.modes.bracketed_paste) => {
+                    skipped.push(format!(
+                        "{name} has not enabled bracketed paste, so the lines would run one by one"
+                    ));
+                }
+                Some(s) => {
+                    s.paste(&text);
+                    done.push(name);
+                }
+                None => skipped.push(format!("{name} has ended")),
+            }
+        }
+        let mut notice = if done.is_empty() {
+            "Nothing inserted.".to_owned()
+        } else {
+            format!(
+                "Inserted into {}, without Enter: read it there and press Enter yourself.",
+                done.join(" and ")
+            )
+        };
+        if !skipped.is_empty() {
+            notice.push_str(&format!(" Not inserted: {}.", skipped.join("; ")));
+        }
+        self.notice = Some(notice);
+    }
+
+    /// What a test terminal shows, from its shell's command marks.
+    fn compare_test_state(&self, id: Option<TermId>) -> (Option<TermId>, compare_view::TestState) {
+        use compare_view::TestState;
+        use forgeterm_terminal::marks::CommandState;
+        let Some((id, t)) = id.and_then(|id| self.terminals.get(&id).map(|t| (id, t))) else {
+            return (None, TestState::None);
+        };
+        if self.pending_inserts.iter().any(|p| p.id == id) {
+            return (Some(id), TestState::Inserting);
+        }
+        let Some(s) = t.session() else {
+            return (Some(id), TestState::Ended);
+        };
+        let state = match s.last_run() {
+            Some(r) => match r.state {
+                CommandState::Running => TestState::Running(r.command),
+                CommandState::Finished(code) => TestState::Finished(r.command, code),
+                CommandState::AtPrompt => TestState::NothingYet,
+            },
+            // cmd marks prompts but not commands: it never reports an exit code.
+            None if s.at_prompt() && t.shell.kind != forgeterm_terminal::ShellKind::Cmd => {
+                TestState::NothingYet
+            }
+            None => TestState::NotReported,
+        };
+        (Some(id), state)
+    }
+
+    fn view_compare(&self) -> Element<'_, Message> {
+        compare_view::view(compare_view::View {
+            repo: self.git.repo.as_ref(),
+            compare: &self.compare,
+            agents: self.compare_agents(),
+            tests: [
+                self.compare_test_state(self.compare.test_terms[0]),
+                self.compare_test_state(self.compare.test_terms[1]),
+            ],
+            now: std::time::Instant::now(),
+        })
+    }
+
     fn view_git_dash(&self) -> Element<'_, Message> {
         let mut agents = Vec::new();
         for (tab, t) in self.workspace.tabs.iter().enumerate() {
@@ -2701,6 +3080,7 @@ impl App {
         self.mission.visible = !self.mission.visible;
         if self.mission.visible {
             self.git_dash.visible = false;
+            self.compare.visible = false;
         }
         if !self.mission.visible {
             self.refresh_visible();
@@ -2731,6 +3111,7 @@ impl App {
         // Whichever page covers the terminals (Mission Control, Git Control Center).
         self.mission.visible = false;
         self.git_dash.visible = false;
+        self.compare.visible = false;
         self.mission.selected = Some(id);
         self.focus_terminal(id);
         self.refresh_visible();
@@ -3840,6 +4221,7 @@ impl App {
                 .into(),
             (None, _) if self.mission.visible => self.view_mission(),
             (None, _) if self.git_dash.visible => self.view_git_dash(),
+            (None, _) if self.compare.visible => self.view_compare(),
             (None, Some(tab)) => self.view_panes(tab),
             (None, None) => space::vertical().into(),
         };

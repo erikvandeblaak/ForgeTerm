@@ -143,10 +143,15 @@ pub fn menus(shell_count: usize) -> Vec<Menu> {
             items: vec![
                 C(ToggleGitDashboard),
                 C(NewAgentWorktree),
+                C(ToggleCompare),
                 C(ToggleGitPanel),
                 C(GitRefresh),
                 Sep,
                 C(GitShowHistory),
+                Sep,
+                C(CompareSwap),
+                C(CompareOpenTests),
+                C(CompareInsertPrompt),
             ],
         },
         Menu {

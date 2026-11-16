@@ -391,6 +391,24 @@ Wegwerp-repo `demo-shop` (branch `feature/checkout`, 1 wijziging). Claude Code 2
 | GD9 | Repository met programma's in de eigen config: kaart "Git is paused" met *Trust* | ⬜ alleen code (zelfde `Repo::Untrusted` als het paneel) |
 | GD10 | Linux (WSLg) | ⬜ alleen clippy voor `x86_64-unknown-linux-gnu` |
 
+## Compare Worktrees (2026-11-16, Windows 11, wegwerp-repo)
+
+`demo-shop`: klein Cargo-project (2 tests) met worktrees `agent-claude-1` en `agent-codex-1`. A heeft een commit (functie `discount`, +4), een niet-gecommitte README-regel en een nieuw `NOTES.md`. B heeft een niet-gecommitte wijziging die test `formats_price` breekt en een README-regel.
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| CW1 | Ctrl+Shift+K: A/B = de twee agent-worktrees, base = HEAD van main; A 3 bestanden +6 −1, B 2 bestanden +2 −2, "changed in both" 2 (README, src/lib.rs); NOTES.md als *new +1* | ✅ |
+| CW2 | Klik `src/lib.rs`: side-by-side met juiste regelnummers per kant, gekoppelde regel 2, `discount` alleen links | ✅ |
+| CW3 | Kleuren: eerst rood/groen (suggereerde "A oud, B nieuw"), aangepast naar A cyaan / B violet | ✅ |
+| CW4 | *Open Test Terminals* (palette): tab met A \| B, `cargo test` staat in beide aan de prompt, niets gestart | ✅ |
+| CW5 | Enter in beide: pagina toont A "exit code 0", B "exit code 101"; *Go to* per kant | ✅ |
+| CW6 | Auto-verversen: de `Cargo.lock` die `cargo test` maakte verschijnt in beide als *new* | ✅ |
+| CW7 | Claude Code in A en in B, prompt "Explain your change in one sentence", *Insert into both*: in beide staat de tekst in de invoer, niet verstuurd; melding noemt beide tabs | ✅ |
+| CW8 | *Swap A ⇄ B*: kanten en cijfers wisselen, het gekozen bestand blijft (eerste versie verloor het, opgelost) | ✅ |
+| CW9 | A-keuze via dropdown → `demo-shop · main`: A 0 bestanden, "changed in both" 0 | ✅ |
+| CW10 | Repository-config met `filter.*.clean` + Refresh: kaart *Git is paused*, niets gelezen | ✅ |
+| CW11 | Linux (WSLg) | ⬜ alleen tests en clippy voor `x86_64-unknown-linux-gnu` |
+
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)
 
 Gemeten 2026-11-10. Opstarttijden uit de eigen tracing-tijdstempels; geheugen = working set na 5 s, idle prompt.
@@ -412,6 +430,8 @@ Beslissingen hieruit: `WGPU_POWER_PREF=low` en (Windows) `WGPU_BACKEND=dx12` als
 Prestatiebudgetten (doel, nog te bewaken in CI): venster < 300 ms, idle geheugen < 175 MB, invoerlatentie < 1 frame.
 
 ### Testvalkuilen (geleerd)
+
+- **Tabs niet op coördinaten aanklikken (2026-11-16):** de tabbalk scrolt bij veel tabs, dus een vaste x-positie kan de **×** van een andere tab raken (gebeurd: een tab met twee lege shells ging dicht). Navigeer met Ctrl+(Shift+)Tab, de palette of *Go to*.
 
 - **Virusscanner en git-tests (2026-11-16):** in 1 van ongeveer 14 runs van de volledige git-suite faalde `status_does_not_run_submodule_filters` met "Permission denied" tijdens de submodule-clone (Norton houdt een vers bestand even vast). Los 8/8 en daarna 5/5 suites groen. Geen codefout; bij herhaling: opnieuw draaien.
 

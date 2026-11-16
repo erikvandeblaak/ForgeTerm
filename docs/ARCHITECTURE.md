@@ -223,6 +223,21 @@ Alleen gedocumenteerde interfaces (Claude Code-documentatie op code.claude.com, 
 - **Gereserveerde Windows-namen** (`nul`, `con`, `com1`, …) als branch: git weigert ze zelf (de ref-lockfile kan niet bestaan) voordat er een map ontstaat (handmatig nagegaan).
 - **Getest tegen echte git:** ongeldige namen, relatieve en bestaande paden, een bestaande branch, verwijderen geweigerd bij een onbekend bestand, de branch blijft na verwijderen.
 
+## 4i4. Worktrees vergelijken (Compare)
+
+- **Waarvoor:** het werk van twee agents (of een agent en jezelf) naast elkaar zien, zonder dat ForgeTerm zegt welke beter is. `CommandId::ToggleCompare` (Ctrl+Shift+K, Git-menu, palette, knop *Compare…* in het Git Control Center).
+- **Git-laag** (`forgeterm-git/src/compare.rs`, GUI-vrij, getest tegen echte git):
+  - `merge_base(root, a, b)`: alleen hex-hashes (geen opties via een "hash" als `--all`);
+  - `changes_since(worktree, base)`: `git diff --numstat -z --no-renames <base> --` (gecommit + niet-gecommit, zodat paden in A en B gelijk lopen) plus `ls-files --others --exclude-standard`. Untracked bestanden tellen als helemaal toegevoegd: max. 100 per worktree en 256 KB per bestand (de pagina herlaadt elke 10 s), geen links of apparaten (`symlink_metadata`), NUL = binair. Paden van git gaan door `safe_join` (geen absolute paden, geen `..`, `resolves_locally`);
+  - `diff_files(dir, a, b)`: `git diff --no-index --no-ext-diff --no-textconv` tussen de twee bestanden, uitgevoerd in de (vertrouwde) hoofdrepository; een kant zonder bestand is `/dev/null`;
+  - `side_by_side(lines)`: unified diff naar rijen links/rechts. Een reeks `-` wordt regel voor regel gekoppeld aan de `+` erna, de rest staat alleen (pure functie, getest).
+- **Laden** (`compare_view::load`, achtergrondthread, A en B parallel): elke kant krijgt dezelfde controles als het dashboard, namelijk een lokaal pad (`is_local_path` + `resolves_locally`), een bestaande map, en `repo_programs` leeg of vertrouwd. Anders volgt "not read" met de reden. Een onvertrouwde hoofdrepository geeft de bekende *Git is paused*-kaart.
+- **Keuze A/B** (`pick_sides`, getest): de gekozen worktrees als ze er nog zijn; anders de eerste twee gekoppelde (twee agents), anders hoofd + gekoppelde. Nooit twee keer dezelfde; bare/prunable vallen af. *Swap* houdt het gekozen bestand vast.
+- **Weergave zonder oordeel:** tegels per kant (bestanden, +/−), "changed in both" (een feit, relevant bij samenvoegen), de bestandenlijst met beide kanten, de side-by-side diff in de kleuren van de kanten (A cyaan, B violet; geen rood/groen, want geen van beide is "oud" of "fout"), en een voettekst met de beperkingen van de cijfers.
+- **Tests:** `CompareOpenTests` opent één tab met een shell in A naast een shell in B. Het commando (voorstel uit `forgeterm_agents::test_command`: `Cargo.toml` → `cargo test`, `package.json` → `npm test`/`pnpm`/`yarn`, Python, Go, .NET, Maven, Gradle, mix, make; aanpasbaar) wordt pas ingevoegd als de shell zijn prompt toont (`Session::at_prompt`, of 1,5 s stille uitvoer zonder shell-integratie; na 20 s een melding). Altijd zonder Enter: de gebruiker start elke run. De pagina toont per kant het laatste commando met exitcode uit OSC 133 (`Session::last_run`), anders "not available".
+- **Eén prompt voor beide agents** (`CompareInsertPrompt`): de tekst gaat als paste naar de eerste agent van dit venster in A en in B, zonder Enter. Een agent zonder bracketed paste krijgt meerregelige tekst niet; de melding zegt waar het wel en niet is ingevoegd.
+- **Getest in de GUI** (TEST_PLAN, *Compare*): cijfers tegen een wegwerp-repo, de diff, Swap/A-B-keuze, testterminals met exitcode 0 en 101, de prompt in twee Claude Code-sessies zonder Enter, en een onvertrouwde repo.
+
 ## 4j. Code-viewer
 
 - **Laden** (`forgeterm-viewer::load`, achtergrondthread): max 8 MB; NUL in de eerste 8 KB zonder UTF-16-BOM = binair (geweigerd); UTF-8, UTF-8-BOM, UTF-16 LE/BE, anders lossy (zichtbaar in de statusregel). Twee versies per regel: het origineel (kopiëren) en een weergaveregel (tabs naar 4 kolommen, besturingstekens naar U+2400-symbolen, afgekapt op 2000 kolommen). Een ESC-reeks in een bestand wordt dus getoond, nooit geïnterpreteerd.
