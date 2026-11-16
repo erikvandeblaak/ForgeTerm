@@ -138,6 +138,8 @@ pub enum Message {
     /// Periodic check whether settings.toml changed on disk.
     SettingsTick,
     DismissSettingsProblems,
+    /// A background task panicked (see `background`).
+    WorkerPanicked,
     AgentsDetected(Vec<(AgentKind, Option<Agent>)>),
     /// Project context scanned for the given start folder.
     ContextScanned(PathBuf, ProjectContext),
@@ -1184,6 +1186,19 @@ impl App {
                 return Task::batch(changed.into_iter().map(load_document).chain(sample));
             }
             Message::DismissSettingsProblems => self.settings_problems.clear(),
+            Message::WorkerPanicked => {
+                // Which task it was is unknown here: free every "running" flag, so
+                // nothing stays stuck (at worst one job runs twice), and say so.
+                tracing::error!("a background task panicked");
+                self.git.refreshing = None;
+                self.git.action_running = false;
+                self.monitor.busy = false;
+                self.explorer_checking = false;
+                self.git_dash.busy = false;
+                self.mission.heads_busy = false;
+                self.notice =
+                    Some("A background task failed unexpectedly; it will be retried.".to_owned());
+            }
             Message::AgentsDetected(found) => {
                 self.agents = found
                     .into_iter()
@@ -1252,6 +1267,9 @@ impl App {
             Message::GitDashLoaded(data) => {
                 self.git_dash.busy = false;
                 self.git_dash.data = Some(*data);
+                if std::mem::take(&mut self.git_dash.reload_pending) {
+                    return self.load_git_dash(true);
+                }
             }
             Message::GitStage(paths) => return self.git_action(GitAction::Stage(paths)),
             Message::GitUnstage(paths) => return self.git_action(GitAction::Unstage(paths)),
@@ -1770,7 +1788,7 @@ impl App {
             self.git_dash.visible = false;
             self.refresh_visible();
         }
-        if id != CommandId::CommandPalette {
+        if id.is_recordable() {
             self.recent_commands.retain(|c| *c != id);
             self.recent_commands.insert(0, id);
             self.recent_commands.truncate(command_palette::RECENT_LIMIT);
@@ -2383,25 +2401,30 @@ impl App {
 
     // ---- git control center ---------------------------------------------------------
 
-    /// Folder of worktree `i` in the dashboard's list, when it is there and usable.
-    fn worktree_path(&self, i: usize) -> Option<PathBuf> {
-        let info = self
-            .git_dash
-            .data
-            .as_ref()?
-            .worktrees
-            .as_ref()
-            .ok()?
-            .get(i)?;
-        (!info.worktree.bare && info.changes != WorktreeChanges::Missing)
-            .then(|| info.worktree.path.clone())
+    /// Folder of the worktree with this id in the dashboard's list, when it is
+    /// still there and usable.
+    fn worktree_path(&self, id: u64) -> Option<PathBuf> {
+        let list = self.git_dash.data.as_ref()?.worktrees.as_ref().ok()?;
+        let info = list
+            .iter()
+            .find(|i| git_dash::worktree_id(&i.worktree.path) == id)?;
+        let usable = !info.worktree.bare
+            && !matches!(
+                info.changes,
+                WorktreeChanges::Missing | WorktreeChanges::NotLocal
+            );
+        usable.then(|| info.worktree.path.clone())
     }
 
     /// Reloads the dashboard's data when it is open and out of date: a different
     /// status than at the last load (a commit, stage or edit), another repository,
     /// or older than 10 s (other worktrees, commits made elsewhere). `force`: always.
     fn load_git_dash(&mut self, force: bool) -> Task<Message> {
-        if !self.git_dash.visible || self.git_dash.busy {
+        if !self.git_dash.visible {
+            return Task::none();
+        }
+        if self.git_dash.busy {
+            self.git_dash.reload_pending |= force;
             return Task::none();
         }
         let Some(Repo::Found { root, status }) = self.git.repo.as_ref() else {
@@ -4455,8 +4478,8 @@ fn background<T: Send + 'static>(
         },
         move |result| match result {
             Ok(v) => to_message(v),
-            // The worker thread panicked; nothing to report beyond the log.
-            Err(_) => Message::DismissSettingsProblems,
+            // The worker thread panicked: reset the busy flags (and log it).
+            Err(_) => Message::WorkerPanicked,
         },
     )
 }
@@ -4657,36 +4680,50 @@ fn git_snapshot(
 /// programs and they are not trusted, and never when their folder is not local.
 fn load_dashboard(root: PathBuf, trusted: &[PathBuf]) -> DashData {
     let root_key = git_dash::path_key(&root);
+    let read = |i: usize, worktree: &forgeterm_git::Worktree| -> WorktreeChanges {
+        let path = &worktree.path;
+        if git_dash::path_key(path) == root_key {
+            WorktreeChanges::Current
+        } else if worktree.bare || i >= git_dash::MAX_WORKTREE_STATUS {
+            WorktreeChanges::NotRead
+        } else if !path.to_str().is_some_and(forgeterm_terminal::is_local_path) {
+            WorktreeChanges::NotLocal
+        } else if !path.is_dir() {
+            WorktreeChanges::Missing
+        } else {
+            match forgeterm_git::repo_programs(path) {
+                Err(e) => WorktreeChanges::Error(e),
+                Ok(p) if !p.is_empty() && !trusted.contains(path) => WorktreeChanges::Paused,
+                Ok(_) => match forgeterm_git::status(path) {
+                    Ok(s) => WorktreeChanges::Count {
+                        changes: s.change_count(),
+                        conflicts: s.conflicted().count(),
+                    },
+                    Err(e) => WorktreeChanges::Error(e),
+                },
+            }
+        }
+    };
+    // In parallel: one slow worktree must not hold up the others.
     let worktrees = forgeterm_git::worktrees(&root).map(|list| {
+        let changes: Vec<WorktreeChanges> = std::thread::scope(|scope| {
+            let handles: Vec<_> = list
+                .iter()
+                .enumerate()
+                .map(|(i, w)| scope.spawn(move || read(i, w)))
+                .collect();
+            handles
+                .into_iter()
+                .map(|h| {
+                    h.join().unwrap_or_else(|_| {
+                        WorktreeChanges::Error("reading it failed unexpectedly".to_owned())
+                    })
+                })
+                .collect()
+        });
         list.into_iter()
-            .enumerate()
-            .map(|(i, worktree)| {
-                let path = &worktree.path;
-                let changes = if git_dash::path_key(path) == root_key {
-                    WorktreeChanges::Current
-                } else if worktree.bare || i > git_dash::MAX_WORKTREE_STATUS {
-                    WorktreeChanges::NotRead
-                } else if !path.to_str().is_some_and(forgeterm_terminal::is_local_path)
-                    || !path.is_dir()
-                {
-                    WorktreeChanges::Missing
-                } else {
-                    match forgeterm_git::repo_programs(path) {
-                        Err(e) => WorktreeChanges::Error(e),
-                        Ok(p) if !p.is_empty() && !trusted.contains(path) => {
-                            WorktreeChanges::Paused
-                        }
-                        Ok(_) => match forgeterm_git::status(path) {
-                            Ok(s) => WorktreeChanges::Count {
-                                changes: s.change_count(),
-                                conflicts: s.conflicted().count(),
-                            },
-                            Err(e) => WorktreeChanges::Error(e),
-                        },
-                    }
-                };
-                WorktreeInfo { worktree, changes }
-            })
+            .zip(changes)
+            .map(|(worktree, changes)| WorktreeInfo { worktree, changes })
             .collect()
     });
     DashData {

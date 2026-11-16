@@ -87,8 +87,9 @@ pub enum CommandId {
     ToggleGitPanel,
     /// Git Control Center: the repository overview in the main area.
     ToggleGitDashboard,
-    /// New tab in worktree `n` of the Git Control Center's list.
-    WorktreeTerminal(usize),
+    /// New tab in a worktree of the Git Control Center's list, by its stable id
+    /// (`git_dash::worktree_id`): a list reloaded meanwhile can never redirect it.
+    WorktreeTerminal(u64),
     GitRefresh,
     GitShowHistory,
     About,
@@ -163,6 +164,22 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
 ];
 
 impl CommandId {
+    /// Whether the palette lists it under "recent": not for navigation, and not
+    /// for commands whose parameter (a terminal, a worktree) means nothing later.
+    pub fn is_recordable(self) -> bool {
+        use CommandId::*;
+        !matches!(
+            self,
+            CommandPalette
+                | SelectTab(_)
+                | GoToTerminal(_)
+                | TerminalFolder(_)
+                | TerminalGit(_)
+                | StopTerminal(_)
+                | WorktreeTerminal(_)
+        )
+    }
+
     /// Commands that create, show or act on a visible terminal. Mission Control
     /// covers the terminals, so it closes first: a new pane only starts at its
     /// first layout, which needs it on screen.
@@ -804,6 +821,22 @@ mod tests {
         }
         // Round trip through the display text.
         assert_eq!(p(&p("Ctrl+Alt+F3").to_string()), p("Ctrl+Alt+F3"));
+    }
+
+    #[test]
+    fn navigation_and_per_terminal_commands_are_not_recent() {
+        use CommandId::*;
+        for id in [
+            SelectTab(1),
+            GoToTerminal(3),
+            WorktreeTerminal(9),
+            CommandPalette,
+        ] {
+            assert!(!id.is_recordable(), "{id:?}");
+        }
+        for id in [NewTab, ToggleGitDashboard, ToggleMissionControl, Copy] {
+            assert!(id.is_recordable(), "{id:?}");
+        }
     }
 
     #[test]

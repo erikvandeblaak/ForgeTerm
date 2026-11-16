@@ -32,6 +32,8 @@ pub struct GitDash {
     /// The panel's status when `data` was loaded: a different status (a commit, a
     /// stage, an edit) means the line counts are out of date.
     pub loaded_for: Option<Status>,
+    /// A forced reload was asked for while one was running: run it right after.
+    pub reload_pending: bool,
 }
 
 /// One background load (see `App::load_git_dash`).
@@ -63,8 +65,10 @@ pub enum WorktreeChanges {
     },
     /// Its config names programs (filters, …): not read until trusted.
     Paused,
-    /// The folder does not exist (or is not local).
+    /// The folder does not exist.
     Missing,
+    /// A network path: not read (it would connect to a server).
+    NotLocal,
     NotRead,
     Error(String),
 }
@@ -83,6 +87,14 @@ pub fn path_key(p: &Path) -> String {
     let s = p.to_string_lossy().replace('\\', "/");
     let s = s.trim_end_matches('/').to_owned();
     if cfg!(windows) { s.to_lowercase() } else { s }
+}
+
+/// Stable id of a worktree for commands (a hash of its normalised path).
+pub fn worktree_id(path: &Path) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    path_key(path).hash(&mut h);
+    h.finish()
 }
 
 /// Index of the worktree that contains `dir` (the deepest one, since a worktree
@@ -217,7 +229,7 @@ fn header<'a>(
         row![
             text(name).size(13).color(theme::TEXT),
             container(
-                text(tail(&root.display().to_string(), 70))
+                text(tail(&root.display().to_string(), 46))
                     .size(11)
                     .color(theme::TEXT_MUTED)
                     .wrapping(text::Wrapping::None),
@@ -619,7 +631,6 @@ fn worktrees_card<'a>(
     let root_key = path_key(root);
     for (i, info) in worktrees.iter().enumerate() {
         list = list.push(worktree_row(
-            i,
             info,
             path_key(&info.worktree.path) == root_key,
             status,
@@ -642,7 +653,6 @@ fn worktrees_card<'a>(
 }
 
 fn worktree_row<'a>(
-    index: usize,
     info: &'a WorktreeInfo,
     is_current: bool,
     status: &'a Status,
@@ -686,6 +696,7 @@ fn worktree_row<'a>(
             theme::AMBER,
         ),
         WorktreeChanges::Missing => ("folder not found".to_owned(), theme::CORAL),
+        WorktreeChanges::NotLocal => ("network folder: not read".to_owned(), theme::TEXT_MUTED),
         WorktreeChanges::NotRead => (
             "not read (too many worktrees)".to_owned(),
             theme::TEXT_MUTED,
@@ -726,12 +737,19 @@ fn worktree_row<'a>(
             ),
         ));
     }
-    if !w.bare && info.changes != WorktreeChanges::Missing {
+    if !w.bare
+        && !matches!(
+            info.changes,
+            WorktreeChanges::Missing | WorktreeChanges::NotLocal
+        )
+    {
         actions = actions.push(space::horizontal());
         actions = actions.push(with_tip(
             action_button(
                 "Terminal here".to_owned(),
-                Some(Message::Command(CommandId::WorktreeTerminal(index))),
+                Some(Message::Command(CommandId::WorktreeTerminal(worktree_id(
+                    &w.path,
+                )))),
                 theme::CYAN,
                 false,
             ),
@@ -868,9 +886,10 @@ fn untrusted<'a>(root: &'a Path, programs: &'a [String]) -> Element<'a, Message>
         text("Git is paused for this repository")
             .size(18)
             .color(theme::AMBER),
-        text(root.display().to_string())
+        text(tail(&root.display().to_string(), 90))
             .size(12)
-            .color(theme::TEXT_MUTED),
+            .color(theme::TEXT_MUTED)
+            .wrapping(text::Wrapping::None),
         text(
             "Its own config makes git run these programs. ForgeTerm reads nothing \
              automatically until you trust it:"
@@ -976,6 +995,13 @@ mod tests {
         let wts = vec![PathBuf::from("C:/Work/Shop")];
         assert_eq!(worktree_of(Path::new(r"c:\work\shop\src"), &wts), Some(0));
         assert_eq!(path_key(Path::new(r"C:\A\B\")), "c:/a/b");
+    }
+
+    #[test]
+    fn worktree_ids_are_stable_and_distinct() {
+        let a = worktree_id(Path::new("C:/work/shop"));
+        assert_eq!(a, worktree_id(Path::new("C:/work/shop/")));
+        assert_ne!(a, worktree_id(Path::new("C:/work/shop-claude")));
     }
 
     #[test]

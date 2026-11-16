@@ -23,10 +23,10 @@ Datum: 2026-11-16. Bron: `docs/FORGETERM_ARCHITECTURE_AUDIT.md` (bevindingen T*,
 
 | Item | Acceptatiecriteria |
 |---|---|
-| S1 Submodule-filters | `status`/`diff` met `--ignore-submodules=all` en `-c diff.ignoreSubmodules=all`. Een test met een echte submodule en een `filter.x.clean`-marker bewijst dat er niets draait. |
+| S1 Submodule-filters ✅ | `status`/`diff` met `--ignore-submodules=all` en `-c diff.ignoreSubmodules=all`. Een test met een echte submodule en een `filter.x.clean`-marker bewijst dat er niets draait. |
 | S3 Viewer-apparaatbestanden | `load` weigert alles wat geen gewoon bestand is en leest met `take(MAX+1)`. Test (Unix): symlink naar `/dev/zero` geeft een nette fout. |
 | S2 Symlinks naar netwerkpaden | Verkenner, bestandslinks, OSC 7-`is_dir`, sessieherstel en contextbestanden controleren het doel van een link met `is_local_path` vóór ze hem volgen. Test met een symlink naar `\\127.0.0.1\x`: geen netwerktoegang. |
-| T1 Achtergrondpaniek | `Message::WorkerFailed(kind)` logt en zet de bijbehorende busy-vlag terug; de instellingenbanner blijft. Test: een paniek in een git-taak laat de volgende refresh gewoon starten. |
+| T1 Achtergrondpaniek ✅ (algemener opgelost: alle busy-vlaggen terug, zie audit) | `Message::WorkerFailed(kind)` logt en zet de bijbehorende busy-vlag terug; de instellingenbanner blijft. Test: een paniek in een git-taak laat de volgende refresh gewoon starten. |
 | T2 Zijpanelen | `enum SidePanel { None, Explorer, Ai, Git, Monitor }` vervangt de vier booleans. Tests voor toggles en voor het laden van instellingen. |
 | S4/S5 | Plakbeslissing onder één lock; git-uitvoer begrensd. |
 

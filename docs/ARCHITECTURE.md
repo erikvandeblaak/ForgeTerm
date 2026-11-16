@@ -193,7 +193,9 @@ Alleen gedocumenteerde interfaces (Claude Code-documentatie op code.claude.com, 
   - `numstat` staged en unstaged (`git diff --numstat -z`; renames, binaire bestanden);
   - `activity` (30 dagen), `history` (8) en `branches`.
   - De status zelf komt van het paneel (`GitState`), dus geen dubbele `git status`.
-- **Andere worktrees:** elk krijgt een eigen trustcheck (`repo_programs`) vóór er een `status` op draait (max. 12), en alleen als de map lokaal is en bestaat. Anders: *Paused*, *Missing* of *NotRead*.
+- **Andere worktrees:** elk krijgt een eigen trustcheck (`repo_programs`) vóór er een `status` op draait (max. 12, parallel in scoped threads, zodat één trage worktree de rest niet ophoudt), en alleen als de map lokaal is en bestaat. Anders: *Paused*, *NotLocal* (netwerkmap, niet gelezen), *Missing* of *NotRead*.
+- **"Terminal here"** draagt een stabiele id (hash van het genormaliseerde pad), geen positie in de lijst. Een lijst die intussen herladen is, kan de klik dus nooit naar een andere worktree sturen.
+- **Laden:** één tegelijk. Een gevraagde verversing tijdens het laden (`reload_pending`) volgt direct daarna.
 - **Verversen:** bij openen, bij *Refresh*, en na elke paneel-refresh. Dat laatste alleen als de status veranderde sinds de vorige load, de repository wisselde, of de data ouder is dan 10 s (commits of worktrees van elders). Nooit meer dan één load tegelijk.
 - **Agents per worktree:** de map waarin ForgeTerm de agent startte, gekoppeld aan de diepste worktree die hem bevat (`git_dash::worktree_of`, getest; op Windows hoofdletter- en scheidingsteken-ongevoelig). Dat is betrouwbaar. "Welke agent veranderde welk bestand" niet, en dat wordt dus ook niet getoond.
 - **Acties** (alles via commands):
