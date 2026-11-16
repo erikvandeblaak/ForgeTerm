@@ -200,7 +200,7 @@ pub fn view(v: View<'_>) -> Element<'_, Message> {
     .width(Length::Fill)
     .height(Length::Fill)
     .style(|_| container::Style {
-        background: Some(theme::OBSIDIAN.into()),
+        background: Some(theme::obsidian().into()),
         ..Default::default()
     })
     .into()
@@ -212,8 +212,8 @@ fn found<'a>(
     data: Option<&'a DashData>,
     v: &View<'a>,
 ) -> Element<'a, Message> {
-    let mut page =
-        column![header(root, status, data, v.now, v.compare_hint.as_deref())].spacing(16);
+    let mut page = column![header(root, status, data, v.now, v.compare_hint.as_deref())]
+        .spacing(theme::space::XXL);
     page = page.push(tiles(status, data));
     let wt_paths: Vec<PathBuf> = data
         .and_then(|d| d.worktrees.as_ref().ok())
@@ -231,14 +231,14 @@ fn found<'a>(
         ))
         .width(Length::FillPortion(2)),
     ]
-    .spacing(16);
+    .spacing(theme::space::XXL);
     page = page.push(main);
     let lower = row![
         container(activity_card(data)).width(Length::FillPortion(3)),
-        container(column![commits_card(data), branches_card(data)].spacing(16))
+        container(column![commits_card(data), branches_card(data)].spacing(theme::space::XXL))
             .width(Length::FillPortion(2)),
     ]
-    .spacing(16);
+    .spacing(theme::space::XXL);
     page.push(lower)
         .push(
             text(format!(
@@ -249,8 +249,8 @@ fn found<'a>(
                     .map(|k| format!(" ({k} opens it beside this page)"))
                     .unwrap_or_default()
             ))
-            .size(11)
-            .color(theme::DISABLED),
+            .size(theme::size::TINY)
+            .color(theme::disabled()),
         )
         .into()
 }
@@ -268,55 +268,55 @@ fn header<'a>(
     );
     let title = column![
         row![
-            text("⎇").size(18).color(theme::VIOLET),
-            text("Git Control Center").size(20).color(theme::TEXT),
+            text("⎇").size(theme::size::HEADING).color(theme::violet()),
+            text("Git Control Center").size(20).color(theme::text()),
         ]
-        .spacing(10)
+        .spacing(theme::space::L)
         .align_y(iced::Alignment::Center),
         row![
-            text(name).size(13).color(theme::TEXT),
+            text(name).size(theme::size::BODY).color(theme::text()),
             container(
                 text(tail(&root.display().to_string(), 46))
-                    .size(11)
-                    .color(theme::TEXT_MUTED)
+                    .size(theme::size::TINY)
+                    .color(theme::text_muted())
                     .wrapping(text::Wrapping::None),
             )
             .width(Length::Fill)
             .clip(true),
         ]
-        .spacing(10)
+        .spacing(theme::space::L)
         .align_y(iced::Alignment::Center),
     ]
     .spacing(3);
 
     let b = &status.branch;
-    let mut chips = row![chip(format!("⎇ {}", b.label()), theme::CYAN, true)]
-        .spacing(8)
+    let mut chips = row![chip(format!("⎇ {}", b.label()), theme::cyan(), true)]
+        .spacing(theme::space::M)
         .align_y(iced::Alignment::Center);
     chips = chips.push(match &b.upstream {
         Some(up) if b.ahead == 0 && b.behind == 0 => {
-            chip(format!("in sync with {up}"), theme::MINT, true)
+            chip(format!("in sync with {up}"), theme::mint(), true)
         }
         Some(up) => chip(
             format!("↑{} ↓{} {up}", b.ahead, b.behind),
-            theme::AMBER,
+            theme::amber(),
             true,
         ),
-        None => chip("no upstream".to_owned(), theme::TEXT_MUTED, false),
+        None => chip("no upstream".to_owned(), theme::text_muted(), false),
     });
     let conflicts = status.conflicted().count();
     if conflicts > 0 {
         chips = chips.push(chip(
             format!("{conflicts} conflict{}", plural(conflicts)),
-            theme::CORAL,
+            theme::coral(),
             true,
         ));
     }
     let n = status.change_count();
     chips = chips.push(if n == 0 {
-        chip("clean".to_owned(), theme::MINT, true)
+        chip("clean".to_owned(), theme::mint(), true)
     } else {
-        chip(format!("{n} change{}", plural(n)), theme::AMBER, true)
+        chip(format!("{n} change{}", plural(n)), theme::amber(), true)
     });
 
     let age = data.map_or_else(
@@ -331,24 +331,24 @@ fn header<'a>(
         },
     );
     let actions = row![
-        text(age).size(11).color(theme::TEXT_MUTED),
+        text(age).size(theme::size::TINY).color(theme::text_muted()),
         action_button(
             "Refresh".to_owned(),
             Some(Message::Command(CommandId::GitRefresh)),
-            theme::CYAN,
+            theme::cyan(),
             false,
         ),
         action_button(
             "History…".to_owned(),
             Some(Message::Command(CommandId::GitShowHistory)),
-            theme::CYAN,
+            theme::cyan(),
             false,
         ),
         with_tip(
             action_button(
                 "Agent in new worktree…".to_owned(),
                 Some(Message::Command(CommandId::NewAgentWorktree)),
-                theme::CYAN,
+                theme::cyan(),
                 false,
             ),
             "New branch in its own folder beside the repository, with an agent \
@@ -359,7 +359,7 @@ fn header<'a>(
             action_button(
                 "Compare…".to_owned(),
                 Some(Message::Command(CommandId::ToggleCompare)),
-                theme::CYAN,
+                theme::cyan(),
                 false,
             ),
             format!(
@@ -371,13 +371,13 @@ fn header<'a>(
             action_button(
                 "Stage & commit".to_owned(),
                 Some(Message::Command(CommandId::ToggleGitPanel)),
-                theme::CYAN,
+                theme::cyan(),
                 true,
             ),
             "Opens the Git panel beside this page".to_owned(),
         ),
     ]
-    .spacing(8)
+    .spacing(theme::space::M)
     .align_y(iced::Alignment::Center);
 
     container(
@@ -385,11 +385,11 @@ fn header<'a>(
             row![title, space::horizontal(), actions].align_y(iced::Alignment::Center),
             chips,
         ]
-        .spacing(12),
+        .spacing(theme::space::XL),
     )
     .padding([16, 18])
     .width(Length::Fill)
-    .style(card_style(theme::GRAPHITE))
+    .style(card_style(theme::graphite()))
     .into()
 }
 
@@ -434,24 +434,29 @@ fn tiles<'a>(status: &'a Status, data: Option<&'a DashData>) -> Element<'a, Mess
             "STAGED",
             staged.to_string(),
             lines(data.map(|d| &d.staged)),
-            theme::MINT
+            theme::mint()
         ),
         tile(
             "UNSTAGED",
             unstaged.to_string(),
             lines(data.map(|d| &d.unstaged)),
-            theme::AMBER
+            theme::amber()
         ),
         tile(
             "UNTRACKED",
             untracked.to_string(),
             "new files".to_owned(),
-            theme::VIOLET
+            theme::violet()
         ),
-        tile("COMMITS · 30 DAYS", commits.0, commits.1, theme::CHART_CYAN),
-        tile("WORKTREES", wts.0, wts.1, theme::CYAN),
+        tile(
+            "COMMITS · 30 DAYS",
+            commits.0,
+            commits.1,
+            theme::chart_cyan()
+        ),
+        tile("WORKTREES", wts.0, wts.1, theme::cyan()),
     ]
-    .spacing(12)
+    .spacing(theme::space::XL)
     .into()
 }
 
@@ -477,16 +482,16 @@ pub(crate) fn tile<'a>(
                     }),
                 stat_label(label),
             ]
-            .spacing(6)
+            .spacing(theme::space::S)
             .align_y(iced::Alignment::Center),
-            text(value).size(24).color(theme::TEXT),
-            text(sub).size(11).color(theme::TEXT_MUTED),
+            text(value).size(24).color(theme::text()),
+            text(sub).size(theme::size::TINY).color(theme::text_muted()),
         ]
-        .spacing(4),
+        .spacing(theme::space::XS),
     )
     .padding([12, 14])
     .width(Length::Fill)
-    .style(card_style(theme::SURFACE))
+    .style(card_style(theme::surface()))
     .into()
 }
 
@@ -499,18 +504,20 @@ enum Group {
 }
 
 fn working_tree<'a>(status: &'a Status, data: Option<&'a DashData>) -> Element<'a, Message> {
-    let mut list = column![card_title("WORKING TREE")].spacing(4);
+    let mut list = column![card_title("WORKING TREE")].spacing(theme::space::XS);
     if status.change_count() == 0 {
         list = list.push(
             container(
                 column![
-                    text("✓").size(22).color(theme::MINT),
-                    text("Working tree clean").size(13).color(theme::TEXT),
+                    text("✓").size(22).color(theme::mint()),
+                    text("Working tree clean")
+                        .size(theme::size::BODY)
+                        .color(theme::text()),
                     text("Nothing to stage or commit.")
-                        .size(11)
-                        .color(theme::TEXT_MUTED),
+                        .size(theme::size::TINY)
+                        .color(theme::text_muted()),
                 ]
-                .spacing(4)
+                .spacing(theme::space::XS)
                 .align_x(iced::Alignment::Center),
             )
             .center_x(Length::Fill)
@@ -546,8 +553,8 @@ fn working_tree<'a>(status: &'a Status, data: Option<&'a DashData>) -> Element<'
         list = list.push(
             container(
                 text(format!("{title} · {}", entries.len()))
-                    .size(10)
-                    .color(theme::TEXT_MUTED),
+                    .size(theme::size::CAPTION)
+                    .color(theme::text_muted()),
             )
             .padding([6, 0]),
         );
@@ -565,8 +572,8 @@ fn working_tree<'a>(status: &'a Status, data: Option<&'a DashData>) -> Element<'
             text(format!(
                 "… and {hidden} more (not drawn; the Git panel lists them too)"
             ))
-            .size(11)
-            .color(theme::TEXT_MUTED),
+            .size(theme::size::TINY)
+            .color(theme::text_muted()),
         );
     }
     card(list)
@@ -580,20 +587,20 @@ fn file_row<'a>(
 ) -> Element<'a, Message> {
     use forgeterm_git::DiffKind;
     let (letter, color, kind, stats) = match group {
-        Group::Conflict => ('!', theme::CORAL, DiffKind::Unstaged, None),
+        Group::Conflict => ('!', theme::coral(), DiffKind::Unstaged, None),
         Group::Staged => (
             e.staged.map_or('?', Change::letter),
-            theme::MINT,
+            theme::mint(),
             DiffKind::Staged,
             data.map(|d| &d.staged),
         ),
         Group::Unstaged => (
             e.unstaged.map_or('?', Change::letter),
-            theme::AMBER,
+            theme::amber(),
             DiffKind::Unstaged,
             data.map(|d| &d.unstaged),
         ),
-        Group::Untracked => ('U', theme::VIOLET, DiffKind::Untracked, None),
+        Group::Untracked => ('U', theme::violet(), DiffKind::Untracked, None),
     };
     let (dir, file) = match e.path.rsplit_once('/') {
         Some((d, f)) => (d, f),
@@ -601,19 +608,19 @@ fn file_row<'a>(
     };
     let name = row![
         text(letter.to_string())
-            .size(12)
+            .size(theme::size::SMALL)
             .font(TERMINAL_FONT)
             .color(color),
         text(file)
-            .size(12)
-            .color(theme::TEXT)
+            .size(theme::size::SMALL)
+            .color(theme::text())
             .wrapping(text::Wrapping::None),
         text(dir)
-            .size(10)
-            .color(theme::TEXT_MUTED)
+            .size(theme::size::CAPTION)
+            .color(theme::text_muted())
             .wrapping(text::Wrapping::None),
     ]
-    .spacing(8)
+    .spacing(theme::space::M)
     .align_y(iced::Alignment::Center);
 
     let (bar, label): (Element<'a, Message>, String) = match stats.and_then(|s| counts(s, &e.path))
@@ -632,14 +639,14 @@ fn file_row<'a>(
             .align_x(iced::alignment::Horizontal::Right),
         container(
             text(label)
-                .size(11)
+                .size(theme::size::TINY)
                 .font(TERMINAL_FONT)
-                .color(theme::TEXT_MUTED)
+                .color(theme::text_muted())
         )
         .width(90)
         .align_x(iced::alignment::Horizontal::Right),
     ]
-    .spacing(10)
+    .spacing(theme::space::L)
     .align_y(iced::Alignment::Center);
     let tip = match &e.orig_path {
         Some(orig) => format!("{orig} → {}\nClick to show the diff", e.path),
@@ -676,9 +683,12 @@ pub(crate) fn diff_bar<'a>(added: u32, deleted: u32, max: u32) -> Element<'a, Me
                 ..Default::default()
             })
     };
-    row![seg(green, theme::MINT), seg(width - green, theme::CORAL)]
-        .spacing(1)
-        .into()
+    row![
+        seg(green, theme::mint()),
+        seg(width - green, theme::coral())
+    ]
+    .spacing(1)
+    .into()
 }
 
 fn worktrees_card<'a>(
@@ -689,7 +699,7 @@ fn worktrees_card<'a>(
     agents: &[AgentAt],
     terminal_dirs: &[PathBuf],
 ) -> Element<'a, Message> {
-    let mut list = column![card_title("WORKTREES")].spacing(10);
+    let mut list = column![card_title("WORKTREES")].spacing(theme::space::L);
     let worktrees = match data.map(|d| &d.worktrees) {
         None => return card(list.push(muted("Loading…"))),
         Some(Err(e)) => return card(list.push(muted(&format!("Not available: {e}")))),
@@ -755,19 +765,19 @@ fn worktree_row<'a>(
         _ => "—".to_owned(),
     };
     let mut title = row![
-        text(name).size(13).color(theme::TEXT),
-        text(branch).size(12).color(theme::VIOLET),
+        text(name).size(theme::size::BODY).color(theme::text()),
+        text(branch).size(theme::size::SMALL).color(theme::violet()),
     ]
-    .spacing(8)
+    .spacing(theme::space::M)
     .align_y(iced::Alignment::Center);
     if is_current {
-        title = title.push(tag("shown", theme::CYAN));
+        title = title.push(tag("shown", theme::cyan()));
     }
     if w.locked.is_some() {
-        title = title.push(tag("locked", theme::AMBER));
+        title = title.push(tag("locked", theme::amber()));
     }
     if w.prunable.is_some() {
-        title = title.push(tag("prunable", theme::CORAL));
+        title = title.push(tag("prunable", theme::coral()));
     }
     let (changes, color) = match &info.changes {
         WorktreeChanges::Current => {
@@ -778,40 +788,42 @@ fn worktree_row<'a>(
         WorktreeChanges::Count { changes, conflicts } => changes_label(*changes, *conflicts),
         WorktreeChanges::Paused => (
             "not read: its config runs programs (trust it in the Git panel)".to_owned(),
-            theme::AMBER,
+            theme::amber(),
         ),
-        WorktreeChanges::Missing => ("folder not found".to_owned(), theme::CORAL),
-        WorktreeChanges::NotLocal => ("network folder: not read".to_owned(), theme::TEXT_MUTED),
+        WorktreeChanges::Missing => ("folder not found".to_owned(), theme::coral()),
+        WorktreeChanges::NotLocal => ("network folder: not read".to_owned(), theme::text_muted()),
         WorktreeChanges::NotRead => (
             "not read (too many worktrees)".to_owned(),
-            theme::TEXT_MUTED,
+            theme::text_muted(),
         ),
-        WorktreeChanges::Error(e) => (format!("git: {e}"), theme::CORAL),
+        WorktreeChanges::Error(e) => (format!("git: {e}"), theme::coral()),
     };
     let mut col = column![
         title,
         container(
             text(tail(&w.path.display().to_string(), 60))
-                .size(11)
-                .color(theme::TEXT_MUTED)
+                .size(theme::size::TINY)
+                .color(theme::text_muted())
                 .wrapping(text::Wrapping::None),
         )
         .width(Length::Fill)
         .clip(true),
-        text(changes).size(12).color(color),
+        text(changes).size(theme::size::SMALL).color(color),
     ]
     .spacing(3);
-    let mut actions = row![].spacing(6).align_y(iced::Alignment::Center);
+    let mut actions = row![]
+        .spacing(theme::space::S)
+        .align_y(iced::Alignment::Center);
     for a in agents {
         actions = actions.push(with_tip(
             mouse_area(
                 row![
                     agent_badge(a.kind),
                     text(format!("{} · tab {}", a.kind.name(), a.tab + 1))
-                        .size(11)
-                        .color(theme::TEXT),
+                        .size(theme::size::TINY)
+                        .color(theme::text()),
                 ]
-                .spacing(6)
+                .spacing(theme::space::S)
                 .align_y(iced::Alignment::Center),
             )
             .on_press(Message::Command(CommandId::GoToTerminal(a.id)))
@@ -835,7 +847,7 @@ fn worktree_row<'a>(
                 Some(Message::Command(CommandId::WorktreeTerminal(worktree_id(
                     &w.path,
                 )))),
-                theme::CYAN,
+                theme::cyan(),
                 false,
             ),
             "New tab with your default shell in this worktree".to_owned(),
@@ -859,7 +871,7 @@ fn worktree_row<'a>(
         };
         if let Some(tip) = tip {
             actions = actions.push(with_tip(
-                action_button("Remove…".to_owned(), press, theme::CORAL, false),
+                action_button("Remove…".to_owned(), press, theme::coral(), false),
                 tip.to_owned(),
             ));
         }
@@ -869,18 +881,18 @@ fn worktree_row<'a>(
         .padding([10, 12])
         .width(Length::Fill)
         .style(move |_| container::Style {
-            background: Some(theme::GRAPHITE.into()),
+            background: Some(theme::graphite().into()),
             border: Border {
                 color: if is_current {
                     Color {
                         a: 0.5,
-                        ..theme::CYAN
+                        ..theme::cyan()
                     }
                 } else {
-                    theme::BORDER
+                    theme::border()
                 },
                 width: 1.0,
-                radius: 8.0.into(),
+                radius: theme::radius::L.into(),
             },
             ..Default::default()
         })
@@ -895,12 +907,15 @@ fn changes_label(changes: usize, conflicts: usize) -> (String, Color) {
                 plural(conflicts),
                 plural(changes)
             ),
-            theme::CORAL,
+            theme::coral(),
         )
     } else if changes > 0 {
-        (format!("{changes} change{}", plural(changes)), theme::AMBER)
+        (
+            format!("{changes} change{}", plural(changes)),
+            theme::amber(),
+        )
     } else {
-        ("clean".to_owned(), theme::MINT)
+        ("clean".to_owned(), theme::mint())
     }
 }
 
@@ -910,11 +925,11 @@ fn activity_card(data: Option<&DashData>) -> Element<'_, Message> {
         Some(Err(e)) => muted_owned(format!("Not available: {e}")),
         Some(Ok(a)) => git_view::activity_chart(a),
     };
-    card(column![card_title("ACTIVITY"), inner].spacing(10))
+    card(column![card_title("ACTIVITY"), inner].spacing(theme::space::L))
 }
 
 fn commits_card(data: Option<&DashData>) -> Element<'_, Message> {
-    let mut list = column![card_title("RECENT COMMITS")].spacing(6);
+    let mut list = column![card_title("RECENT COMMITS")].spacing(theme::space::S);
     match data.map(|d| &d.commits) {
         None => list = list.push(muted("Loading…")),
         Some(Err(e)) => list = list.push(muted_owned(format!("Not available: {e}"))),
@@ -924,21 +939,21 @@ fn commits_card(data: Option<&DashData>) -> Element<'_, Message> {
                 list = list.push(
                     row![
                         text(e.short.clone())
-                            .size(11)
+                            .size(theme::size::TINY)
                             .font(TERMINAL_FONT)
-                            .color(theme::CYAN),
+                            .color(theme::cyan()),
                         column![
                             text(e.subject.clone())
-                                .size(12)
-                                .color(theme::TEXT)
+                                .size(theme::size::SMALL)
+                                .color(theme::text())
                                 .wrapping(text::Wrapping::None),
                             text(format!("{} · {}", e.author, e.when))
-                                .size(10)
-                                .color(theme::TEXT_MUTED),
+                                .size(theme::size::CAPTION)
+                                .color(theme::text_muted()),
                         ]
                         .spacing(1),
                     ]
-                    .spacing(10),
+                    .spacing(theme::space::L),
                 );
             }
         }
@@ -947,7 +962,7 @@ fn commits_card(data: Option<&DashData>) -> Element<'_, Message> {
 }
 
 fn branches_card(data: Option<&DashData>) -> Element<'_, Message> {
-    let mut list = column![card_title("LOCAL BRANCHES")].spacing(6);
+    let mut list = column![card_title("LOCAL BRANCHES")].spacing(theme::space::S);
     match data.map(|d| &d.branches) {
         None => list = list.push(muted("Loading…")),
         Some(Err(e)) => list = list.push(muted_owned(format!("Not available: {e}"))),
@@ -956,27 +971,35 @@ fn branches_card(data: Option<&DashData>) -> Element<'_, Message> {
             for br in local.iter().take(8) {
                 let mut r = row![
                     text(if br.current { "●" } else { "○" })
-                        .size(10)
+                        .size(theme::size::CAPTION)
                         .color(if br.current {
-                            theme::CYAN
+                            theme::cyan()
                         } else {
-                            theme::DISABLED
+                            theme::disabled()
                         }),
                     text(br.name.clone())
-                        .size(12)
-                        .color(if br.current { theme::CYAN } else { theme::TEXT })
+                        .size(theme::size::SMALL)
+                        .color(if br.current {
+                            theme::cyan()
+                        } else {
+                            theme::text()
+                        })
                         .wrapping(text::Wrapping::None),
                 ]
-                .spacing(8)
+                .spacing(theme::space::M)
                 .align_y(iced::Alignment::Center);
                 r = r.push(space::horizontal());
                 if br.upstream_gone {
-                    r = r.push(text("upstream gone").size(10).color(theme::CORAL));
+                    r = r.push(
+                        text("upstream gone")
+                            .size(theme::size::CAPTION)
+                            .color(theme::coral()),
+                    );
                 } else if br.ahead > 0 || br.behind > 0 {
                     r = r.push(
                         text(format!("↑{} ↓{}", br.ahead, br.behind))
-                            .size(11)
-                            .color(theme::AMBER),
+                            .size(theme::size::TINY)
+                            .color(theme::amber()),
                     );
                 }
                 list = list.push(r);
@@ -992,50 +1015,55 @@ fn branches_card(data: Option<&DashData>) -> Element<'_, Message> {
 pub(crate) fn untrusted<'a>(root: &'a Path, programs: &'a [String]) -> Element<'a, Message> {
     let mut col = column![
         text("Git is paused for this repository")
-            .size(18)
-            .color(theme::AMBER),
+            .size(theme::size::HEADING)
+            .color(theme::amber()),
         text(tail(&root.display().to_string(), 90))
-            .size(12)
-            .color(theme::TEXT_MUTED)
+            .size(theme::size::SMALL)
+            .color(theme::text_muted())
             .wrapping(text::Wrapping::None),
         text(
             "Its own config makes git run these programs. ForgeTerm reads nothing \
              automatically until you trust it:"
         )
-        .size(12)
-        .color(theme::TEXT),
+        .size(theme::size::SMALL)
+        .color(theme::text()),
     ]
-    .spacing(8);
+    .spacing(theme::space::M);
     for p in programs.iter().take(12) {
         col = col.push(
             text(p.clone())
-                .size(11)
+                .size(theme::size::TINY)
                 .font(TERMINAL_FONT)
-                .color(theme::TEXT_MUTED),
+                .color(theme::text_muted()),
         );
     }
     col = col.push(action_button(
         "Trust this repository".to_owned(),
         Some(Message::Command(CommandId::GitTrustRepository)),
-        theme::AMBER,
+        theme::amber(),
         true,
     ));
     container(col)
         .padding(20)
         .max_width(720)
-        .style(card_style(theme::SURFACE))
+        .style(card_style(theme::surface()))
         .into()
 }
 
 pub(crate) fn message_card<'a>(title: &str, detail: Option<String>) -> Element<'a, Message> {
-    let mut col = column![text(title.to_owned()).size(18).color(theme::TEXT)].spacing(8);
+    let mut col = column![
+        text(title.to_owned())
+            .size(theme::size::HEADING)
+            .color(theme::text())
+    ]
+    .spacing(theme::space::M);
     if let Some(d) = detail {
-        col = col.push(text(d).size(12).color(theme::TEXT_MUTED));
+        col = col.push(text(d).size(theme::size::SMALL).color(theme::text_muted()));
     }
     container(col)
         .padding(20)
         .max_width(720)
-        .style(card_style(theme::SURFACE))
+        .style(card_style(theme::surface()))
         .into()
 }
 
@@ -1043,7 +1071,7 @@ pub(crate) fn card<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, 
     container(content)
         .padding([14, 16])
         .width(Length::Fill)
-        .style(card_style(theme::SURFACE))
+        .style(card_style(theme::surface()))
         .into()
 }
 
@@ -1051,24 +1079,33 @@ pub(crate) fn card_style(bg: Color) -> impl Fn(&iced::Theme) -> container::Style
     move |_| container::Style {
         background: Some(bg.into()),
         border: Border {
-            color: theme::BORDER,
+            color: theme::border(),
             width: 1.0,
-            radius: 10.0.into(),
+            radius: theme::radius::XL.into(),
         },
         ..Default::default()
     }
 }
 
 pub(crate) fn card_title<'a>(s: &'a str) -> Element<'a, Message> {
-    text(s).size(10).color(theme::TEXT_MUTED).into()
+    text(s)
+        .size(theme::size::CAPTION)
+        .color(theme::text_muted())
+        .into()
 }
 
 pub(crate) fn muted<'a>(s: &str) -> Element<'a, Message> {
-    text(s.to_owned()).size(11).color(theme::TEXT_MUTED).into()
+    text(s.to_owned())
+        .size(theme::size::TINY)
+        .color(theme::text_muted())
+        .into()
 }
 
 pub(crate) fn muted_owned<'a>(s: String) -> Element<'a, Message> {
-    text(s).size(11).color(theme::TEXT_MUTED).into()
+    text(s)
+        .size(theme::size::TINY)
+        .color(theme::text_muted())
+        .into()
 }
 
 pub(crate) fn plural(n: usize) -> &'static str {

@@ -25,7 +25,9 @@ pub fn view<'a>(
 ) -> Element<'a, Message> {
     let root_name = folder_name(tree.root());
     let header = row![
-        text("EXPLORER").size(11).color(theme::TEXT_MUTED),
+        text("EXPLORER")
+            .size(theme::size::TINY)
+            .color(theme::text_muted()),
         space::horizontal(),
         icon_button(
             "↑",
@@ -57,16 +59,16 @@ pub fn view<'a>(
             tree.show_hidden()
         ),
     ]
-    .spacing(2)
+    .spacing(theme::space::XXS)
     .align_y(iced::Alignment::Center);
 
     let root = column![
-        text(root_name).size(13).color(theme::TEXT),
+        text(root_name).size(theme::size::BODY).color(theme::text()),
         // A long path is cut at the panel edge instead of running over the terminal.
         container(
             text(tree.root().to_string_lossy().into_owned())
-                .size(11)
-                .color(theme::TEXT_MUTED)
+                .size(theme::size::TINY)
+                .color(theme::text_muted())
                 .wrapping(text::Wrapping::None)
         )
         .width(Length::Fill)
@@ -88,27 +90,27 @@ pub fn view<'a>(
         .height(Length::Fill)
         .width(Length::Fill);
 
-    let mut top = column![header, root].spacing(6);
+    let mut top = column![header, root].spacing(theme::space::S);
     if let Some((value, problem)) = goto {
         top = top.push(
             text_input("Folder path (~ = home, relative = from here)", value)
                 .id(crate::app::EXPLORER_GOTO_ID)
                 .on_input(Message::ExplorerGoToInput)
                 .on_submit(Message::ExplorerGoToSubmit)
-                .size(12)
+                .size(theme::size::SMALL)
                 .padding([4, 6]),
         );
         let hint = problem
             .clone()
             .unwrap_or_else(|| "Enter opens the folder, Esc cancels.".into());
         let color = if problem.is_some() {
-            theme::CORAL
+            theme::coral()
         } else {
-            theme::TEXT_MUTED
+            theme::text_muted()
         };
-        top = top.push(text(hint).size(11).color(color));
+        top = top.push(text(hint).size(theme::size::TINY).color(color));
     }
-    let mut panel = column![container(top).padding([8, 10]), list].spacing(2);
+    let mut panel = column![container(top).padding([8, 10]), list].spacing(theme::space::XXS);
     if let Some(entry) = tree.selected() {
         panel = panel.push(footer(&entry.name, entry.is_dir));
     }
@@ -117,9 +119,9 @@ pub fn view<'a>(
         .width(Length::Fixed(WIDTH))
         .height(Length::Fill)
         .style(|_| container::Style {
-            background: Some(theme::GRAPHITE.into()),
+            background: Some(theme::graphite().into()),
             border: Border {
-                color: theme::BORDER,
+                color: theme::border(),
                 width: 1.0,
                 radius: 0.0.into(),
             },
@@ -132,7 +134,9 @@ fn view_row<'a>(r: &Row<'a>, selected: Option<&Path>, focused: bool) -> Element<
     match r {
         Row::Note { depth, text: note } => row![
             space::horizontal().width(indent(*depth) + 16.0),
-            text(note.clone()).size(12).color(theme::TEXT_MUTED),
+            text(note.clone())
+                .size(theme::size::SMALL)
+                .color(theme::text_muted()),
         ]
         .height(22)
         .align_y(iced::Alignment::Center)
@@ -144,16 +148,16 @@ fn view_row<'a>(r: &Row<'a>, selected: Option<&Path>, focused: bool) -> Element<
         } => {
             let is_selected = selected == Some(entry.path.as_path());
             let color = if entry.hidden {
-                theme::TEXT_MUTED
+                theme::text_muted()
             } else {
-                theme::TEXT
+                theme::text()
             };
             let chevron: Element<'a, Message> = if entry.is_dir {
                 mouse_area(
                     container(
                         text(if *expanded { "▾" } else { "▸" })
-                            .size(15)
-                            .color(theme::TEXT_MUTED),
+                            .size(theme::size::TITLE)
+                            .color(theme::text_muted()),
                     )
                     .center_x(16),
                 )
@@ -166,7 +170,7 @@ fn view_row<'a>(r: &Row<'a>, selected: Option<&Path>, focused: bool) -> Element<
                 space::horizontal().width(indent(*depth)),
                 chevron,
                 text(entry.name.clone())
-                    .size(13)
+                    .size(theme::size::BODY)
                     .color(color)
                     .wrapping(text::Wrapping::None),
             ]
@@ -176,11 +180,11 @@ fn view_row<'a>(r: &Row<'a>, selected: Option<&Path>, focused: bool) -> Element<
                 .width(Length::Fill)
                 .align_y(iced::Alignment::Center)
                 .style(move |_| container::Style {
-                    background: is_selected.then(|| theme::SELECTION.into()),
+                    background: is_selected.then(|| theme::selection().into()),
                     border: Border {
-                        radius: 4.0.into(),
+                        radius: theme::radius::S.into(),
                         // The cyan edge shows that arrow keys move this selection.
-                        color: theme::CYAN,
+                        color: theme::cyan(),
                         width: if is_selected && focused { 1.0 } else { 0.0 },
                     },
                     ..Default::default()
@@ -195,7 +199,7 @@ fn view_row<'a>(r: &Row<'a>, selected: Option<&Path>, focused: bool) -> Element<
 
 fn footer(name: &str, is_dir: bool) -> Element<'_, Message> {
     let action = |label: &'static str, id: CommandId| {
-        button(text(label).size(12))
+        button(text(label).size(theme::size::SMALL))
             .on_press(Message::Command(id))
             .padding([4, 8])
             .style(|_, status| {
@@ -203,15 +207,19 @@ fn footer(name: &str, is_dir: bool) -> Element<'_, Message> {
                 button::Style {
                     background: Some(
                         if hovered {
-                            theme::ELEVATED
+                            theme::elevated()
                         } else {
-                            theme::SURFACE
+                            theme::surface()
                         }
                         .into(),
                     ),
-                    text_color: if hovered { theme::CYAN } else { theme::TEXT },
+                    text_color: if hovered {
+                        theme::cyan()
+                    } else {
+                        theme::text()
+                    },
                     border: Border {
-                        color: theme::BORDER,
+                        color: theme::border(),
                         width: 1.0,
                         radius: 5.0.into(),
                     },
@@ -223,8 +231,8 @@ fn footer(name: &str, is_dir: bool) -> Element<'_, Message> {
         column![
             container(
                 text(name)
-                    .size(12)
-                    .color(theme::TEXT)
+                    .size(theme::size::SMALL)
+                    .color(theme::text())
                     .wrapping(text::Wrapping::None)
             )
             .width(Length::Fill)
@@ -233,7 +241,7 @@ fn footer(name: &str, is_dir: bool) -> Element<'_, Message> {
                 action("Insert path", CommandId::InsertSelectedPath),
                 action("Copy", CommandId::CopySelectedPath),
             ]
-            .spacing(4),
+            .spacing(theme::space::XS),
             if is_dir {
                 row![action("Open tab here", CommandId::NewTabInSelectedFolder)]
             } else {
@@ -242,16 +250,16 @@ fn footer(name: &str, is_dir: bool) -> Element<'_, Message> {
                     action("Tab in folder", CommandId::NewTabInSelectedFolder),
                 ]
             }
-            .spacing(4),
+            .spacing(theme::space::XS),
         ]
-        .spacing(6),
+        .spacing(theme::space::S),
     )
     .padding([8, 10])
     .width(Length::Fill)
     .style(|_| container::Style {
-        background: Some(theme::SURFACE.into()),
+        background: Some(theme::surface().into()),
         border: Border {
-            color: theme::BORDER,
+            color: theme::border(),
             width: 1.0,
             radius: 0.0.into(),
         },
@@ -268,33 +276,33 @@ fn icon_button<'a>(
     active: bool,
 ) -> Element<'a, Message> {
     let color = match (enabled, active) {
-        (false, _) => theme::DISABLED,
-        (true, true) => theme::CYAN,
-        (true, false) => theme::TEXT,
+        (false, _) => theme::disabled(),
+        (true, true) => theme::cyan(),
+        (true, false) => theme::text(),
     };
-    let b = button(container(text(glyph).size(13).color(color)).center_x(14))
+    let b = button(container(text(glyph).size(theme::size::BODY).color(color)).center_x(14))
         .padding([2, 5])
         .on_press_maybe(enabled.then_some(Message::Command(id)))
         .style(move |_, status| button::Style {
             background: (active
                 || matches!(status, button::Status::Hovered | button::Status::Pressed))
-            .then(|| theme::ELEVATED.into()),
+            .then(|| theme::elevated().into()),
             border: Border {
-                radius: 4.0.into(),
+                radius: theme::radius::S.into(),
                 ..Default::default()
             },
             ..Default::default()
         });
     tooltip(
         b,
-        container(text(tip).size(11).color(theme::TEXT))
+        container(text(tip).size(theme::size::TINY).color(theme::text()))
             .padding([3, 6])
             .style(|_| container::Style {
-                background: Some(theme::ELEVATED.into()),
+                background: Some(theme::elevated().into()),
                 border: Border {
-                    color: theme::BORDER,
+                    color: theme::border(),
                     width: 1.0,
-                    radius: 4.0.into(),
+                    radius: theme::radius::S.into(),
                 },
                 ..Default::default()
             }),

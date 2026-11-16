@@ -347,7 +347,7 @@ impl canvas::Program<Message> for TerminalCanvas<'_> {
                     PADDING + (*row as f32 + 1.0) * m.cell_height - 2.0,
                 ),
                 Size::new((end - first) as f32 * m.cell_width, 1.5),
-                crate::theme::CYAN,
+                crate::theme::cyan(),
             );
             layers.push(frame.into_geometry());
         }
@@ -395,10 +395,10 @@ pub fn draw_snapshot(frame: &mut Frame, snap: &Snapshot, m: Metrics, size: Size,
     // its command ended.
     for (row, mark) in &snap.prompt_marks {
         let color = match mark {
-            PromptMark::Prompt => crate::theme::DISABLED,
-            PromptMark::Running => crate::theme::CYAN,
-            PromptMark::Succeeded => crate::theme::MINT,
-            PromptMark::Failed(_) => crate::theme::CORAL,
+            PromptMark::Prompt => crate::theme::disabled(),
+            PromptMark::Running => crate::theme::cyan(),
+            PromptMark::Succeeded => crate::theme::mint(),
+            PromptMark::Failed(_) => crate::theme::coral(),
         };
         frame.fill_rectangle(
             Point::new(3.0, (PADDING + *row as f32 * ch + 2.0).round()),

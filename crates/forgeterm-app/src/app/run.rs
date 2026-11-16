@@ -157,6 +157,7 @@ impl App {
                 }
             }
             CommandId::ReloadSettings => self.load_settings(false),
+            CommandId::SetTheme(choice) => self.apply_theme(choice),
             // Like VS Code: hidden → show with the keyboard, shown → take the
             // keyboard, already focused → hide (keyboard back to the terminal).
             CommandId::ToggleExplorer => {
@@ -576,6 +577,7 @@ impl App {
             | CommandId::ZoomIn
             | CommandId::ZoomOut
             | CommandId::ZoomReset
+            | CommandId::SetTheme(_)
             | CommandId::About
             | CommandId::Website
             | CommandId::Quit
@@ -621,6 +623,10 @@ impl App {
                 || id.static_title().to_owned(),
                 |s| format!("New Tab with {}", s.name),
             ),
+            CommandId::SetTheme(t) if t == theme::current() => {
+                format!("Theme: {} (current)", t.name())
+            }
+            CommandId::SetTheme(t) => format!("Theme: {}", t.name()),
             CommandId::StartAgent(kind, false) => format!("Start {kind} in Project"),
             CommandId::StartAgent(kind, true) => format!("Start {kind} in Split"),
             CommandId::GoToTerminal(t) => match self.terminals.get(&t) {
@@ -680,6 +686,10 @@ impl App {
                 let id = CommandId::StartAgent(kind, split);
                 entries.push(entry(id, self.command_title(id)));
             }
+        }
+        for t in ThemeChoice::ALL {
+            let id = CommandId::SetTheme(t);
+            entries.push(entry(id, self.command_title(id)));
         }
         for id in self.mission_order() {
             let id = CommandId::GoToTerminal(id);

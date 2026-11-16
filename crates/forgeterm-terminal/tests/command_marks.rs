@@ -208,3 +208,40 @@ fn program_status_query_is_answered_and_reports_kept() {
     });
     session.input(b"exit\r".to_vec());
 }
+
+/// A theme change reaches programs that ask for the colors (OSC 11): the reply
+/// follows `Session::set_palette`. Unix only: ConPTY drops OSC replies (see above).
+#[cfg(unix)]
+#[test]
+fn color_query_follows_set_palette() {
+    let Some(shell) = detect_shells().into_iter().find(|s| {
+        matches!(s.kind, ShellKind::GitBash | ShellKind::Posix)
+            && s.program.to_ascii_lowercase().contains("bash")
+    }) else {
+        println!("no bash installed: skipped");
+        return;
+    };
+    let (session, rx) = spawn(&shell);
+    wait(&rx, "first prompt", || session.has_prompt_marks());
+    let ask = |n: u8| {
+        let cmd = format!(
+            r"printf '\e]11;?\e\\'; IFS= read -r -s -t 5 -d '\' r; echo bg{n}:${{r:1}}:end{}",
+            '\r'
+        );
+        session.input(cmd.into_bytes());
+    };
+    ask(1);
+    wait(&rx, "first reply", || {
+        screen(&session).contains("bg1:]11;rgb:0909/0d0d/1414")
+    });
+    let light = Palette {
+        background: forgeterm_terminal::Rgb::hex(0xF7F9FC),
+        ..Palette::default()
+    };
+    session.set_palette(&light);
+    ask(2);
+    wait(&rx, "reply after the theme change", || {
+        screen(&session).contains("bg2:]11;rgb:f7f7/f9f9/fcfc")
+    });
+    session.input(b"exit\r".to_vec());
+}

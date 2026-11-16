@@ -98,21 +98,25 @@ impl PromptStudio {
     /// Floating window. `target`: name of the terminal Insert goes to.
     pub fn view(&self, target: Option<&str>) -> Element<'_, Message> {
         let header = row![
-            text("Prompt Studio").size(16).color(theme::TEXT),
+            text("Prompt Studio").size(16).color(theme::text()),
             space::horizontal(),
             text(format!("Inserts into: {}", target.unwrap_or("no terminal")))
-                .size(12)
-                .color(theme::TEXT_MUTED),
+                .size(theme::size::SMALL)
+                .color(theme::text_muted()),
             plain_button("Dock beside terminal", Some(DOCK)),
             plain_button("×", Some(Message::PromptClose)),
         ]
-        .spacing(12)
+        .spacing(theme::space::XL)
         .align_y(iced::Alignment::Center);
 
         let body: Element<'_, Message> = match &self.library {
-            None => container(text("Loading templates…").size(13).color(theme::TEXT_MUTED))
-                .center(Length::Fill)
-                .into(),
+            None => container(
+                text("Loading templates…")
+                    .size(theme::size::BODY)
+                    .color(theme::text_muted()),
+            )
+            .center(Length::Fill)
+            .into(),
             Some(lib) => row![
                 self.view_list(lib, Length::Fixed(270.0)),
                 self.view_editor(false)
@@ -122,25 +126,27 @@ impl PromptStudio {
             .into(),
         };
 
-        let card =
-            container(column![header, body, self.view_footer(target.is_some(), false)].spacing(12))
-                .padding(16)
-                .width(Length::Fixed(940.0))
-                .height(Length::Fixed(620.0))
-                .style(|_| container::Style {
-                    background: Some(theme::SURFACE.into()),
-                    border: Border {
-                        color: theme::BORDER,
-                        width: 1.0,
-                        radius: 10.0.into(),
-                    },
-                    shadow: Shadow {
-                        color: Color::from_rgba(0.0, 0.0, 0.0, 0.55),
-                        offset: Vector::new(0.0, 12.0),
-                        blur_radius: 32.0,
-                    },
-                    ..Default::default()
-                });
+        let card = container(
+            column![header, body, self.view_footer(target.is_some(), false)]
+                .spacing(theme::space::XL),
+        )
+        .padding(16)
+        .width(Length::Fixed(940.0))
+        .height(Length::Fixed(620.0))
+        .style(|_| container::Style {
+            background: Some(theme::surface().into()),
+            border: Border {
+                color: theme::border(),
+                width: 1.0,
+                radius: theme::radius::XL.into(),
+            },
+            shadow: Shadow {
+                color: Color::from_rgba(0.0, 0.0, 0.0, 0.55),
+                offset: Vector::new(0.0, 12.0),
+                blur_radius: 32.0,
+            },
+            ..Default::default()
+        });
         let backdrop = container(opaque(card))
             .center(Length::Fill)
             .padding(16)
@@ -156,12 +162,14 @@ impl PromptStudio {
     /// click in a terminal gives it back).
     pub fn view_docked(&self, target: Option<&str>, focused: bool) -> Element<'_, Message> {
         let header = row![
-            text("Prompt Studio").size(14).color(theme::TEXT),
+            text("Prompt Studio")
+                .size(theme::size::LARGE)
+                .color(theme::text()),
             space::horizontal(),
             plain_button("Float", Some(DOCK)),
             plain_button("×", Some(Message::PromptClose)),
         ]
-        .spacing(6)
+        .spacing(theme::space::S)
         .align_y(iced::Alignment::Center);
         let target_line = text(format!(
             "Inserts into: {}{}",
@@ -172,18 +180,22 @@ impl PromptStudio {
                 ""
             }
         ))
-        .size(11)
-        .color(theme::TEXT_MUTED);
+        .size(theme::size::TINY)
+        .color(theme::text_muted());
 
         let body: Element<'_, Message> = match &self.library {
-            None => container(text("Loading templates…").size(13).color(theme::TEXT_MUTED))
-                .center(Length::Fill)
-                .into(),
+            None => container(
+                text("Loading templates…")
+                    .size(theme::size::BODY)
+                    .color(theme::text_muted()),
+            )
+            .center(Length::Fill)
+            .into(),
             Some(lib) => column![
                 container(self.view_list(lib, Length::Fill)).height(Length::FillPortion(2)),
                 container(self.view_editor(true)).height(Length::FillPortion(5)),
             ]
-            .spacing(10)
+            .spacing(theme::space::L)
             .height(Length::Fill)
             .into(),
         };
@@ -195,15 +207,19 @@ impl PromptStudio {
                 body,
                 self.view_footer(target.is_some(), true)
             ]
-            .spacing(8),
+            .spacing(theme::space::M),
         )
         .padding(12)
         .width(Length::Fixed(400.0))
         .height(Length::Fill)
         .style(move |_| container::Style {
-            background: Some(theme::SURFACE.into()),
+            background: Some(theme::surface().into()),
             border: Border {
-                color: if focused { theme::CYAN } else { theme::BORDER },
+                color: if focused {
+                    theme::cyan()
+                } else {
+                    theme::border()
+                },
                 width: 1.0,
                 radius: 0.0.into(),
             },
@@ -213,20 +229,22 @@ impl PromptStudio {
     }
 
     fn view_list<'a>(&'a self, lib: &'a Library, width: Length) -> Element<'a, Message> {
-        let mut list = column![].spacing(2);
+        let mut list = column![].spacing(theme::space::XXS);
         for (index, t) in lib.templates.iter().enumerate() {
             let selected = index == self.selected;
             let (tag, tag_color) = if t.is_builtin() {
-                ("built-in", theme::TEXT_MUTED)
+                ("built-in", theme::text_muted())
             } else {
-                ("yours", theme::MINT)
+                ("yours", theme::mint())
             };
             let content = row![
-                text(t.name.as_str()).size(13).color(theme::TEXT),
+                text(t.name.as_str())
+                    .size(theme::size::BODY)
+                    .color(theme::text()),
                 space::horizontal(),
-                text(tag).size(10).color(tag_color),
+                text(tag).size(theme::size::CAPTION).color(tag_color),
             ]
-            .spacing(6)
+            .spacing(theme::space::S)
             .align_y(iced::Alignment::Center);
             list = list.push(
                 mouse_area(
@@ -238,9 +256,13 @@ impl PromptStudio {
                 .on_press(Message::PromptSelect(index)),
             );
         }
-        let mut side = column![scrollable(list).height(Length::Fill),].spacing(8);
+        let mut side = column![scrollable(list).height(Length::Fill),].spacing(theme::space::M);
         for p in lib.problems.iter().take(3) {
-            side = side.push(text(p.as_str()).size(11).color(theme::AMBER));
+            side = side.push(
+                text(p.as_str())
+                    .size(theme::size::TINY)
+                    .color(theme::amber()),
+            );
         }
         side = side.push(
             row![
@@ -250,12 +272,12 @@ impl PromptStudio {
                 ),
                 plain_button("↻ Reload", Some(Message::Command(CommandId::ReloadPrompts))),
             ]
-            .spacing(6),
+            .spacing(theme::space::S),
         );
         side = side.push(
             text("Your own templates: .md files in that folder, with {{variables}}.")
-                .size(11)
-                .color(theme::TEXT_MUTED),
+                .size(theme::size::TINY)
+                .color(theme::text_muted()),
         );
         container(side).width(width).into()
     }
@@ -263,27 +285,37 @@ impl PromptStudio {
     /// `docked`: the narrow panel gives the fields more room than the preview.
     fn view_editor(&self, docked: bool) -> Element<'_, Message> {
         let Some(t) = self.current() else {
-            return container(text("No templates").size(13).color(theme::TEXT_MUTED))
-                .center(Length::Fill)
-                .into();
+            return container(
+                text("No templates")
+                    .size(theme::size::BODY)
+                    .color(theme::text_muted()),
+            )
+            .center(Length::Fill)
+            .into();
         };
-        let mut fields = column![].spacing(8);
+        let mut fields = column![].spacing(theme::space::M);
         if let Some(d) = &t.description {
-            fields = fields.push(text(d.as_str()).size(12).color(theme::TEXT_MUTED));
+            fields = fields.push(
+                text(d.as_str())
+                    .size(theme::size::SMALL)
+                    .color(theme::text_muted()),
+            );
         }
         for name in t.variables() {
             let auto = AUTO_VARIABLES.contains(&name.as_str());
             let label = row![
-                text(name.clone()).size(12).color(theme::CYAN),
+                text(name.clone())
+                    .size(theme::size::SMALL)
+                    .color(theme::cyan()),
                 text(if auto {
                     "filled in by ForgeTerm when known, editable"
                 } else {
                     ""
                 })
-                .size(10)
-                .color(theme::TEXT_MUTED),
+                .size(theme::size::CAPTION)
+                .color(theme::text_muted()),
             ]
-            .spacing(8);
+            .spacing(theme::space::M);
             if let Some(content) = self.editors.get(&name) {
                 fields = fields.push(column![label, field(content, name.clone())].spacing(3));
             }
@@ -294,8 +326,8 @@ impl PromptStudio {
             scrollable(
                 text(preview_text)
                     .font(TERMINAL_FONT)
-                    .size(12)
-                    .color(theme::TEXT),
+                    .size(theme::size::SMALL)
+                    .color(theme::text()),
             )
             .height(Length::Fill)
             .width(Length::Fill),
@@ -303,21 +335,23 @@ impl PromptStudio {
         .padding(10)
         .height(Length::Fill)
         .style(|_| container::Style {
-            background: Some(theme::OBSIDIAN.into()),
+            background: Some(theme::obsidian().into()),
             border: Border {
-                color: theme::BORDER,
+                color: theme::border(),
                 width: 1.0,
-                radius: 6.0.into(),
+                radius: theme::radius::M.into(),
             },
             ..Default::default()
         });
 
         column![
             scrollable(fields).height(Length::FillPortion(if docked { 3 } else { 1 })),
-            text("PREVIEW").size(11).color(theme::TEXT_MUTED),
+            text("PREVIEW")
+                .size(theme::size::TINY)
+                .color(theme::text_muted()),
             container(preview).height(Length::FillPortion(if docked { 2 } else { 1 })),
         ]
-        .spacing(8)
+        .spacing(theme::space::M)
         .width(Length::Fill)
         .into()
     }
@@ -329,15 +363,15 @@ impl PromptStudio {
         let ready = rendered.as_ref().is_some_and(|r| r.missing.is_empty());
         let status = match &rendered {
             Some(r) if !r.missing.is_empty() => text(format!("Fill in: {}", r.missing.join(", ")))
-                .size(12)
-                .color(theme::AMBER),
+                .size(theme::size::SMALL)
+                .color(theme::amber()),
             Some(_) if !has_target => text("No terminal to insert into; Copy still works.")
-                .size(12)
-                .color(theme::AMBER),
+                .size(theme::size::SMALL)
+                .color(theme::amber()),
             Some(_) => text("Inserted at the prompt without Enter: you decide when to send it.")
-                .size(12)
-                .color(theme::TEXT_MUTED),
-            None => text("").size(12),
+                .size(theme::size::SMALL)
+                .color(theme::text_muted()),
+            None => text("").size(theme::size::SMALL),
         };
         let has_text = rendered.as_ref().is_some_and(|r| !r.text.is_empty());
         let buttons = row![
@@ -351,13 +385,13 @@ impl PromptStudio {
                 (ready && has_target).then_some(Message::Command(CommandId::InsertPrompt))
             ),
         ]
-        .spacing(8)
+        .spacing(theme::space::M)
         .align_y(iced::Alignment::Center);
         if stacked {
-            column![status, buttons].spacing(6).into()
+            column![status, buttons].spacing(theme::space::S).into()
         } else {
             row![status, buttons]
-                .spacing(8)
+                .spacing(theme::space::M)
                 .align_y(iced::Alignment::Center)
                 .into()
         }
@@ -371,7 +405,7 @@ fn field(content: &text_editor::Content, name: String) -> Element<'_, Message> {
     text_editor(content)
         .placeholder("type a value…")
         .on_action(move |a| Message::PromptEdit(name.clone(), a))
-        .size(13)
+        .size(theme::size::BODY)
         .padding([6, 8])
         .min_height(30.0)
         .max_height(110.0)
@@ -382,29 +416,33 @@ fn field(content: &text_editor::Content, name: String) -> Element<'_, Message> {
 fn editor_style(_: &iced::Theme, status: text_editor::Status) -> text_editor::Style {
     let focused = matches!(status, text_editor::Status::Focused { .. });
     text_editor::Style {
-        background: theme::GRAPHITE.into(),
+        background: theme::graphite().into(),
         border: Border {
-            color: if focused { theme::CYAN } else { theme::BORDER },
+            color: if focused {
+                theme::cyan()
+            } else {
+                theme::border()
+            },
             width: 1.0,
-            radius: 6.0.into(),
+            radius: theme::radius::M.into(),
         },
-        placeholder: theme::TEXT_MUTED,
-        value: theme::TEXT,
-        selection: theme::SELECTION,
+        placeholder: theme::text_muted(),
+        value: theme::text(),
+        selection: theme::selection(),
     }
 }
 
 fn selectable(selected: bool) -> container::Style {
     container::Style {
-        background: selected.then(|| theme::ELEVATED.into()),
+        background: selected.then(|| theme::elevated().into()),
         border: Border {
             color: if selected {
-                theme::CYAN
+                theme::cyan()
             } else {
                 Color::TRANSPARENT
             },
             width: if selected { 1.0 } else { 0.0 },
-            radius: 6.0.into(),
+            radius: theme::radius::M.into(),
         },
         ..Default::default()
     }
@@ -412,7 +450,7 @@ fn selectable(selected: bool) -> container::Style {
 
 fn plain_button(label: &str, on_press: Option<Message>) -> Element<'_, Message> {
     let enabled = on_press.is_some();
-    button(text(label).size(12))
+    button(text(label).size(theme::size::SMALL))
         .on_press_maybe(on_press)
         .padding([6, 12])
         .style(move |_, status| {
@@ -420,21 +458,21 @@ fn plain_button(label: &str, on_press: Option<Message>) -> Element<'_, Message> 
             button::Style {
                 background: Some(
                     if hovered {
-                        theme::ELEVATED
+                        theme::elevated()
                     } else {
-                        theme::GRAPHITE
+                        theme::graphite()
                     }
                     .into(),
                 ),
                 text_color: if !enabled {
-                    theme::DISABLED
+                    theme::disabled()
                 } else if hovered {
-                    theme::CYAN
+                    theme::cyan()
                 } else {
-                    theme::TEXT
+                    theme::text()
                 },
                 border: Border {
-                    color: theme::BORDER,
+                    color: theme::border(),
                     width: 1.0,
                     radius: 5.0.into(),
                 },
@@ -446,7 +484,7 @@ fn plain_button(label: &str, on_press: Option<Message>) -> Element<'_, Message> 
 
 fn primary_button(label: &str, on_press: Option<Message>) -> Element<'_, Message> {
     let enabled = on_press.is_some();
-    button(text(label).size(12))
+    button(text(label).size(theme::size::SMALL))
         .on_press_maybe(on_press)
         .padding([6, 14])
         .style(move |_, status| {
@@ -454,21 +492,25 @@ fn primary_button(label: &str, on_press: Option<Message>) -> Element<'_, Message
             button::Style {
                 background: Some(
                     if !enabled {
-                        theme::GRAPHITE
+                        theme::graphite()
                     } else if hovered {
-                        theme::MINT
+                        theme::mint()
                     } else {
-                        theme::CYAN
+                        theme::cyan()
                     }
                     .into(),
                 ),
                 text_color: if enabled {
-                    theme::OBSIDIAN
+                    theme::obsidian()
                 } else {
-                    theme::DISABLED
+                    theme::disabled()
                 },
                 border: Border {
-                    color: if enabled { theme::CYAN } else { theme::BORDER },
+                    color: if enabled {
+                        theme::cyan()
+                    } else {
+                        theme::border()
+                    },
                     width: 1.0,
                     radius: 5.0.into(),
                 },

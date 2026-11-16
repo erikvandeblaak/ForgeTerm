@@ -76,7 +76,7 @@ pub fn bytes(n: u64) -> String {
 
 /// One row per terminal: (label, shell pid).
 pub fn view(m: &Monitor, terminals: Vec<(String, u32)>) -> Element<'_, Message> {
-    let mut body = column![].spacing(10);
+    let mut body = column![].spacing(theme::space::L);
     body = body.push(section("SYSTEM"));
     match &m.last {
         None => body = body.push(muted("Measuring…")),
@@ -105,9 +105,11 @@ pub fn view(m: &Monitor, terminals: Vec<(String, u32)>) -> Element<'_, Message> 
             ));
             body = body.push(
                 row![
-                    text("GPU").size(12).color(theme::TEXT),
+                    text("GPU").size(theme::size::SMALL).color(theme::text()),
                     space::horizontal(),
-                    text("not measured").size(12).color(theme::TEXT_MUTED),
+                    text("not measured")
+                        .size(theme::size::SMALL)
+                        .color(theme::text_muted()),
                 ]
                 .align_y(iced::Alignment::Center),
             );
@@ -125,13 +127,13 @@ pub fn view(m: &Monitor, terminals: Vec<(String, u32)>) -> Element<'_, Message> 
                 let mut col = column![
                     row![
                         text(label)
-                            .size(12)
-                            .color(theme::TEXT)
+                            .size(theme::size::SMALL)
+                            .color(theme::text())
                             .wrapping(text::Wrapping::None),
                         space::horizontal(),
                         text(format!("{cpu} · {}", bytes(t.memory)))
-                            .size(12)
-                            .color(theme::CYAN),
+                            .size(theme::size::SMALL)
+                            .color(theme::cyan()),
                     ]
                     .align_y(iced::Alignment::Center),
                     text(format!(
@@ -144,8 +146,8 @@ pub fn view(m: &Monitor, terminals: Vec<(String, u32)>) -> Element<'_, Message> 
                             format!(" · {}", t.programs.join(", "))
                         }
                     ))
-                    .size(10)
-                    .color(theme::TEXT_MUTED),
+                    .size(theme::size::CAPTION)
+                    .color(theme::text_muted()),
                 ]
                 .spacing(1);
                 col = col.padding([2, 0]);
@@ -162,7 +164,9 @@ pub fn view(m: &Monitor, terminals: Vec<(String, u32)>) -> Element<'_, Message> 
 
     container(
         column![
-            text("MONITOR").size(11).color(theme::TEXT_MUTED),
+            text("MONITOR")
+                .size(theme::size::TINY)
+                .color(theme::text_muted()),
             scrollable(body.padding(iced::Padding {
                 top: 0.0,
                 right: 14.0,
@@ -171,15 +175,15 @@ pub fn view(m: &Monitor, terminals: Vec<(String, u32)>) -> Element<'_, Message> 
             }))
             .height(Length::Fill),
         ]
-        .spacing(8),
+        .spacing(theme::space::M),
     )
     .padding([10, 10])
     .width(Length::Fixed(WIDTH))
     .height(Length::Fill)
     .style(|_| container::Style {
-        background: Some(theme::GRAPHITE.into()),
+        background: Some(theme::graphite().into()),
         border: Border {
-            color: theme::BORDER,
+            color: theme::border(),
             width: 1.0,
             radius: 0.0.into(),
         },
@@ -189,26 +193,32 @@ pub fn view(m: &Monitor, terminals: Vec<(String, u32)>) -> Element<'_, Message> 
 }
 
 fn section(title: &str) -> Element<'_, Message> {
-    text(title).size(11).color(theme::TEXT_MUTED).into()
+    text(title)
+        .size(theme::size::TINY)
+        .color(theme::text_muted())
+        .into()
 }
 
 fn muted(s: &str) -> Element<'_, Message> {
-    text(s).size(11).color(theme::TEXT_MUTED).into()
+    text(s)
+        .size(theme::size::TINY)
+        .color(theme::text_muted())
+        .into()
 }
 
 fn metric<'a>(title: String, value: String, history: &'a VecDeque<f32>) -> Element<'a, Message> {
     column![
         row![
-            text(title).size(12).color(theme::TEXT),
+            text(title).size(theme::size::SMALL).color(theme::text()),
             space::horizontal(),
-            text(value).size(12).color(theme::TEXT),
+            text(value).size(theme::size::SMALL).color(theme::text()),
         ]
         .align_y(iced::Alignment::Center),
         Canvas::new(Sparkline { history })
             .width(Length::Fill)
             .height(46),
     ]
-    .spacing(4)
+    .spacing(theme::space::XS)
     .into()
 }
 
@@ -250,17 +260,17 @@ impl canvas::Program<Message> for Sparkline<'_> {
     ) -> Vec<Geometry> {
         let mut frame = Frame::new(renderer, bounds.size());
         let (w, h) = (bounds.width, bounds.height);
-        frame.fill_rectangle(Point::ORIGIN, bounds.size(), theme::OBSIDIAN);
+        frame.fill_rectangle(Point::ORIGIN, bounds.size(), theme::obsidian());
         // Recessive grid: 50 % line and the baseline.
         frame.fill_rectangle(
             Point::new(0.0, h / 2.0),
             Size::new(w, 1.0),
             Color {
                 a: 0.5,
-                ..theme::BORDER
+                ..theme::border()
             },
         );
-        frame.fill_rectangle(Point::new(0.0, h - 1.0), Size::new(w, 1.0), theme::BORDER);
+        frame.fill_rectangle(Point::new(0.0, h - 1.0), Size::new(w, 1.0), theme::border());
 
         let n = self.history.len();
         let step = w / (HISTORY.saturating_sub(1).max(1)) as f32;
@@ -292,13 +302,13 @@ impl canvas::Program<Message> for Sparkline<'_> {
                 &area,
                 Color {
                     a: 0.15,
-                    ..theme::CHART_CYAN
+                    ..theme::chart_cyan()
                 },
             );
             frame.stroke(
                 &line,
                 Stroke::default()
-                    .with_color(theme::CHART_CYAN)
+                    .with_color(theme::chart_cyan())
                     .with_width(2.0),
             );
         }
@@ -316,10 +326,10 @@ impl canvas::Program<Message> for Sparkline<'_> {
                     Size::new(1.0, h),
                     Color {
                         a: 0.6,
-                        ..theme::TEXT_MUTED
+                        ..theme::text_muted()
                     },
                 );
-                frame.fill(&Path::circle(at, 3.0), theme::CHART_CYAN);
+                frame.fill(&Path::circle(at, 3.0), theme::chart_cyan());
                 let ago = from_right as u32 * INTERVAL_SECS;
                 let label = if ago == 0 {
                     format!("{:.0} % now", self.history[i])
@@ -334,7 +344,7 @@ impl canvas::Program<Message> for Sparkline<'_> {
                 frame.fill_text(Text {
                     content: label,
                     position: Point::new(x.max(2.0), 2.0),
-                    color: theme::TEXT,
+                    color: theme::text(),
                     size: iced::Pixels(11.0),
                     ..Text::default()
                 });

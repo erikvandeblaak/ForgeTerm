@@ -64,6 +64,9 @@ impl App {
             None => launch_dir(),
         };
 
+        if startup || old.appearance.theme != new.appearance.theme {
+            self.apply_theme(new.appearance.theme);
+        }
         let (t_old, t_new) = (&old.terminal, &new.terminal);
         if startup || t_old.font_size != t_new.font_size {
             self.set_font_size(t_new.font_size);
@@ -97,6 +100,24 @@ impl App {
             tracing::warn!("settings: {p}");
         }
         self.settings_problems = problems;
+    }
+
+    /// Makes `choice` the active theme and redraws everything that caches colors:
+    /// terminal snapshots carry resolved colors, canvases keep their geometry.
+    pub(super) fn apply_theme(&mut self, choice: ThemeChoice) {
+        theme::set(choice);
+        self.palette = theme::terminal_palette();
+        for t in self.terminals.values_mut() {
+            if let Some(session) = t.session() {
+                session.set_palette(&self.palette);
+            }
+            t.refresh(&self.palette);
+            t.cache.clear();
+            t.preview_cache.clear();
+        }
+        for tab in &self.viewer.tabs {
+            tab.cache.clear();
+        }
     }
 
     pub(super) fn settings_changed_on_disk(&self) -> bool {

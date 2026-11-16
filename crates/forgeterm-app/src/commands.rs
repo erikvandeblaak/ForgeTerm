@@ -8,6 +8,7 @@
 use std::fmt;
 
 use forgeterm_agents::AgentKind;
+use forgeterm_settings::ThemeChoice;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Dir {
@@ -123,6 +124,8 @@ pub enum CommandId {
     WorktreeTerminal(u64),
     GitRefresh,
     GitShowHistory,
+    /// Switches the color theme for this session (settings.toml keeps the default).
+    SetTheme(ThemeChoice),
     About,
     /// Opens the maker's website ([`WEBSITE`]) in the default browser.
     Website,
@@ -269,7 +272,7 @@ impl CommandId {
     pub fn category(self) -> &'static str {
         use CommandId::*;
         match self {
-            CommandPalette | ZoomIn | ZoomOut | ZoomReset | ToggleMonitor => "View",
+            CommandPalette | ZoomIn | ZoomOut | ZoomReset | ToggleMonitor | SetTheme(_) => "View",
             NewTab | NewTabWithShell(_) | CloseTab | CloseTabAt(_) | NextTab | PreviousTab
             | SelectTab(_) => "Tab",
             SplitRight | SplitDown | ClosePane | TogglePaneZoom | FocusPane(_) => "Pane",
@@ -349,6 +352,7 @@ impl CommandId {
                     }
                 );
             }
+            SetTheme(t) => return format!("theme_{}", t.id().replace('-', "_")),
             StartAgent(kind, split) => {
                 let agent = match kind {
                     AgentKind::ClaudeCode => "claude_code",
@@ -445,7 +449,8 @@ impl CommandId {
                     CommandId::StartAgent(*k, false),
                     CommandId::StartAgent(*k, true),
                 ]
-            }));
+            }))
+            .chain(ThemeChoice::ALL.map(CommandId::SetTheme));
         // The palette itself is not in STATIC_COMMANDS (it does not list itself).
         STATIC_COMMANDS
             .iter()
@@ -505,6 +510,7 @@ impl CommandId {
             ToggleAiPanel => "Toggle AI Workspace",
             AiRefresh => "Refresh Agents and Project Context",
             StartAgent(..) => "Start Agent",
+            SetTheme(_) => "Theme",
             ToggleMissionControl => "Mission Control (Agents Dashboard)",
             GoToTerminal(_) => "Go to Terminal",
             TerminalFolder(_) => "Show Terminal Folder in Explorer",
@@ -1016,6 +1022,7 @@ mod tests {
             all.push(CommandId::StartAgent(k, false));
             all.push(CommandId::StartAgent(k, true));
         }
+        all.extend(ThemeChoice::ALL.map(CommandId::SetTheme));
         let mut seen = std::collections::HashSet::new();
         for id in all {
             let name = id.config_name();

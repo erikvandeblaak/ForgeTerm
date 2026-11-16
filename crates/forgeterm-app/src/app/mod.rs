@@ -7,7 +7,7 @@ use std::time::{Duration, SystemTime};
 
 use forgeterm_agents::{Agent, AgentKind, ProjectContext};
 use forgeterm_explorer::{Listing, Tree, list_dir};
-use forgeterm_settings::Settings;
+use forgeterm_settings::{Settings, ThemeChoice};
 use forgeterm_terminal::{
     Palette, SessionEvent, ShellSpec, detect_shells, paste_needs_confirmation, quote_path,
 };
@@ -384,7 +384,7 @@ impl App {
             workspace: Workspace::default(),
             next_id: 1,
             shells: detect_shells(),
-            palette: Palette::default(),
+            palette: theme::terminal_palette(),
             metrics: Metrics::new(Settings::default().terminal.font_size),
             pending_paste: None,
             error: None,

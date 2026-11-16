@@ -144,7 +144,10 @@ impl GitState {
     /// Status-bar text: `main ↑1 ↓2 · 3 changed`; `None` outside a repository.
     pub fn summary(&self) -> Option<(String, Color)> {
         if let Some(Repo::Untrusted { .. }) = &self.repo {
-            return Some(("git paused (repository runs programs)".into(), theme::AMBER));
+            return Some((
+                "git paused (repository runs programs)".into(),
+                theme::amber(),
+            ));
         }
         let status = self.status()?;
         let b = &status.branch;
@@ -158,13 +161,13 @@ impl GitState {
         let conflicts = status.conflicted().count();
         let color = if conflicts > 0 {
             s.push_str(&format!(" · {conflicts} conflict{}", plural(conflicts)));
-            theme::CORAL
+            theme::coral()
         } else if status.change_count() > 0 {
             s.push_str(&format!(" · {} changed", status.change_count()));
-            theme::AMBER
+            theme::amber()
         } else {
             s.push_str(" · clean");
-            theme::MINT
+            theme::mint()
         };
         Some((s, color))
     }
@@ -200,7 +203,9 @@ fn plural(n: usize) -> &'static str {
 
 pub fn view(git: &GitState) -> Element<'_, Message> {
     let header = row![
-        text("GIT").size(11).color(theme::TEXT_MUTED),
+        text("GIT")
+            .size(theme::size::TINY)
+            .color(theme::text_muted()),
         space::horizontal(),
         small_button(
             "↻",
@@ -210,7 +215,7 @@ pub fn view(git: &GitState) -> Element<'_, Message> {
     ]
     .align_y(iced::Alignment::Center);
 
-    let mut body = column![].spacing(10);
+    let mut body = column![].spacing(theme::space::L);
     match &git.repo {
         None => body = body.push(muted("Reading…")),
         Some(Repo::Outside) => {
@@ -222,8 +227,8 @@ pub fn view(git: &GitState) -> Element<'_, Message> {
         Some(Repo::Untrusted { programs, .. }) => {
             body = body.push(
                 text("Automatic Git status is paused for this repository.")
-                    .size(13)
-                    .color(theme::AMBER),
+                    .size(theme::size::BODY)
+                    .color(theme::amber()),
             );
             body = body.push(muted(
                 "Its own configuration (.git/config) makes git run these programs, \
@@ -232,9 +237,9 @@ pub fn view(git: &GitState) -> Element<'_, Message> {
             for p in programs.iter().take(8) {
                 body = body.push(
                     text(p.as_str())
-                        .size(11)
+                        .size(theme::size::TINY)
                         .font(TERMINAL_FONT)
-                        .color(theme::TEXT)
+                        .color(theme::text())
                         .wrapping(text::Wrapping::Glyph),
                 );
             }
@@ -249,14 +254,22 @@ pub fn view(git: &GitState) -> Element<'_, Message> {
             ));
         }
         Some(Repo::Error(e)) => {
-            body = body.push(text(e.as_str()).size(12).color(theme::CORAL));
+            body = body.push(
+                text(e.as_str())
+                    .size(theme::size::SMALL)
+                    .color(theme::coral()),
+            );
         }
         Some(Repo::Found { root, status }) => {
             body = body.push(branch_block(root, status));
             if let Some(result) = &git.last_action {
                 body = body.push(match result {
-                    Ok(m) => text(m.as_str()).size(12).color(theme::MINT),
-                    Err(e) => text(e.as_str()).size(12).color(theme::CORAL),
+                    Ok(m) => text(m.as_str())
+                        .size(theme::size::SMALL)
+                        .color(theme::mint()),
+                    Err(e) => text(e.as_str())
+                        .size(theme::size::SMALL)
+                        .color(theme::coral()),
                 });
             }
             body = body.push(section(
@@ -309,15 +322,15 @@ pub fn view(git: &GitState) -> Element<'_, Message> {
             }))
             .height(Length::Fill)
         ]
-        .spacing(8),
+        .spacing(theme::space::M),
     )
     .padding([10, 10])
     .width(Length::Fixed(WIDTH))
     .height(Length::Fill)
     .style(|_| container::Style {
-        background: Some(theme::GRAPHITE.into()),
+        background: Some(theme::graphite().into()),
         border: Border {
-            color: theme::BORDER,
+            color: theme::border(),
             width: 1.0,
             radius: 0.0.into(),
         },
@@ -339,14 +352,20 @@ fn branch_block<'a>(root: &'a std::path::Path, status: &'a Status) -> Element<'a
     };
     column![
         row![
-            text(b.label()).size(14).color(theme::CYAN),
+            text(b.label())
+                .size(theme::size::LARGE)
+                .color(theme::cyan()),
             space::horizontal(),
-            text(name).size(11).color(theme::TEXT_MUTED),
+            text(name)
+                .size(theme::size::TINY)
+                .color(theme::text_muted()),
         ]
         .align_y(iced::Alignment::Center),
-        text(upstream).size(11).color(theme::TEXT_MUTED),
+        text(upstream)
+            .size(theme::size::TINY)
+            .color(theme::text_muted()),
     ]
-    .spacing(2)
+    .spacing(theme::space::XXS)
     .into()
 }
 
@@ -378,11 +397,11 @@ fn section<'a>(
     };
     let mut head = row![
         text(format!("{title} ({})", entries.len()))
-            .size(11)
+            .size(theme::size::TINY)
             .color(if kind == RowKind::Conflict {
-                theme::CORAL
+                theme::coral()
             } else {
-                theme::TEXT_MUTED
+                theme::text_muted()
             }),
         space::horizontal(),
     ]
@@ -390,7 +409,7 @@ fn section<'a>(
     if let Some((label, msg, tip)) = all_action {
         head = head.push(small_button(label, (!busy).then_some(msg), tip));
     }
-    let mut list = column![head].spacing(2);
+    let mut list = column![head].spacing(theme::space::XXS);
     for e in entries.iter().take(MAX_ROWS) {
         list = list.push(entry_row(e, kind, busy));
     }
@@ -405,18 +424,18 @@ fn section<'a>(
 
 fn entry_row<'a>(e: &'a Entry, kind: RowKind, busy: bool) -> Element<'a, Message> {
     let (letter, color, diff_kind) = match kind {
-        RowKind::Conflict => ('!', theme::CORAL, DiffKind::Unstaged),
+        RowKind::Conflict => ('!', theme::coral(), DiffKind::Unstaged),
         RowKind::Staged => (
             e.staged.map_or('?', Change::letter),
-            theme::MINT,
+            theme::mint(),
             DiffKind::Staged,
         ),
         RowKind::Unstaged => (
             e.unstaged.map_or('?', Change::letter),
-            theme::AMBER,
+            theme::amber(),
             DiffKind::Unstaged,
         ),
-        RowKind::Untracked => ('U', theme::VIOLET, DiffKind::Untracked),
+        RowKind::Untracked => ('U', theme::violet(), DiffKind::Untracked),
     };
     let (dir, file) = match e.path.rsplit_once('/') {
         Some((d, f)) => (d, f),
@@ -424,21 +443,21 @@ fn entry_row<'a>(e: &'a Entry, kind: RowKind, busy: bool) -> Element<'a, Message
     };
     let mut label = row![
         text(letter.to_string())
-            .size(12)
+            .size(theme::size::SMALL)
             .font(TERMINAL_FONT)
             .color(color),
         text(file)
-            .size(12)
-            .color(theme::TEXT)
+            .size(theme::size::SMALL)
+            .color(theme::text())
             .wrapping(text::Wrapping::None),
     ]
-    .spacing(6)
+    .spacing(theme::space::S)
     .align_y(iced::Alignment::Center);
     if !dir.is_empty() {
         label = label.push(
             text(dir)
-                .size(10)
-                .color(theme::TEXT_MUTED)
+                .size(theme::size::CAPTION)
+                .color(theme::text_muted())
                 .wrapping(text::Wrapping::None),
         );
     }
@@ -450,14 +469,14 @@ fn entry_row<'a>(e: &'a Entry, kind: RowKind, busy: bool) -> Element<'a, Message
     let open = tooltip(
         mouse_area(container(label).width(Length::Fill).clip(true))
             .on_press(Message::GitShowDiff(e.path.clone(), diff_kind)),
-        container(text(tip).size(11).color(theme::TEXT))
+        container(text(tip).size(theme::size::TINY).color(theme::text()))
             .padding(6)
             .style(|_| container::Style {
-                background: Some(theme::ELEVATED.into()),
+                background: Some(theme::elevated().into()),
                 border: Border {
-                    color: theme::BORDER,
+                    color: theme::border(),
                     width: 1.0,
-                    radius: 4.0.into(),
+                    radius: theme::radius::S.into(),
                 },
                 ..Default::default()
             }),
@@ -477,7 +496,9 @@ fn entry_row<'a>(e: &'a Entry, kind: RowKind, busy: bool) -> Element<'a, Message
         // Staging a conflict marks it resolved; that is left to the terminal.
         RowKind::Conflict => None,
     };
-    let mut r = row![open].spacing(4).align_y(iced::Alignment::Center);
+    let mut r = row![open]
+        .spacing(theme::space::XS)
+        .align_y(iced::Alignment::Center);
     if let Some(a) = action {
         r = r.push(a);
     }
@@ -489,22 +510,26 @@ fn commit_box<'a>(git: &'a GitState, status: &'a Status) -> Element<'a, Message>
     let editor = text_editor(&git.commit_message)
         .placeholder("Commit message")
         .on_action(Message::GitCommitEdit)
-        .size(12)
+        .size(theme::size::SMALL)
         .padding([6, 8])
         .min_height(52.0)
         .max_height(140.0)
         .style(|_, status| {
             let focused = matches!(status, text_editor::Status::Focused { .. });
             text_editor::Style {
-                background: theme::OBSIDIAN.into(),
+                background: theme::obsidian().into(),
                 border: Border {
-                    color: if focused { theme::CYAN } else { theme::BORDER },
+                    color: if focused {
+                        theme::cyan()
+                    } else {
+                        theme::border()
+                    },
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: theme::radius::M.into(),
                 },
-                placeholder: theme::TEXT_MUTED,
-                value: theme::TEXT,
-                selection: theme::SELECTION,
+                placeholder: theme::text_muted(),
+                value: theme::text(),
+                selection: theme::selection(),
             }
         });
     let label = if git.action_running {
@@ -520,7 +545,9 @@ fn commit_box<'a>(git: &'a GitState, status: &'a Status) -> Element<'a, Message>
         "Runs git commit (including the repository's hooks)."
     };
     column![
-        text("COMMIT").size(11).color(theme::TEXT_MUTED),
+        text("COMMIT")
+            .size(theme::size::TINY)
+            .color(theme::text_muted()),
         editor,
         row![
             space::horizontal(),
@@ -533,15 +560,26 @@ fn commit_box<'a>(git: &'a GitState, status: &'a Status) -> Element<'a, Message>
         ],
         muted(hint),
     ]
-    .spacing(6)
+    .spacing(theme::space::S)
     .into()
 }
 
 fn log_block(log: Option<&Result<Vec<Commit>, String>>) -> Element<'_, Message> {
-    let mut list = column![text("RECENT COMMITS").size(11).color(theme::TEXT_MUTED)].spacing(4);
+    let mut list = column![
+        text("RECENT COMMITS")
+            .size(theme::size::TINY)
+            .color(theme::text_muted())
+    ]
+    .spacing(theme::space::XS);
     match log {
         None => list = list.push(muted("Reading…")),
-        Some(Err(e)) => list = list.push(text(e.as_str()).size(11).color(theme::CORAL)),
+        Some(Err(e)) => {
+            list = list.push(
+                text(e.as_str())
+                    .size(theme::size::TINY)
+                    .color(theme::coral()),
+            )
+        }
         Some(Ok(commits)) if commits.is_empty() => list = list.push(muted("No commits yet.")),
         Some(Ok(commits)) => {
             for c in commits {
@@ -549,18 +587,18 @@ fn log_block(log: Option<&Result<Vec<Commit>, String>>) -> Element<'_, Message> 
                     column![
                         row![
                             text(c.hash.as_str())
-                                .size(11)
+                                .size(theme::size::TINY)
                                 .font(TERMINAL_FONT)
-                                .color(theme::CYAN),
+                                .color(theme::cyan()),
                             text(c.subject.as_str())
-                                .size(12)
-                                .color(theme::TEXT)
+                                .size(theme::size::SMALL)
+                                .color(theme::text())
                                 .wrapping(text::Wrapping::None),
                         ]
-                        .spacing(6),
+                        .spacing(theme::space::S),
                         text(format!("{} · {}", c.author, c.when))
-                            .size(10)
-                            .color(theme::TEXT_MUTED),
+                            .size(theme::size::CAPTION)
+                            .color(theme::text_muted()),
                     ]
                     .spacing(1),
                 );
@@ -574,12 +612,21 @@ fn log_block(log: Option<&Result<Vec<Commit>, String>>) -> Element<'_, Message> 
 const MAX_BRANCHES: usize = 40;
 
 fn branches_block(git: &GitState) -> Element<'_, Message> {
-    let mut list = column![text("BRANCHES").size(11).color(theme::TEXT_MUTED)].spacing(3);
+    let mut list = column![
+        text("BRANCHES")
+            .size(theme::size::TINY)
+            .color(theme::text_muted())
+    ]
+    .spacing(3);
     let branches = match &git.branches {
         None => return list.push(muted("Reading…")).into(),
         Some(Err(e)) => {
             return list
-                .push(text(e.as_str()).size(11).color(theme::CORAL))
+                .push(
+                    text(e.as_str())
+                        .size(theme::size::TINY)
+                        .color(theme::coral()),
+                )
                 .into();
         }
         Some(Ok(b)) => b,
@@ -589,7 +636,7 @@ fn branches_block(git: &GitState) -> Element<'_, Message> {
         list = list.push(
             container(
                 column![
-                    text(format!("Switch to {target}?")).size(12).color(theme::TEXT),
+                    text(format!("Switch to {target}?")).size(theme::size::SMALL).color(theme::text()),
                     muted("git switch keeps your uncommitted changes, or refuses if they would be overwritten."),
                     row![
                         space::horizontal(),
@@ -600,17 +647,17 @@ fn branches_block(git: &GitState) -> Element<'_, Message> {
                             "git switch"
                         ),
                     ]
-                    .spacing(6),
+                    .spacing(theme::space::S),
                 ]
-                .spacing(4),
+                .spacing(theme::space::XS),
             )
             .padding(6)
             .style(|_| container::Style {
-                background: Some(theme::ELEVATED.into()),
+                background: Some(theme::elevated().into()),
                 border: Border {
-                    color: theme::AMBER,
+                    color: theme::amber(),
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: theme::radius::M.into(),
                 },
                 ..Default::default()
             }),
@@ -629,14 +676,22 @@ fn branches_block(git: &GitState) -> Element<'_, Message> {
             info.push_str(" (upstream gone)");
         }
         let name = text(info)
-            .size(12)
-            .color(if b.current { theme::CYAN } else { theme::TEXT })
+            .size(theme::size::SMALL)
+            .color(if b.current {
+                theme::cyan()
+            } else {
+                theme::text()
+            })
             .wrapping(text::Wrapping::None);
         let mut r = row![container(name).width(Length::Fill).clip(true)]
-            .spacing(4)
+            .spacing(theme::space::XS)
             .align_y(iced::Alignment::Center);
         if b.current {
-            r = r.push(text("current").size(10).color(theme::TEXT_MUTED));
+            r = r.push(
+                text("current")
+                    .size(theme::size::CAPTION)
+                    .color(theme::text_muted()),
+            );
         } else {
             r = r.push(small_button(
                 "Switch",
@@ -658,23 +713,23 @@ fn branches_block(git: &GitState) -> Element<'_, Message> {
     let input = text_input("new-branch-name", &git.new_branch)
         .on_input(Message::GitNewBranchName)
         .on_submit_maybe(name_ok.then_some(Message::GitCreateBranch))
-        .size(12)
+        .size(theme::size::SMALL)
         .padding([4, 6])
         .style(|_, status| text_input::Style {
-            background: theme::OBSIDIAN.into(),
+            background: theme::obsidian().into(),
             border: Border {
                 color: if matches!(status, text_input::Status::Focused { .. }) {
-                    theme::CYAN
+                    theme::cyan()
                 } else {
-                    theme::BORDER
+                    theme::border()
                 },
                 width: 1.0,
-                radius: 4.0.into(),
+                radius: theme::radius::S.into(),
             },
-            icon: theme::TEXT_MUTED,
-            placeholder: theme::TEXT_MUTED,
-            value: theme::TEXT,
-            selection: theme::SELECTION,
+            icon: theme::text_muted(),
+            placeholder: theme::text_muted(),
+            value: theme::text(),
+            selection: theme::selection(),
         });
     list = list.push(
         row![
@@ -685,7 +740,7 @@ fn branches_block(git: &GitState) -> Element<'_, Message> {
                 "git switch -c <name> (from the current commit)"
             )
         ]
-        .spacing(4)
+        .spacing(theme::space::XS)
         .align_y(iced::Alignment::Center),
     );
 
@@ -698,8 +753,12 @@ fn branches_block(git: &GitState) -> Element<'_, Message> {
             remote.len()
         );
         list = list.push(
-            mouse_area(text(label).size(11).color(theme::TEXT_MUTED))
-                .on_press(Message::Command(CommandId::GitToggleRemoteBranches)),
+            mouse_area(
+                text(label)
+                    .size(theme::size::TINY)
+                    .color(theme::text_muted()),
+            )
+            .on_press(Message::Command(CommandId::GitToggleRemoteBranches)),
         );
         if git.show_remotes {
             for b in remote.iter().take(MAX_BRANCHES) {
@@ -709,14 +768,14 @@ fn branches_block(git: &GitState) -> Element<'_, Message> {
                 let mut r = row![
                     container(
                         text(b.name.as_str())
-                            .size(12)
-                            .color(theme::TEXT)
+                            .size(theme::size::SMALL)
+                            .color(theme::text())
                             .wrapping(text::Wrapping::None)
                     )
                     .width(Length::Fill)
                     .clip(true)
                 ]
-                .spacing(4)
+                .spacing(theme::space::XS)
                 .align_y(iced::Alignment::Center);
                 if !tracked {
                     r = r.push(small_button(
@@ -750,7 +809,7 @@ pub fn activity_chart(activity: &Activity) -> Element<'_, Message> {
         activity.total
     );
     let mut bars = row![]
-        .spacing(2)
+        .spacing(theme::space::XXS)
         .align_y(iced::Alignment::End)
         .height(CHART_HEIGHT);
     for (day, count) in &activity.days {
@@ -764,7 +823,7 @@ pub fn activity_chart(activity: &Activity) -> Element<'_, Message> {
             .width(Length::Fill)
             .height(height)
             .style(|_| container::Style {
-                background: Some(theme::CHART_CYAN.into()),
+                background: Some(theme::chart_cyan().into()),
                 border: Border {
                     radius: iced::border::Radius {
                         top_left: 4.0,
@@ -789,14 +848,14 @@ pub fn activity_chart(activity: &Activity) -> Element<'_, Message> {
         bars = bars.push(
             container(tooltip(
                 column_area,
-                container(text(label).size(11).color(theme::TEXT))
+                container(text(label).size(theme::size::TINY).color(theme::text()))
                     .padding(5)
                     .style(|_| container::Style {
-                        background: Some(theme::ELEVATED.into()),
+                        background: Some(theme::elevated().into()),
                         border: Border {
-                            color: theme::BORDER,
+                            color: theme::border(),
                             width: 1.0,
-                            radius: 4.0.into(),
+                            radius: theme::radius::S.into(),
                         },
                         ..Default::default()
                     }),
@@ -809,7 +868,7 @@ pub fn activity_chart(activity: &Activity) -> Element<'_, Message> {
         .width(Length::Fill)
         .height(1)
         .style(|_| container::Style {
-            background: Some(theme::BORDER.into()),
+            background: Some(theme::border().into()),
             ..Default::default()
         });
     let first = activity
@@ -818,28 +877,30 @@ pub fn activity_chart(activity: &Activity) -> Element<'_, Message> {
         .map(|(d, _)| d.format("%-d %b").to_string());
     let axis = row![
         text(first.unwrap_or_default())
-            .size(10)
-            .color(theme::TEXT_MUTED),
+            .size(theme::size::CAPTION)
+            .color(theme::text_muted()),
         space::horizontal(),
-        text("today").size(10).color(theme::TEXT_MUTED),
+        text("today")
+            .size(theme::size::CAPTION)
+            .color(theme::text_muted()),
     ];
     column![
         row![
-            text(title).size(12).color(theme::TEXT),
+            text(title).size(theme::size::SMALL).color(theme::text()),
             space::horizontal(),
             text(if max > 0 {
                 format!("max {max}/day")
             } else {
                 String::new()
             })
-            .size(10)
-            .color(theme::TEXT_MUTED),
+            .size(theme::size::CAPTION)
+            .color(theme::text_muted()),
         ],
         bars,
         baseline,
         axis,
     ]
-    .spacing(4)
+    .spacing(theme::space::XS)
     .into()
 }
 
@@ -847,8 +908,8 @@ pub fn activity_chart(activity: &Activity) -> Element<'_, Message> {
 pub fn view_history<'a>(h: &'a HistoryView, branch: String) -> Element<'a, Message> {
     let header = row![
         text(format!("History · {branch}"))
-            .size(14)
-            .color(theme::TEXT),
+            .size(theme::size::LARGE)
+            .color(theme::text()),
         space::horizontal(),
         small_button("Close (Esc)", Some(Message::GitHistoryClose), "Close"),
     ]
@@ -856,51 +917,57 @@ pub fn view_history<'a>(h: &'a HistoryView, branch: String) -> Element<'a, Messa
 
     let chart: Element<'_, Message> = match &h.activity {
         None => muted("Counting commits…"),
-        Some(Err(e)) => text(e.as_str()).size(11).color(theme::CORAL).into(),
+        Some(Err(e)) => text(e.as_str())
+            .size(theme::size::TINY)
+            .color(theme::coral())
+            .into(),
         Some(Ok(a)) => activity_chart(a),
     };
 
     let list: Element<'_, Message> = match &h.entries {
         None => muted("Reading history…"),
-        Some(Err(e)) => text(e.as_str()).size(12).color(theme::CORAL).into(),
+        Some(Err(e)) => text(e.as_str())
+            .size(theme::size::SMALL)
+            .color(theme::coral())
+            .into(),
         Some(Ok(entries)) if entries.is_empty() => muted("No commits yet."),
         Some(Ok(entries)) => {
-            let mut col = column![].spacing(2);
+            let mut col = column![].spacing(theme::space::XXS);
             for e in entries {
                 let selected = h.selected.as_deref() == Some(e.hash.as_str());
                 let mut top = row![
                     text(e.short.as_str())
-                        .size(11)
+                        .size(theme::size::TINY)
                         .font(TERMINAL_FONT)
-                        .color(theme::CYAN),
+                        .color(theme::cyan()),
                     text(e.subject.as_str())
-                        .size(12)
-                        .color(theme::TEXT)
+                        .size(theme::size::SMALL)
+                        .color(theme::text())
                         .wrapping(text::Wrapping::None),
                 ]
-                .spacing(6);
+                .spacing(theme::space::S);
                 if !e.refs.is_empty() {
                     top = top.push(
                         text(compact_refs(&e.refs))
-                            .size(10)
-                            .color(theme::AMBER)
+                            .size(theme::size::CAPTION)
+                            .color(theme::amber())
                             .wrapping(text::Wrapping::None),
                     );
                 }
                 let entry = column![
                     container(top).clip(true),
                     text(format!("{} · {}", e.author, e.when))
-                        .size(10)
-                        .color(theme::TEXT_MUTED),
+                        .size(theme::size::CAPTION)
+                        .color(theme::text_muted()),
                 ]
                 .spacing(1);
                 col = col.push(
                     mouse_area(container(entry).padding([5, 8]).width(Length::Fill).style(
                         move |_| container::Style {
-                            background: selected.then(|| theme::ELEVATED.into()),
+                            background: selected.then(|| theme::elevated().into()),
                             border: Border {
                                 color: if selected {
-                                    theme::CYAN
+                                    theme::cyan()
                                 } else {
                                     Color::TRANSPARENT
                                 },
@@ -920,7 +987,10 @@ pub fn view_history<'a>(h: &'a HistoryView, branch: String) -> Element<'a, Messa
     let detail: Element<'_, Message> = match (&h.selected, &h.detail) {
         (None, _) => muted("Select a commit to see its changes."),
         (Some(_), None) => muted("Loading…"),
-        (Some(_), Some(Err(e))) => text(e.as_str()).size(12).color(theme::CORAL).into(),
+        (Some(_), Some(Err(e))) => text(e.as_str())
+            .size(theme::size::SMALL)
+            .color(theme::coral())
+            .into(),
         (Some(_), Some(Ok(d))) => diff_lines(d),
     };
 
@@ -930,11 +1000,11 @@ pub fn view_history<'a>(h: &'a HistoryView, branch: String) -> Element<'a, Messa
             .width(width)
             .height(Length::Fill)
             .style(|_| container::Style {
-                background: Some(theme::OBSIDIAN.into()),
+                background: Some(theme::obsidian().into()),
                 border: Border {
-                    color: theme::BORDER,
+                    color: theme::border(),
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: theme::radius::M.into(),
                 },
                 ..Default::default()
             })
@@ -946,11 +1016,11 @@ pub fn view_history<'a>(h: &'a HistoryView, branch: String) -> Element<'a, Messa
                 .padding(10)
                 .width(Length::Fill)
                 .style(|_| container::Style {
-                    background: Some(theme::GRAPHITE.into()),
+                    background: Some(theme::graphite().into()),
                     border: Border {
-                        color: theme::BORDER,
+                        color: theme::border(),
                         width: 1.0,
-                        radius: 6.0.into(),
+                        radius: theme::radius::M.into(),
                     },
                     ..Default::default()
                 }),
@@ -958,10 +1028,10 @@ pub fn view_history<'a>(h: &'a HistoryView, branch: String) -> Element<'a, Messa
                 panel(list, Length::FillPortion(2)),
                 panel(detail, Length::FillPortion(3))
             ]
-            .spacing(10)
+            .spacing(theme::space::L)
             .height(Length::Fill),
         ]
-        .spacing(10),
+        .spacing(theme::space::L),
     );
     overlay(card, Message::GitHistoryClose)
 }
@@ -991,11 +1061,11 @@ fn overlay<'a>(card: container::Container<'a, Message>, close: Message) -> Eleme
         .height(Length::Fill)
         .max_width(1100.0)
         .style(|_| container::Style {
-            background: Some(theme::SURFACE.into()),
+            background: Some(theme::surface().into()),
             border: Border {
-                color: theme::BORDER,
+                color: theme::border(),
                 width: 1.0,
-                radius: 10.0.into(),
+                radius: theme::radius::XL.into(),
             },
             shadow: Shadow {
                 color: Color::from_rgba(0.0, 0.0, 0.0, 0.55),
@@ -1024,7 +1094,7 @@ fn diff_lines(d: &Diff) -> Element<'_, Message> {
         lines = lines.push(
             text(line.as_str())
                 .font(TERMINAL_FONT)
-                .size(12)
+                .size(theme::size::SMALL)
                 .color(diff_color(line))
                 .wrapping(text::Wrapping::None),
         );
@@ -1053,8 +1123,12 @@ pub fn view_diff(diff: &DiffView) -> Element<'_, Message> {
         DiffKind::Untracked => "new file",
     };
     let header = row![
-        text(diff.path.as_str()).size(14).color(theme::TEXT),
-        text(kind).size(11).color(theme::TEXT_MUTED),
+        text(diff.path.as_str())
+            .size(theme::size::LARGE)
+            .color(theme::text()),
+        text(kind)
+            .size(theme::size::TINY)
+            .color(theme::text_muted()),
         space::horizontal(),
         small_button(
             "Open in viewer",
@@ -1063,12 +1137,15 @@ pub fn view_diff(diff: &DiffView) -> Element<'_, Message> {
         ),
         small_button("Close (Esc)", Some(Message::GitDiffClose), "Close"),
     ]
-    .spacing(10)
+    .spacing(theme::space::L)
     .align_y(iced::Alignment::Center);
 
     let content: Element<'_, Message> = match &diff.result {
         None => muted("Loading…"),
-        Some(Err(e)) => text(e.as_str()).size(12).color(theme::CORAL).into(),
+        Some(Err(e)) => text(e.as_str())
+            .size(theme::size::SMALL)
+            .color(theme::coral())
+            .into(),
         Some(Ok(d)) if d.lines.is_empty() => {
             muted("No differences (binary, or only mode changes).")
         }
@@ -1078,7 +1155,7 @@ pub fn view_diff(diff: &DiffView) -> Element<'_, Message> {
                 lines = lines.push(
                     text(line.as_str())
                         .font(TERMINAL_FONT)
-                        .size(12)
+                        .size(theme::size::SMALL)
                         .color(diff_color(line))
                         .wrapping(text::Wrapping::None),
                 );
@@ -1108,27 +1185,27 @@ pub fn view_diff(diff: &DiffView) -> Element<'_, Message> {
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .style(|_| container::Style {
-                    background: Some(theme::OBSIDIAN.into()),
+                    background: Some(theme::obsidian().into()),
                     border: Border {
-                        color: theme::BORDER,
+                        color: theme::border(),
                         width: 1.0,
-                        radius: 6.0.into(),
+                        radius: theme::radius::M.into(),
                     },
                     ..Default::default()
                 }),
         ]
-        .spacing(10),
+        .spacing(theme::space::L),
     )
     .padding(14)
     .width(Length::Fill)
     .height(Length::Fill)
     .max_width(1100.0)
     .style(|_| container::Style {
-        background: Some(theme::SURFACE.into()),
+        background: Some(theme::surface().into()),
         border: Border {
-            color: theme::BORDER,
+            color: theme::border(),
             width: 1.0,
-            radius: 10.0.into(),
+            radius: theme::radius::XL.into(),
         },
         shadow: Shadow {
             color: Color::from_rgba(0.0, 0.0, 0.0, 0.55),
@@ -1149,42 +1226,48 @@ pub fn view_diff(diff: &DiffView) -> Element<'_, Message> {
 
 fn diff_color(line: &str) -> Color {
     if line.starts_with("+++") || line.starts_with("---") {
-        theme::TEXT_MUTED
+        theme::text_muted()
     } else if line.starts_with('+') {
-        theme::MINT
+        theme::mint()
     } else if line.starts_with('-') {
-        theme::CORAL
+        theme::coral()
     } else if line.starts_with("@@") {
-        theme::CYAN
+        theme::cyan()
     } else if line.starts_with("diff ")
         || line.starts_with("index ")
         || line.starts_with("new file")
     {
-        theme::TEXT_MUTED
+        theme::text_muted()
     } else {
-        theme::TEXT
+        theme::text()
     }
 }
 
 fn muted<'a>(s: &'a str) -> Element<'a, Message> {
-    text(s).size(11).color(theme::TEXT_MUTED).into()
+    text(s)
+        .size(theme::size::TINY)
+        .color(theme::text_muted())
+        .into()
 }
 
 fn muted_owned<'a>(s: String) -> Element<'a, Message> {
-    text(s).size(11).color(theme::TEXT_MUTED).into()
+    text(s)
+        .size(theme::size::TINY)
+        .color(theme::text_muted())
+        .into()
 }
 
 fn path_text<'a>(s: String) -> Element<'a, Message> {
     text(s)
-        .size(11)
-        .color(theme::TEXT_MUTED)
+        .size(theme::size::TINY)
+        .color(theme::text_muted())
         .wrapping(text::Wrapping::Glyph)
         .into()
 }
 
 fn small_button<'a>(label: &str, on_press: Option<Message>, tip: &'a str) -> Element<'a, Message> {
     let enabled = on_press.is_some();
-    let b = button(text(label.to_owned()).size(11))
+    let b = button(text(label.to_owned()).size(theme::size::TINY))
         .on_press_maybe(on_press)
         .padding([3, 8])
         .style(move |_, status| {
@@ -1192,33 +1275,33 @@ fn small_button<'a>(label: &str, on_press: Option<Message>, tip: &'a str) -> Ele
             button::Style {
                 background: Some(
                     if hovered {
-                        theme::ELEVATED
+                        theme::elevated()
                     } else {
-                        theme::SURFACE
+                        theme::surface()
                     }
                     .into(),
                 ),
                 text_color: if !enabled {
-                    theme::DISABLED
+                    theme::disabled()
                 } else if hovered {
-                    theme::CYAN
+                    theme::cyan()
                 } else {
-                    theme::TEXT
+                    theme::text()
                 },
                 border: Border {
-                    color: theme::BORDER,
+                    color: theme::border(),
                     width: 1.0,
-                    radius: 4.0.into(),
+                    radius: theme::radius::S.into(),
                 },
                 ..Default::default()
             }
         });
     tooltip(
         b,
-        container(text(tip).size(11).color(theme::TEXT))
+        container(text(tip).size(theme::size::TINY).color(theme::text()))
             .padding(5)
             .style(|_| container::Style {
-                background: Some(theme::ELEVATED.into()),
+                background: Some(theme::elevated().into()),
                 ..Default::default()
             }),
         tooltip::Position::Bottom,
