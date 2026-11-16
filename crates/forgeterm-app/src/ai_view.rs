@@ -1,6 +1,6 @@
 //! AI workspace side panel: detected agents and the project's agent files.
 
-use forgeterm_agents::{Agent, AgentKind, ContextItem, ProjectContext};
+use forgeterm_agents::{Agent, AgentKind, ContextItem, ContextKind, ProjectContext};
 use iced::widget::{button, column, container, mouse_area, row, scrollable, space, text, tooltip};
 use iced::{Border, Color, Element, Length};
 
@@ -162,11 +162,17 @@ fn agent_card(kind: AgentKind, state: &AgentState) -> Element<'_, Message> {
 }
 
 fn context_row(item: &ContextItem) -> Element<'_, Message> {
+    // Hooks run commands when the agent works: amber, and the command in view.
+    let (label_color, inline) = match item.kind {
+        ContextKind::Hook => (theme::amber(), item.description.as_deref()),
+        ContextKind::McpServer => (theme::cyan(), item.description.as_deref()),
+        _ => (theme::cyan(), None),
+    };
     let label = row![
         container(
             text(item.kind.label())
                 .size(theme::size::CAPTION)
-                .color(theme::cyan())
+                .color(label_color)
         )
         .width(64),
         text(item.name.clone())
@@ -175,8 +181,17 @@ fn context_row(item: &ContextItem) -> Element<'_, Message> {
             .wrapping(text::Wrapping::None),
     ]
     .align_y(iced::Alignment::Center);
+    let mut content = column![label].spacing(1);
+    if let Some(detail) = inline {
+        content = content.push(row![
+            space::horizontal().width(64),
+            text(detail.to_owned())
+                .size(theme::size::CAPTION)
+                .color(theme::text_muted()),
+        ]);
+    }
     let row_box = mouse_area(
-        container(label)
+        container(content)
             .padding([3, 4])
             .width(Length::Fill)
             .style(|_| container::Style {

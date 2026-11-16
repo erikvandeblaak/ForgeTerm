@@ -973,6 +973,7 @@ name = "forgeterm-agents"
 version = "0.2.0"
 dependencies = [
  "forgeterm-fs",
+ "serde_json",
 ]
 
 [[package]]

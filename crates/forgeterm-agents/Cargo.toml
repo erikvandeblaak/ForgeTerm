@@ -10,6 +10,8 @@ rust-version.workspace = true
 
 [dependencies]
 forgeterm-fs.workspace = true
+# Reads .mcp.json and the hooks in .claude/settings*.json (display only).
+serde_json = "1"
 
 [lints]
 workspace = true

@@ -14,7 +14,11 @@ pub enum ContextKind {
     Command,
     Subagent,
     Settings,
+    /// A hook in `.claude/settings*.json`: a command Claude Code runs on an event.
+    Hook,
     Mcp,
+    /// One server from `.mcp.json`.
+    McpServer,
 }
 
 impl ContextKind {
@@ -26,7 +30,9 @@ impl ContextKind {
             ContextKind::Command => "Command",
             ContextKind::Subagent => "Subagent",
             ContextKind::Settings => "Settings",
+            ContextKind::Hook => "Hook",
             ContextKind::Mcp => "MCP",
+            ContextKind::McpServer => "MCP server",
         }
     }
 }
@@ -136,12 +142,149 @@ pub fn scan_context(start: &Path) -> ProjectContext {
             });
         }
     }
+    // What the settings and .mcp.json files declare (shown, never run).
+    let mut declared = Vec::new();
+    for item in &items {
+        match item.kind {
+            ContextKind::Settings => declared.extend(hooks_in(&item.path)),
+            ContextKind::Mcp => declared.extend(mcp_servers_in(&item.path)),
+            _ => {}
+        }
+    }
+    items.extend(declared);
     items.sort_by(|a, b| a.kind.cmp(&b.kind).then_with(|| a.name.cmp(&b.name)));
     ProjectContext {
         root,
         is_git,
         items,
     }
+}
+
+/// Largest settings / `.mcp.json` file parsed.
+const MAX_JSON_BYTES: u64 = 512 * 1024;
+/// Longest command text shown per item.
+const MAX_SHOWN: usize = 200;
+
+fn read_json(path: &Path) -> Option<serde_json::Value> {
+    let meta = fs::metadata(path).ok()?;
+    if meta.len() > MAX_JSON_BYTES {
+        return None;
+    }
+    serde_json::from_str(&fs::read_to_string(path).ok()?).ok()
+}
+
+fn shorten(s: &str) -> String {
+    let one_line = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    if one_line.chars().count() > MAX_SHOWN {
+        let cut: String = one_line.chars().take(MAX_SHOWN).collect();
+        format!("{cut}…")
+    } else {
+        one_line
+    }
+}
+
+/// Hooks as documented for Claude Code settings:
+/// `{"hooks": {"<Event>": [{"matcher": "…", "hooks": [{"type": "command", "command": "…"}]}]}}`.
+fn hooks_in(path: &Path) -> Vec<ContextItem> {
+    let Some(json) = read_json(path) else {
+        return Vec::new();
+    };
+    parse_hooks(&json, path)
+}
+
+fn parse_hooks(json: &serde_json::Value, path: &Path) -> Vec<ContextItem> {
+    let Some(events) = json.get("hooks").and_then(|h| h.as_object()) else {
+        return Vec::new();
+    };
+    let file = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let mut out = Vec::new();
+    for (event, groups) in events {
+        for group in groups.as_array().into_iter().flatten() {
+            let matcher = group
+                .get("matcher")
+                .and_then(|m| m.as_str())
+                .filter(|m| !m.is_empty());
+            let commands: Vec<String> = group
+                .get("hooks")
+                .and_then(|h| h.as_array())
+                .into_iter()
+                .flatten()
+                .filter_map(|h| {
+                    let kind = h.get("type").and_then(|t| t.as_str()).unwrap_or("command");
+                    match kind {
+                        "command" => h.get("command").and_then(|c| c.as_str()).map(str::to_owned),
+                        other => Some(format!("({other} hook)")),
+                    }
+                })
+                .collect();
+            if commands.is_empty() {
+                continue;
+            }
+            out.push(ContextItem {
+                kind: ContextKind::Hook,
+                name: match matcher {
+                    Some(m) => format!("{event} · {m}"),
+                    None => event.clone(),
+                },
+                description: Some(format!("{} ({file})", shorten(&commands.join("; ")))),
+                path: path.to_path_buf(),
+            });
+        }
+    }
+    out
+}
+
+/// Servers as documented for `.mcp.json`:
+/// `{"mcpServers": {"<name>": {"command": "…", "args": […]} | {"type": "http", "url": "…"}}}`.
+fn mcp_servers_in(path: &Path) -> Vec<ContextItem> {
+    let Some(json) = read_json(path) else {
+        return Vec::new();
+    };
+    parse_mcp_servers(&json, path)
+}
+
+fn parse_mcp_servers(json: &serde_json::Value, path: &Path) -> Vec<ContextItem> {
+    let Some(servers) = json.get("mcpServers").and_then(|s| s.as_object()) else {
+        return Vec::new();
+    };
+    servers
+        .iter()
+        .map(|(name, server)| {
+            let text = |key: &str| server.get(key).and_then(|v| v.as_str());
+            let description = if let Some(url) = text("url") {
+                format!("{}: {url}", text("type").unwrap_or("remote"))
+            } else if let Some(command) = text("command") {
+                let args: Vec<&str> = server
+                    .get("args")
+                    .and_then(|a| a.as_array())
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|a| a.as_str())
+                    .collect();
+                format!(
+                    "runs: {}",
+                    shorten(
+                        &[command]
+                            .into_iter()
+                            .chain(args)
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    )
+                )
+            } else {
+                "no command or url".to_owned()
+            };
+            ContextItem {
+                kind: ContextKind::McpServer,
+                name: name.clone(),
+                description: Some(description),
+                path: path.to_path_buf(),
+            }
+        })
+        .collect()
 }
 
 fn sorted_entries(dir: &Path) -> Vec<PathBuf> {
@@ -229,6 +372,62 @@ fn parse_front_matter(text: &str) -> FrontMatter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hooks_and_mcp_servers_are_listed_not_run() {
+        let settings: serde_json::Value = serde_json::from_str(
+            r#"{
+              "permissions": {"allow": ["Bash(cargo test:*)"]},
+              "hooks": {
+                "PreToolUse": [
+                  {"matcher": "Bash", "hooks": [{"type": "command", "command": "./check.sh"}, {"type": "command", "command": "echo  two\n lines"}]},
+                  {"matcher": "", "hooks": []}
+                ],
+                "Stop": [{"hooks": [{"type": "prompt", "prompt": "x"}]}]
+              }
+            }"#,
+        )
+        .unwrap();
+        let path = Path::new("/p/.claude/settings.json");
+        let hooks = parse_hooks(&settings, path);
+        assert_eq!(hooks.len(), 2, "{hooks:?}");
+        assert_eq!(hooks[0].name, "PreToolUse · Bash");
+        assert_eq!(
+            hooks[0].description.as_deref(),
+            Some("./check.sh; echo two lines (settings.json)")
+        );
+        assert_eq!(hooks[1].name, "Stop");
+        assert_eq!(
+            hooks[1].description.as_deref(),
+            Some("(prompt hook) (settings.json)")
+        );
+        assert!(parse_hooks(&serde_json::json!({"hooks": 3}), path).is_empty());
+
+        let mcp: serde_json::Value = serde_json::from_str(
+            r#"{"mcpServers": {
+                "files": {"command": "npx", "args": ["-y", "@scope/server", "."]},
+                "docs": {"type": "http", "url": "https://example.com/mcp"},
+                "odd": {}
+            }}"#,
+        )
+        .unwrap();
+        let servers = parse_mcp_servers(&mcp, Path::new("/p/.mcp.json"));
+        let shown: Vec<(&str, &str)> = servers
+            .iter()
+            .map(|s| (s.name.as_str(), s.description.as_deref().unwrap()))
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                ("docs", "http: https://example.com/mcp"),
+                ("files", "runs: npx -y @scope/server ."),
+                ("odd", "no command or url"),
+            ]
+        );
+        let long = "x".repeat(500);
+        assert!(shorten(&long).ends_with('…'));
+        assert_eq!(shorten(&long).chars().count(), MAX_SHOWN + 1);
+    }
 
     #[test]
     fn front_matter_fields() {
