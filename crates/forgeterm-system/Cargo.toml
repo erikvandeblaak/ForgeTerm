@@ -1,6 +1,6 @@
 [package]
 name = "forgeterm-system"
-description = "ForgeTerm system information: processes running inside terminals (sysinfo). UI-agnostic, read-only."
+description = "ForgeTerm system information: processes inside terminals (sysinfo) and GPU usage (NVML, amdgpu sysfs). UI-agnostic, read-only."
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -10,6 +10,9 @@ rust-version.workspace = true
 
 [dependencies]
 sysinfo = { version = "0.37", default-features = false, features = ["system"] }
+# Loads the driver's NVML library at runtime: no NVIDIA driver = "not available".
+nvml-wrapper = "0.13"
+tracing.workspace = true
 
 [lints]
 workspace = true

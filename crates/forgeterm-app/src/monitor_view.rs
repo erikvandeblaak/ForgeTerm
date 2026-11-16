@@ -1,11 +1,12 @@
 //! Monitor panel: measured CPU and memory of the machine and of each terminal's
-//! process tree (forgeterm-system). Samples only while the panel is open; nothing
-//! leaves the computer. GPU is not measured and says so.
+//! process tree, and GPU usage where the driver offers it (forgeterm-system). Samples
+//! only while the panel is open; nothing leaves the computer. Without a supported
+//! GPU interface the panel says "not available" and why.
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
-use forgeterm_system::{Sample, Sampler};
+use forgeterm_system::{GpuProbe, GpuStatus, Sample, Sampler};
 use iced::mouse::Cursor;
 use iced::widget::canvas::{self, Canvas, Frame, Geometry, Path, Stroke, Text};
 use iced::widget::{column, container, row, scrollable, space, text};
@@ -22,20 +23,26 @@ pub const HISTORY: usize = 90;
 
 pub struct Monitor {
     pub sampler: Arc<Mutex<Sampler>>,
+    /// Open only while the panel is: opening NVML can wake a laptop's discrete GPU.
+    pub gpu_probe: Arc<Mutex<Option<GpuProbe>>>,
     pub busy: bool,
     pub last: Option<Sample>,
     pub cpu: VecDeque<f32>,
     pub memory: VecDeque<f32>,
+    /// Utilization of the first GPU.
+    pub gpu: VecDeque<f32>,
 }
 
 impl Default for Monitor {
     fn default() -> Self {
         Self {
             sampler: Arc::new(Mutex::new(Sampler::new())),
+            gpu_probe: Arc::new(Mutex::new(None)),
             busy: false,
             last: None,
             cpu: VecDeque::new(),
             memory: VecDeque::new(),
+            gpu: VecDeque::new(),
         }
     }
 }
@@ -50,6 +57,15 @@ impl Monitor {
                 &mut self.memory,
                 sample.memory_used as f32 / sample.memory_total as f32 * 100.0,
             );
+        }
+        match &sample.gpu {
+            Some(GpuStatus::Measured(gpus)) => {
+                if let Some(u) = gpus.first().and_then(|g| g.utilization_percent) {
+                    push(&mut self.gpu, u as f32);
+                }
+            }
+            // Not measured (panel closed, or no interface): no line across the gap.
+            _ => self.gpu.clear(),
         }
         self.last = Some(sample);
         self.busy = false;
@@ -103,16 +119,7 @@ pub fn view(m: &Monitor, terminals: Vec<(String, u32)>) -> Element<'_, Message> 
                 ),
                 &m.memory,
             ));
-            body = body.push(
-                row![
-                    text("GPU").size(theme::size::SMALL).color(theme::text()),
-                    space::horizontal(),
-                    text("not measured")
-                        .size(theme::size::SMALL)
-                        .color(theme::text_muted()),
-                ]
-                .align_y(iced::Alignment::Center),
-            );
+            body = body.push(gpu_view(s.gpu.as_ref(), &m.gpu));
 
             body = body.push(section("TERMINALS"));
             let mut any = false;
@@ -159,7 +166,7 @@ pub fn view(m: &Monitor, terminals: Vec<(String, u32)>) -> Element<'_, Message> 
         }
     }
     body = body.push(muted(
-        "Measured by the operating system every 2 s while this panel is open. Nothing leaves this computer.",
+        "Measured by the operating system (GPU: by the graphics driver) every 2 s while this panel is open. Nothing leaves this computer.",
     ));
 
     container(
@@ -190,6 +197,68 @@ pub fn view(m: &Monitor, terminals: Vec<(String, u32)>) -> Element<'_, Message> 
         ..Default::default()
     })
     .into()
+}
+
+fn gpu_view<'a>(status: Option<&'a GpuStatus>, history: &'a VecDeque<f32>) -> Element<'a, Message> {
+    let unavailable = |value: &'a str, why: Option<&'a str>| {
+        let mut col = column![
+            row![
+                text("GPU").size(theme::size::SMALL).color(theme::text()),
+                space::horizontal(),
+                text(value)
+                    .size(theme::size::SMALL)
+                    .color(theme::text_muted()),
+            ]
+            .align_y(iced::Alignment::Center)
+        ]
+        .spacing(theme::space::XXS);
+        if let Some(why) = why {
+            col = col.push(muted(why));
+        }
+        col.into()
+    };
+    let gpus = match status {
+        None => return unavailable("measuring…", None),
+        Some(GpuStatus::Unavailable(why)) => return unavailable("not available", Some(why)),
+        Some(GpuStatus::Measured(gpus)) => gpus,
+    };
+    let mut col = column![].spacing(theme::space::S);
+    for (i, g) in gpus.iter().enumerate() {
+        let value = g
+            .utilization_percent
+            .map_or_else(|| "busy: n/a".to_owned(), |u| format!("{u} %"));
+        let title = if gpus.len() > 1 {
+            format!("GPU {}", i + 1)
+        } else {
+            "GPU".to_owned()
+        };
+        let mut details = vec![g.name.clone()];
+        if let (Some(used), Some(total)) = (g.memory_used, g.memory_total) {
+            details.push(format!("VRAM {} / {}", bytes(used), bytes(total)));
+        }
+        if let Some(t) = g.temperature_c {
+            details.push(format!("{t} °C"));
+        }
+        details.push(g.source.to_owned());
+        if i == 0 {
+            col = col.push(metric(title, value, history));
+        } else {
+            col = col.push(
+                row![
+                    text(title).size(theme::size::SMALL).color(theme::text()),
+                    space::horizontal(),
+                    text(value).size(theme::size::SMALL).color(theme::text()),
+                ]
+                .align_y(iced::Alignment::Center),
+            );
+        }
+        col = col.push(
+            text(details.join(" · "))
+                .size(theme::size::CAPTION)
+                .color(theme::text_muted()),
+        );
+    }
+    col.into()
 }
 
 fn section(title: &str) -> Element<'_, Message> {
@@ -367,6 +436,7 @@ mod tests {
             memory_total: 100,
             logical_cpus: 4,
             shells: Default::default(),
+            gpu: None,
         };
         m.record(sample(None));
         assert!(m.cpu.is_empty(), "the first sample has no CPU value");
