@@ -242,6 +242,12 @@ Quit (menu, venster-× via `exit_on_close_request: false` + `close_requests`), t
 4. *Besturingstekens bij plakken* (middel): zonder bracketed paste worden alle besturingstekens behalve tab/CR/LF verwijderd (Ctrl+O zou in bash de regel uitvoeren); met bracketed paste ook de 8-bit CSI (U+009B). Een programma dat het klembord vult (OSC 52) krijgt een zichtbare melding met de tab; meer dan 1 MB wordt geweigerd. OSC 52 *lezen* was al geblokkeerd.
 5. *cmd-metatekens in het agentpad* (laag): een `.cmd`/`.bat`-pad met `& | < > ^ % ! "` wordt niet gestart (melding) in plaats van door `cmd /c` geïnterpreteerd.
 
+**Architectuuraudit 2026-11-16** (zie `FORGETERM_ARCHITECTURE_AUDIT.md`):
+
+6. *Submodules* (hoog, gereproduceerd): `git status` betrad submodules en voerde een clean-filter uit hun eigen config uit. Nu `--ignore-submodules=all` (status, diff, numstat); de test faalt zonder de fix.
+7. *Symlinks/junctions naar netwerkshares* (middel, Windows): een link in een gekloonde repo liet de verkenner (alleen al door te tonen), OSC 7, bestandslinks, de viewer, sessieherstel en de agentcontext een SMB-verbinding maken. De nieuwe crate `forgeterm-fs` (geen dependencies) bevat `is_local_path` en `resolves_locally`: die loopt het pad component voor component af met `symlink_metadata`/`read_link`, volgt alleen lokale doelen (relatief, ketens, `\?\C:\`-junctions) en weigert cycli. De verkenner stat een link pas als zijn doel lokaal is; anders staat hij er als niet te openen item.
+8. *Apparaatbestanden in de viewer* (middel, Linux): alleen gewone bestanden, en gelezen via de geopende handle met `take(MAX+1)`. Een symlink naar `/dev/zero` (getest) of een FIFO laat de app niet meer vastlopen of crashen.
+
 Door de reviewer gecontroleerd en in orde bevonden: OSC 52 lezen geweigerd, titels alleen weergave, links alleen http(s) + Ctrl+klik + één argument, git-argumenten (`--`, hex-hash, `-`-namen geweigerd, check-ref-format), viewer (limiet, besturingstekens zichtbaar), sessiebestand (alleen lay-out, shell alleen uit de gedetecteerde lijst), quoting per shell, `cmd /d`.
 
 

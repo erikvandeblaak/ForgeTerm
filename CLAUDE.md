@@ -45,6 +45,7 @@ Start de app vanuit een omgeving **zonder** `NO_COLOR` (Claude Code zet die; Pow
 - `crates/forgeterm-viewer` — code-viewer: bestand veilig laden (limiet, binair, UTF-8/16, CRLF), weergaveregels (tabs, besturingstekens), syntect-kleuring met Forge-thema, kopiëren, zoeken
 - `crates/forgeterm-system` — processen in de terminals (sysinfo, alleen lezen): welke programma's een shell nog draait
 - `crates/forgeterm-settings` — `settings.toml` laden (tolerant, problemen als tekst), template, pad
+- `crates/forgeterm-fs` — padveiligheid zonder dependencies: `is_local_path`, `resolves_locally` (geen symlink/junction naar een netwerkshare volgen); gebruik dit vóór elke bestandssysteemaanroep op een pad van buiten (terminaluitvoer, repo, sessiebestand)
 - `crates/forgeterm-explorer` — bestandsboom (lezen, sorteren, verborgen, lazy uitklappen); wijzigt nooit het bestandssysteem
 - `crates/forgeterm-app` — iced-applicatie, canvas-renderer, thema-tokens
 - `assets/` — fonts (OFL), branding
