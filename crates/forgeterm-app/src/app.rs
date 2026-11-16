@@ -40,6 +40,8 @@ use crate::worktree_form::{self, WorktreeForm};
 use crate::{explorer_view, keys, theme};
 
 const LOGO: &[u8] = include_bytes!("../../../assets/branding/forgeterm-logo.svg");
+/// Start of the notice when git refuses to remove a worktree.
+const REMOVE_FAILED: &str = "git did not remove the worktree: ";
 const MAX_TAB_TITLE: usize = 28;
 /// The horizontally scrolling tab strip.
 const TABS_ID: &str = "forgeterm-tabs";
@@ -202,6 +204,8 @@ pub enum Message {
     MissionTick,
     WorktreeFormAgent(AgentKind),
     WorktreeFormBranch(String),
+    /// The repository's branch names, read when the form opened.
+    WorktreeFormBranches(Vec<String>),
     WorktreeFormSubmit,
     WorktreeFormCancel,
     /// `git worktree add` finished: the new folder, or git's error.
@@ -1287,12 +1291,18 @@ impl App {
                 }
             }
             Message::WorktreeFormAgent(kind) => {
-                let existing = self.branch_names();
                 if let Some(f) = &mut self.worktree_form {
                     if worktree_form::is_suggestion(&f.branch) {
-                        f.branch = worktree_form::suggest_branch(kind, &existing);
+                        f.branch = worktree_form::suggest_branch(kind, &f.existing);
                     }
                     f.kind = kind;
+                }
+            }
+            Message::WorktreeFormBranches(names) => {
+                if let Some(f) = &mut self.worktree_form
+                    && f.set_existing(names)
+                {
+                    return iced::widget::operation::select_all(worktree_form::BRANCH_INPUT_ID);
                 }
             }
             Message::WorktreeFormBranch(branch) => {
@@ -1329,6 +1339,13 @@ impl App {
                 self.mission.visible = false;
                 self.git_dash.visible = false;
                 self.refresh_visible();
+                if self.found_agent(form.kind).is_none() {
+                    self.notice = Some(format!(
+                        "Worktree created at {}, but {} was not found: no agent started.",
+                        path.display(),
+                        form.kind.name()
+                    ));
+                }
                 let start = self.start_agent_in(form.kind, path, false);
                 return Task::batch([start, self.refresh_git(true)]);
             }
@@ -1348,8 +1365,18 @@ impl App {
             }
             Message::WorktreeRemoveCancel => self.pending_worktree_remove = None,
             Message::WorktreeRemoved(result) => {
-                if let Err(e) = result {
-                    self.notice = Some(format!("git did not remove the worktree: {e}"));
+                match result {
+                    Err(e) => self.notice = Some(format!("{REMOVE_FAILED}{e}")),
+                    // An earlier refusal no longer applies.
+                    Ok(()) => {
+                        if self
+                            .notice
+                            .as_deref()
+                            .is_some_and(|n| n.starts_with(REMOVE_FAILED))
+                        {
+                            self.notice = None;
+                        }
+                    }
                 }
                 return self.load_git_dash(true);
             }
@@ -2169,17 +2196,30 @@ impl App {
                 else {
                     return Task::none();
                 };
-                let branch = worktree_form::suggest_branch(kind, &self.branch_names());
+                let existing = self.branch_names();
+                let branch = worktree_form::suggest_branch(kind, &existing);
                 self.worktree_form = Some(WorktreeForm {
                     root: root.clone(),
                     kind,
                     branch,
+                    existing,
                     error: None,
                     busy: false,
                 });
+                // The panel's list can be missing or old: read it now.
+                let root = root.clone();
+                let names = background(
+                    move || {
+                        forgeterm_git::branches(&root)
+                            .map(|l| l.into_iter().map(|b| b.name).collect())
+                            .unwrap_or_default()
+                    },
+                    Message::WorktreeFormBranches,
+                );
                 return Task::batch([
                     iced::widget::operation::focus(worktree_form::BRANCH_INPUT_ID),
                     iced::widget::operation::select_all(worktree_form::BRANCH_INPUT_ID),
+                    names,
                 ]);
             }
             CommandId::RemoveWorktree(id) => {
@@ -2584,17 +2624,15 @@ impl App {
             .find(|(_, i)| git_dash::worktree_id(&i.worktree.path) == id)?;
         let w = &info.worktree;
         let shown = git_dash::path_key(&w.path) == git_dash::path_key(&data.root);
-        let busy_agent = self.terminals.values().any(|t| {
-            t.agent.is_some()
-                && t.directory().is_some_and(|d| {
-                    git_dash::worktree_of(d, std::slice::from_ref(&w.path)).is_some()
-                })
-        });
-        let readable = matches!(
-            info.changes,
-            WorktreeChanges::Count { .. } | WorktreeChanges::Current
-        );
-        (index > 0 && !shown && !w.bare && readable && !busy_agent)
+        // The deepest worktree containing each terminal (a worktree may sit in another).
+        let paths: Vec<PathBuf> = list.iter().map(|i| i.worktree.path.clone()).collect();
+        let terminals = self
+            .terminals
+            .values()
+            .filter_map(TerminalPane::directory)
+            .filter(|d| git_dash::worktree_of(d, &paths) == Some(index))
+            .count();
+        (git_dash::removal(index == 0, shown, info, terminals) == git_dash::Removal::Allowed)
             .then(|| (data.root.clone(), w.path.clone(), w.branch.clone()))
     }
 
@@ -2649,6 +2687,11 @@ impl App {
             repo: self.git.repo.as_ref(),
             dash: &self.git_dash,
             agents,
+            terminal_dirs: self
+                .terminals
+                .values()
+                .filter_map(|t| t.directory().map(Path::to_path_buf))
+                .collect(),
             dir: self.focused().and_then(TerminalPane::directory),
             now: std::time::Instant::now(),
         })

@@ -20,6 +20,8 @@ pub struct WorktreeForm {
     pub root: PathBuf,
     pub kind: AgentKind,
     pub branch: String,
+    /// Branch names known so far (suggestions skip them); read again on open.
+    pub existing: Vec<String>,
     pub error: Option<String>,
     /// `git worktree add` is running.
     pub busy: bool,
@@ -35,6 +37,21 @@ pub fn suggest_branch(kind: AgentKind, existing: &[String]) -> String {
         .map(|n| format!("{base}-{n}"))
         .find(|b| !existing.iter().any(|e| e == b))
         .unwrap_or_else(|| base.to_owned())
+}
+
+impl WorktreeForm {
+    /// The repository's branches were read: a suggestion the user did not change
+    /// skips them too. Returns whether the branch field changed.
+    pub fn set_existing(&mut self, names: Vec<String>) -> bool {
+        let untouched = self.branch == suggest_branch(self.kind, &self.existing);
+        self.existing = names;
+        let fresh = suggest_branch(self.kind, &self.existing);
+        let changed = untouched && !self.busy && self.branch != fresh;
+        if changed {
+            self.branch = fresh;
+        }
+        changed
+    }
 }
 
 /// Whether the user kept the suggestion (then switching agent updates it).
@@ -221,7 +238,12 @@ fn modal<'a>(card: impl Into<Element<'a, Message>>, cancel: Message) -> Element<
             }),
     )
     .on_press(cancel);
-    stack![backdrop, container(opaque(card)).center(Length::Fill)].into()
+    // `opaque`: the page below gets no hover either (no tooltips through the dimming).
+    stack![
+        opaque(backdrop),
+        container(opaque(card)).center(Length::Fill)
+    ]
+    .into()
 }
 
 #[cfg(test)]
@@ -245,5 +267,28 @@ mod tests {
         assert!(!is_suggestion("agent/claude-"));
         assert!(!is_suggestion("feature/login"));
         assert!(!is_suggestion("agent/claude-1x"));
+    }
+
+    #[test]
+    fn late_branch_list_updates_only_an_untouched_suggestion() {
+        let form = |branch: &str| WorktreeForm {
+            root: PathBuf::from("/work/shop"),
+            kind: AgentKind::ClaudeCode,
+            branch: branch.to_owned(),
+            existing: Vec::new(),
+            error: None,
+            busy: false,
+        };
+        let names = vec!["main".to_owned(), "agent/claude-1".to_owned()];
+        let mut f = form("agent/claude-1");
+        assert!(f.set_existing(names.clone()));
+        assert_eq!(f.branch, "agent/claude-2");
+        // Typed by the user: kept, even when it looks like a suggestion.
+        let mut f = form("agent/claude-7");
+        assert!(!f.set_existing(names.clone()));
+        assert_eq!(f.branch, "agent/claude-7");
+        let mut f = form("feature/login");
+        assert!(!f.set_existing(names.clone()));
+        assert_eq!(f.existing, names);
     }
 }

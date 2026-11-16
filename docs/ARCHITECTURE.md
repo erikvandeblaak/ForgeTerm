@@ -216,9 +216,11 @@ Alleen gedocumenteerde interfaces (Claude Code-documentatie op code.claude.com, 
 - **Aanmaken:** `add_worktree` valideert de naam (`check-ref-format`, geen `-`), eist een absoluut pad dat nog niet bestaat en voert dan `git worktree add -b <branch> -- <pad>` uit, nooit met `--force`. Dat draait op een achtergrondthread; een fout van git verschijnt in het formulier. Daarna start de agent in de nieuwe map in een eigen tab (`start_agent_in`).
 - **Alleen in een vertrouwde repository** (`Repo::Found`): een checkout voert filters en de `post-checkout`-hook van de repository uit, net als het git-commando. Het formulier zegt dat.
 - **Verwijderen** (`CommandId::RemoveWorktree(id)`, met bevestiging):
-  - alleen een gekoppelde worktree die niet de getoonde is, leesbaar is en waarin geen agent van dit venster werkt;
+  - alleen een gekoppelde worktree die niet de getoonde is, niet bare of locked, leesbaar, en waarin geen terminal van dit venster staat (ook geen gewone shell). Eén regel voor knop en command: `git_dash::removal` (getest). Waarom ook shells: op Windows houdt een shell zijn map vast; git verwijdert dan alle bestanden en de registratie, faalt op de map en laat een lege map achter (gereproduceerd). Staat er alleen een terminal in, dan is de knop uitgeschakeld met uitleg;
   - `git worktree remove -- <pad>`, zonder `--force`: git weigert bij wijzigingen of onbekende bestanden, en die weigering verschijnt als melding;
-  - de branch blijft bestaan.
+  - de branch blijft bestaan; na een geslaagde verwijdering verdwijnt een eerdere weigeringsmelding.
+- **Modals** (`worktree_form::modal`): achtergrond en kaart zijn `opaque`, zodat de pagina eronder geen hover en tooltips krijgt.
+- **Gereserveerde Windows-namen** (`nul`, `con`, `com1`, …) als branch: git weigert ze zelf (de ref-lockfile kan niet bestaan) voordat er een map ontstaat (handmatig nagegaan).
 - **Getest tegen echte git:** ongeldige namen, relatieve en bestaande paden, een bestaande branch, verwijderen geweigerd bij een onbekend bestand, de branch blijft na verwijderen.
 
 ## 4j. Code-viewer
