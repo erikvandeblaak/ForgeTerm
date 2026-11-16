@@ -431,7 +431,21 @@ Beslissingen hieruit: `WGPU_POWER_PREF=low` en (Windows) `WGPU_BACKEND=dx12` als
 
 Prestatiebudgetten (doel, nog te bewaken in CI): venster < 300 ms, idle geheugen < 175 MB, invoerlatentie < 1 frame.
 
+## Performance (2026-11-16, Windows 11, release)
+
+Zie `docs/PERFORMANCE.md` voor de cijfers. GUI-controles van de wijzigingen:
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| PF1 | Terminal-zoeken: snel "Cargo", "x", Backspace getypt: één zoekopdracht na de pauze, `Cargo.toml` gevonden; "Cargonope": *Not found* | ✅ |
+| PF2 | Alt+Tab weg (echte toetsen): `Unfocused` komt binnen, geen `git status` meer; terug: meteen één keer ingehaald | ✅ (trace) |
+| PF3 | Minimaliseren met Win+↓: idem, 0 ms CPU in 12 s | ✅ (trace) |
+| PF4 | Een TUI met 60 fps en 1 MB uitvoer worden correct getekend na de refresh-wijziging | ✅ |
+
 ### Testvalkuilen (geleerd)
+
+- **Focus testen met echte invoer (2026-11-16):** `SetForegroundWindow`/`ShowWindow` vanuit een ander proces geeft in winit géén `Focused(false)`; Alt+Tab of Win+↓ via `keybd_event` wel.
+- **Synthetische invoer telt als gebruikersactiviteit:** `GetLastInputInfo` ziet ook eigen `keybd_event`s. Wacht vóór elke GUI-stap tot er 20 s geen invoer was, in plaats van één keer te controleren.
 
 - **Tabs niet op coördinaten aanklikken (2026-11-16):** de tabbalk scrolt bij veel tabs, dus een vaste x-positie kan de **×** van een andere tab raken (gebeurd: een tab met twee lege shells ging dicht). Navigeer met Ctrl+(Shift+)Tab, de palette of *Go to*.
 

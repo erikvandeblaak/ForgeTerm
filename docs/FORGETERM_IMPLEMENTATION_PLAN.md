@@ -112,6 +112,9 @@ Geleverd als *Compare Worktrees* (Ctrl+Shift+K), zie ARCHITECTURE §4i4. Besluit
 
 ## P2 — Kwaliteit en performance
 
+Stap 1–4 gedaan (branch `feature/p2-performance`, 2026-11-16): metingen en besluiten in `docs/PERFORMANCE.md`. Het meten weerlegde een deel van de audit (snapshot, `view()`, viewer-zoeken zijn goedkoop) en bevestigde terminal-zoeken (debounce) en de idle-timers (pauzeren zonder focus).
+
+
 1. **Meten eerst:**
    - `benches/` met criterion voor `Session::snapshot`, `draw`-voorbereiding, `filelink`/`url`-scans, viewer-`find`;
    - een reproduceerbaar scenario "1 MB output" en "Claude Code TUI";

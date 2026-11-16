@@ -196,6 +196,8 @@ pub enum Message {
     ConfirmClose,
     CancelClose,
     TermFindQuery(String),
+    /// The typing pause after keystroke `n` ended (see [`TERM_FIND_DEBOUNCE`]).
+    TermFindDue(u64),
     /// Search again: `true` = older output (up), `false` = newer (down).
     TermFindStep(bool),
     TermFindClose,
@@ -246,7 +248,15 @@ const TERM_FIND_ID: &str = "forgeterm-terminal-find";
 struct TermFind {
     query: String,
     outcome: Option<forgeterm_terminal::SearchOutcome>,
+    /// Bumped per keystroke: only the search for the last one runs.
+    seq: u64,
+    /// The current query has been searched (else a debounced search is pending).
+    searched: bool,
 }
+
+/// Typing pause before the terminal is searched: a miss scans the whole
+/// scrollback under the terminal lock (8.8 ms per 10k lines, docs/PERFORMANCE.md).
+const TERM_FIND_DEBOUNCE: Duration = Duration::from_millis(150);
 
 /// What a close action would end.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -763,8 +773,18 @@ impl App {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        // A cheap stat every 2 s picks up saved edits to settings.toml.
-        let settings = iced::time::every(Duration::from_secs(2)).map(|_| Message::SettingsTick);
+        // A cheap stat every 2 s picks up saved edits to settings.toml; git status
+        // every 4 s (a process) keeps the status bar current after commands typed
+        // in the terminal. Both only while the window has focus: nobody sees them
+        // in the background, and regaining focus catches up at once.
+        let (settings, git) = if self.window_focused {
+            (
+                iced::time::every(Duration::from_secs(2)).map(|_| Message::SettingsTick),
+                iced::time::every(Duration::from_secs(4)).map(|_| Message::GitTick),
+            )
+        } else {
+            (Subscription::none(), Subscription::none())
+        };
         let events = event::listen_with(|event, status, _window| match event {
             // Keys a widget already handled (e.g. Enter submitting the palette's text
             // input) must not also reach the terminal.
@@ -787,9 +807,6 @@ impl App {
             Event::Window(window::Event::Unfocused) => Some(Message::WindowFocus(false)),
             _ => None,
         });
-        // git status is cheap but starts a process: every 4 s keeps the status bar
-        // current after commands typed in the terminal.
-        let git = iced::time::every(Duration::from_secs(4)).map(|_| Message::GitTick);
         let close = iced::window::close_requests().map(|_| Message::WindowCloseRequested);
         // Test hook for platforms where the window cannot be captured from outside
         // (WSLg): with FORGETERM_SCREENSHOT=<file.png> the rendered frame is saved
@@ -988,19 +1005,42 @@ impl App {
             }
             Message::CancelClose => self.pending_close = None,
             Message::TermFindQuery(query) => {
-                // Search as you type: from the cursor upwards, most recent match first.
-                if let Some(s) = self.focused().and_then(TerminalPane::session) {
-                    s.clear_selection();
-                }
-                let outcome = self.term_search(&query, true);
-                if let Some(f) = &mut self.term_find {
-                    f.query = query;
-                    f.outcome = outcome;
+                // Search as you type, after a short pause (a long scrollback takes
+                // milliseconds per search).
+                let Some(f) = &mut self.term_find else {
+                    return Task::none();
+                };
+                f.query = query;
+                f.seq += 1;
+                f.searched = false;
+                f.outcome = None;
+                let seq = f.seq;
+                return background(
+                    move || {
+                        std::thread::sleep(TERM_FIND_DEBOUNCE);
+                        seq
+                    },
+                    Message::TermFindDue,
+                );
+            }
+            Message::TermFindDue(seq) => {
+                if self
+                    .term_find
+                    .as_ref()
+                    .is_some_and(|f| f.seq == seq && !f.searched)
+                {
+                    self.term_find_first();
                 }
             }
             Message::TermFindStep(older) => {
-                let query = self.term_find.as_ref().map(|f| f.query.clone());
-                if let Some(query) = query {
+                let Some(f) = &self.term_find else {
+                    return Task::none();
+                };
+                if !f.searched {
+                    // Enter before the pause ended: search now.
+                    self.term_find_first();
+                } else {
+                    let query = f.query.clone();
                     let outcome = self.term_search(&query, older);
                     if let Some(f) = &mut self.term_find {
                         f.outcome = outcome;
@@ -1133,7 +1173,17 @@ impl App {
                     ));
                 }
             },
-            Message::WindowFocus(focused) => self.window_focused = focused,
+            Message::WindowFocus(focused) => {
+                let back = focused && !self.window_focused;
+                self.window_focused = focused;
+                // The idle timers pause in the background: catch up once.
+                if back {
+                    return Task::batch([
+                        Task::done(Message::SettingsTick),
+                        self.refresh_git(false),
+                    ]);
+                }
+            }
             Message::ShortcutsClose => self.shortcuts_open = false,
             Message::ExplorerListed(path, result) => self.explorer.set_listing(path, result),
             Message::ExplorerSelect(path) => {
@@ -2612,6 +2662,22 @@ impl App {
             self.pending_paste = Some((id, text));
         } else if let Some(s) = t.session() {
             s.paste(&text);
+        }
+    }
+
+    /// The first search for the typed query: from the cursor upwards, most recent
+    /// match first.
+    fn term_find_first(&mut self) {
+        let Some(query) = self.term_find.as_ref().map(|f| f.query.clone()) else {
+            return;
+        };
+        if let Some(s) = self.focused().and_then(TerminalPane::session) {
+            s.clear_selection();
+        }
+        let outcome = self.term_search(&query, true);
+        if let Some(f) = &mut self.term_find {
+            f.outcome = outcome;
+            f.searched = true;
         }
     }
 

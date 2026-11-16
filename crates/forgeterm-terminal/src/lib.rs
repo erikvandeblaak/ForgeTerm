@@ -7,7 +7,9 @@
 
 mod cwd;
 mod filelink;
+mod headless;
 pub use filelink::{FileRef, file_ref_at, file_refs, resolve as resolve_file_ref};
+pub use headless::Headless;
 
 pub use cwd::is_local_path;
 mod input;
