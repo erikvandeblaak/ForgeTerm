@@ -30,6 +30,8 @@ pub struct Sample {
     pub logical_cpus: usize,
     /// Per shell pid; shells that are gone are missing.
     pub shells: HashMap<u32, TreeUsage>,
+    /// Filled by the caller when GPU usage was asked for (see [`crate::gpu`]).
+    pub gpu: Option<crate::GpuStatus>,
 }
 
 /// Keeps sysinfo's state between samples (CPU usage is a difference).
@@ -125,6 +127,7 @@ impl Sampler {
             memory_total: self.sys.total_memory(),
             logical_cpus: cpus,
             shells: out,
+            gpu: None,
         }
     }
 }

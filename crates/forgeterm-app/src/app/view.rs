@@ -320,9 +320,19 @@ impl App {
             .iter()
             .enumerate()
             .map(|(index, s)| ShellChoice {
-                index,
+                command: CommandId::NewTabWithShell(index),
                 name: s.name.clone(),
             })
+            .chain(
+                self.ssh_hosts
+                    .iter()
+                    .enumerate()
+                    .filter(|_| self.ssh_program.is_some())
+                    .map(|(index, h)| ShellChoice {
+                        command: CommandId::NewSshTab(index),
+                        name: format!("SSH: {}", h.alias),
+                    }),
+            )
             .collect();
         let new_tab = button(text("+").size(theme::size::TITLE).color(theme::text()))
             .on_press(Message::Command(CommandId::NewTab))

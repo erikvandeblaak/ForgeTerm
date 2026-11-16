@@ -1,8 +1,11 @@
 //! What runs inside ForgeTerm's terminals, from the operating system's process
-//! table (sysinfo). Read-only: nothing is ever signalled or killed from here.
+//! table (sysinfo), and GPU usage from the vendor's interface ([`gpu`]). Read-only:
+//! nothing is ever signalled or killed from here.
 
+pub mod gpu;
 mod usage;
 
+pub use gpu::{GpuProbe, GpuStatus, GpuUsage};
 pub use usage::{Sample, Sampler, TreeUsage};
 
 use std::collections::HashMap;

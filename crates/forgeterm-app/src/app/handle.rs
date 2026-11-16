@@ -42,9 +42,7 @@ impl App {
                 modifiers,
                 captured,
             } => return self.on_key(key, text, modifiers, captured),
-            Message::ShellPicked(choice) => {
-                return self.run_command(CommandId::NewTabWithShell(choice.index));
-            }
+            Message::ShellPicked(choice) => return self.run_command(choice.command),
             // Through the command, so a page covering the terminals (Mission Control,
             // Git Control Center) closes too, also when the active tab is clicked.
             Message::SelectTab(index) => return self.run_command(CommandId::SelectTab(index)),
@@ -335,6 +333,7 @@ impl App {
                     self.load_settings(false);
                 }
                 self.save_session();
+                self.load_ssh_hosts_if_changed();
                 let sample = self.sample_monitor();
                 // Files open in the viewer that changed on disk are reloaded.
                 let changed: Vec<PathBuf> = self

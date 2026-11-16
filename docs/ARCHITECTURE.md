@@ -303,7 +303,13 @@ Eén bron: `assets/branding/forgeterm-logo.svg`. Het venstericoon wordt bij het 
 
 ## 4m. Monitor
 
-`forgeterm-system::Sampler` houdt een sysinfo-`System` vast (CPU-gebruik is een verschil tussen twee metingen; de eerste meting heeft dus geen CPU-waarde en het paneel zegt "measuring…"). Per meting: totaal CPU (alle cores = 100 %), gebruikt/totaal RAM, en per shell-pid de hele procesboom (kinderen, kleinkinderen, …; breedte-eerst) met CPU (per-proces-waarden van sysinfo gedeeld door het aantal logische cores), resident geheugen, aantal processen en programmanamen. De app meet elke 2 s op een achtergrondthread, alleen als het paneel open is en er geen meting loopt; 90 metingen historie. Grafieken: één reeks per sparkline (geen legenda), 0–100 %, kleur `CHART_CYAN` (gevalideerd), hover = kruisdraad met waarde en leeftijd. GPU wordt niet gemeten en staat er zo.
+`forgeterm-system::Sampler` houdt een sysinfo-`System` vast (CPU-gebruik is een verschil tussen twee metingen; de eerste meting heeft dus geen CPU-waarde en het paneel zegt "measuring…"). Per meting: totaal CPU (alle cores = 100 %), gebruikt/totaal RAM, en per shell-pid de hele procesboom (kinderen, kleinkinderen, …; breedte-eerst) met CPU (per-proces-waarden van sysinfo gedeeld door het aantal logische cores), resident geheugen, aantal processen en programmanamen. De app meet elke 2 s op een achtergrondthread, alleen als het paneel open is en er geen meting loopt; 90 metingen historie. Grafieken: één reeks per sparkline (geen legenda), 0–100 %, kleur `CHART_CYAN` (gevalideerd), hover = kruisdraad met waarde en leeftijd.
+
+GPU (`forgeterm-system::gpu`), alleen via gedocumenteerde interfaces van de leverancier:
+- **NVIDIA** (Windows en Linux): NVML, de bibliotheek van de driver. `nvml-wrapper` laadt die pas tijdens het draaien; zonder driver geeft dat "not available" met de reden. Gemeten worden: belasting, VRAM gebruikt/totaal en temperatuur.
+- **AMD op Linux:** de sysfs-tellers van amdgpu (`gpu_busy_percent`, `mem_info_vram_*`, hwmon `temp1_input`).
+- **Al het andere** (AMD/Intel op Windows, Intel op Linux): "not available" met de reden. Er wordt niets geschat.
+- NVML openen kan de losse GPU van een laptop wekken. Daarom bestaat de `GpuProbe` alleen zolang het monitorpaneel open is: Mission Control meet wel CPU, maar geen GPU. Bij het sluiten van het paneel laat de volgende tick de driver los.
 
 ## 4o. Toetsenbord: kitty-protocol
 
@@ -354,7 +360,7 @@ Door de reviewer gecontroleerd en in orde bevonden: OSC 52 lezen geweigerd, tite
 
 - **De grote platformverschillen** zitten in `shell.rs` (welke shells, hoe ze starten) en in alacritty's `tty` (ConPTY tegen een echte PTY).
 - **Daarnaast** staan er kleine `#[cfg]`-takken op ongeveer twintig plaatsen. Voorbeelden: padregels (drive-letters, UNC, hoofdletters), geen consolevenster bij git op Windows, CRLF op het klembord, Ctrl+V alleen op Windows, en bestanden openen met het OS.
-- Elke tak is klein en blijft bij de code waar hij over gaat. Een aparte `forgeterm-platform`-crate komt er pas met het eerste grotere onderdeel, zoals GPU-metingen (P3).
+- Elke tak is klein en blijft bij de code waar hij over gaat. Een aparte `forgeterm-platform`-crate is (nog) niet nodig: de GPU-meting is per leverancier en niet per OS, en zit in `forgeterm-system::gpu`.
 - **Linux** is getest in WSL Ubuntu 24.04, de basis van Linux Mint 22:
   - build en alle tests, inclusief echte PTY's met `/bin/sh` en bash;
   - de GUI onder WSLg, via `FORGETERM_SCREENSHOT`;

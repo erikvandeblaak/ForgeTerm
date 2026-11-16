@@ -245,7 +245,8 @@ Let op: Kladblok in Windows 11 opent het bestand als tabblad in een al geopend K
 |---|---|---|
 | M1 | `ping` in de tab, Ctrl+Shift+M → per terminal "2 processes · PING, 94 MB"; Windows zelf (WMI): pwsh + PING.EXE, 94 MB working set | ✅ identiek |
 | M2 | Systeemgeheugen 11.5 / 15.7 GB (73 %); Windows: 11.5 / 15.7 GB | ✅ identiek |
-| M3 | GPU staat er als "not measured" (niet verzonnen) | ✅ |
+| M3 | GPU staat er als "not measured" (niet verzonnen) | ✅ (2026-11-10; vervangen door M3b) |
+| M3b | GPU (2026-11-16, RTX 4070 Laptop): belasting met sparkline, naam, VRAM, temperatuur en bron "NVML"; waarden komen overeen met `nvidia-smi`; ook in Arctic leesbaar. WSL: NVML meet dezelfde GPU (`probe_measures_or_says_why`). amdgpu-sysfs: unit-test met nagemaakte sysfs-map (geen AMD-hardware) | ✅ |
 | M4 | Hover over de geheugen-sparkline → kruisdraad + "74 % · 16 s ago" (eerst niet: canvas tekende niet opnieuw bij muisbeweging; opgelost) | ✅ |
 | M5 | Na `ping`: "1 process · waiting at the prompt"; ForgeTerm hard beëindigd → geen achtergebleven ping | ✅ |
 | I1 | Venstericoon (titelbalk) = logo; `forgeterm.exe` bevat het icoon (ExtractAssociatedIcon toont het F-logo) | ✅ |
@@ -469,7 +470,17 @@ Zie `docs/PERFORMANCE.md` voor de cijfers. GUI-controles van de wijzigingen:
 | TH8 | Thema in `settings.toml` wijzigen terwijl ForgeTerm draait: Midnight → Cyber zonder herstart. Onbekende naam: melding "is not a theme; using midnight. Themes: …" en terug naar de standaard, zoals bij andere ongeldige waarden | ✅ |
 | TH9 | Gevonden tijdens deze test: About en Keyboard Shortcuts via de palette gingen meteen weer dicht (de Enter van het invoerveld sloot ze). Nu blijven ze open; Esc en een echte Enter sluiten ze. Quit via de palette met een draaiend programma vraagt nog steeds eerst | ✅ na fix |
 | TH10 | Linux (WSLg, `FORGETERM_SCREENSHOT`): Arctic met verkenner; bash-prompt (groen/blauw), tekst en statusbalk leesbaar | ✅ |
-| TH11 | Onafhankelijke review: een afgelopen terminal die openblijft (exitcode ≠ 0) hield na een themawissel de oude kleuren. Nu bewaart het paneel het scherm (`EndedScreen`) en tekent het opnieuw in het nieuwe palet; een paneel zonder shell krijgt een leeg beeld in de nieuwe kleuren (`ended_screen_redraws_in_a_new_palette`). GUI-controle hiervan nog niet gedaan | ✅ (test) |
+| TH11 | Onafhankelijke review: een afgelopen terminal die openblijft (exitcode ≠ 0) hield na een themawissel de oude kleuren. Nu bewaart het paneel het scherm (`EndedScreen`) en tekent het opnieuw in het nieuwe palet; een paneel zonder shell krijgt een leeg beeld in de nieuwe kleuren (`ended_screen_redraws_in_a_new_palette`). GUI: `exit 3` in PowerShell, daarna Arctic: tekst en melding "exited with code 3" in de nieuwe kleuren | ✅ |
+
+### SSH-profielen (2026-11-16, Windows 11, `USERPROFILE` naar een testmap met `.ssh/config`)
+
+| # | Stap | Resultaat |
+|---|---|---|
+| SH1 | Palette "ssh": "New SSH Tab: localhost (tester@localhost:22)" en "devbox (erik@devbox.invalid)"; `Host *` staat er niet | ✅ |
+| SH2 | File-menu: de twee hosts onder de shells | ✅ |
+| SH3 | "New SSH Tab: localhost": tab "SSH: localhost", ssh meldt "Connection refused" (geen server), paneel blijft open met exitcode 255 | ✅ |
+| SH4 | Statusbalk van de SSH-tab toonde de lokale map en git-status → nu geen lokale map voor SSH-panelen (wel meegeteld bij "worktree in gebruik") | ✅ na fix (unit + code) |
+| SH5 | Parser: wildcards, negaties, `Match`, `Include`, `-optie` als alias, eerste waarde wint, `--` vóór de alias (unit) | ✅ |
 
 ### Testvalkuilen (geleerd)
 

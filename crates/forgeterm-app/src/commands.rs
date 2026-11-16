@@ -24,6 +24,8 @@ pub enum CommandId {
     NewTab,
     /// Index into the detected shell list.
     NewTabWithShell(usize),
+    /// Index into the SSH hosts of `~/.ssh/config` (not bindable: the list changes).
+    NewSshTab(usize),
     CloseTab,
     ClosePane,
     NextTab,
@@ -226,6 +228,7 @@ impl CommandId {
                 | WorktreeTerminal(_)
                 | RemoveWorktree(_)
                 | CloseTabAt(_)
+                | NewSshTab(_)
         )
     }
 
@@ -238,6 +241,7 @@ impl CommandId {
             self,
             NewTab
                 | NewTabWithShell(_)
+                | NewSshTab(_)
                 | NextTab
                 | PreviousTab
                 | SelectTab(_)
@@ -273,8 +277,8 @@ impl CommandId {
         use CommandId::*;
         match self {
             CommandPalette | ZoomIn | ZoomOut | ZoomReset | ToggleMonitor | SetTheme(_) => "View",
-            NewTab | NewTabWithShell(_) | CloseTab | CloseTabAt(_) | NextTab | PreviousTab
-            | SelectTab(_) => "Tab",
+            NewTab | NewTabWithShell(_) | NewSshTab(_) | CloseTab | CloseTabAt(_) | NextTab
+            | PreviousTab | SelectTab(_) => "Tab",
             SplitRight | SplitDown | ClosePane | TogglePaneZoom | FocusPane(_) => "Pane",
             RestartShell
             | ClearScrollback
@@ -362,6 +366,7 @@ impl CommandId {
             }
             // Per-terminal actions exist only for live terminals: not bindable.
             GoToTerminal(_) => "go_to_terminal",
+            NewSshTab(_) => "new_ssh_tab",
             TerminalFolder(_) => "terminal_folder",
             TerminalGit(_) => "terminal_git",
             StopTerminal(_) => "stop_terminal",
@@ -468,6 +473,7 @@ impl CommandId {
             CommandPalette => "Show Command Palette",
             NewTab => "New Tab",
             NewTabWithShell(_) => "New Tab with Shell",
+            NewSshTab(_) => "New SSH Tab",
             CloseTab => "Close Tab",
             ClosePane => "Close Pane",
             NextTab => "Next Tab",
