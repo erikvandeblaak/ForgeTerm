@@ -322,9 +322,17 @@ mod tests {
         for t in &all {
             assert_ne!(t.name, t.id, "{} needs a name", t.id);
             assert!(t.description.is_some(), "{} needs a description", t.id);
-            assert!(!t.variables().is_empty(), "{} has no variables", t.id);
             assert!(!t.body.ends_with('\n'));
         }
+        // A template without variables is complete as it is (Insert works at once).
+        let check = all.iter().find(|t| t.id == "check-thoroughly").unwrap();
+        assert!(check.variables().is_empty());
+        let r = render(&check.body, &HashMap::new());
+        assert!(r.missing.is_empty());
+        assert_eq!(
+            r.text,
+            "Check, verify and test everything very thoroughly. Keep going until you really need me."
+        );
     }
 
     #[test]

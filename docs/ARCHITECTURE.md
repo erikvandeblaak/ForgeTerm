@@ -153,6 +153,20 @@ Alleen gedocumenteerde interfaces (Claude Code-documentatie op code.claude.com, 
 - **Invoegen**: klik op een contextbestand → in een Claude Code-terminal `@pad` (relatief aan de projectroot; met spaties het volledige pad), in Codex het volledige pad, in een shell het gequote pad. Nooit een Enter.
 - **Niet gedaan / bewust niet:** ForgeTerm verstuurt geen prompts, leest geen sessies of tokens en toont geen kosten (geen gedocumenteerde bron). Hooks worden niet geïnterpreteerd (alleen het settings-bestand wordt getoond).
 
+## 4g2. Mission Control
+
+- **Model** (`forgeterm-agents::mission`, GUI-vrij, getest): `classify(Process, Option<Reported>, bell) -> Status`. Een dood proces wint altijd (exit 0 = Exited, anders Failed). Daarna een gemelde status (OSC 7501: Blocked → *Needs you*, Error → *Failed*), dan de bel, dan Working/Done/Idle. Zonder melding is het *Running*: ForgeTerm leidt uit stilte nooit "idle" of "wacht op jou" af en toont alleen de feiten ("no output for 2m"). `urgency()` sorteert wat aandacht vraagt bovenaan.
+- **Branch** (`forgeterm-git::head`): leest `.git/HEAD`, of via een `.git`-bestand (`gitdir:`) de HEAD van een gekoppelde worktree. Er draait geen git-proces, dus geen filters of hooks, en het is veilig in niet-vertrouwde repo's. Een netwerk-`gitdir` wordt geweigerd; reads zijn max. 4 KB, alleen gewone bestanden.
+- **App** (`mission_view.rs` + `App::mission_*`): het dashboard vervangt het pane-gebied, zijpanelen blijven ernaast mogelijk.
+  - **Previews:** agent-terminals blijven bij elke wakeup verversen, zodat de miniatuur live is.
+  - **Wat telt als "gezien":** niets. Bellen en statussen worden niet bevestigd terwijl het dashboard openstaat.
+  - **Runtime:** een tick van 1 s, alleen als het dashboard open is, verzorgt de tijden.
+  - **Branch verversen:** elke 5 s, op een achtergrondthread.
+  - **CPU en geheugen:** de bestaande monitor-sampler (2 s) draait ook als het dashboard open is. De CPU-historie per agent (60 metingen) heeft een auto-schaal.
+- **Acties** zijn commands: `ToggleMissionControl`, `GoToTerminal`, `TerminalFolder`, `TerminalGit` en `StopTerminal` (met de `TermId`). Commands die een terminal maken of tonen (`CommandId::shows_terminals`), sluiten eerst het dashboard, omdat een nieuwe pane pas bij zijn eerste layout start.
+- **Beëindigen:** het sluiten van een draaiende agent-sessie vraagt altijd bevestiging. Een agent is zelf het proces van de terminal; de kindproces-check zag hem daarom niet.
+- **Afgelopen sessies:** max. 12, met hoe de sessie eindigde (exitcode, niet gestart, door jou gesloten) en de looptijd.
+
 ## 4h. Prompt Studio
 
 - **Sjablonen** (`forgeterm-prompts`): Markdown met optionele front matter (`name`, `description`) en `{{naam}}`-placeholders (`[A-Za-z0-9_-]`, spaties binnen de haken toegestaan; al het andere blijft letterlijke tekst). Ingebouwd: 6 sjablonen (`include_str!`). Eigen: `.md` in `<settings-map>/prompts` (niet recursief, max 256 KB, UTF-8; problemen als tekst), overschrijven een ingebouwd sjabloon met dezelfde bestandsnaam. Laden op een achtergrondthread, bij elke opening en via Reload.

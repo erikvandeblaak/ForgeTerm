@@ -45,6 +45,7 @@ A terminal that runs AI agents has to be predictable. ForgeTerm puts the tools y
 | **Tabs and splits** | Side by side or stacked, drag the divider, maximise one pane. Each tab picks its own shell: PowerShell 7, Windows PowerShell, cmd, Git Bash, WSL, bash. |
 | **Command Palette** | Ctrl+Shift+P lists every action with fuzzy search. The same actions are in the menu bar, and every shortcut can be changed in `settings.toml`. |
 | **AI workspace** | Finds Claude Code and Codex, shows their version and starts them in the project root as a tab or split. Shows the project context: `CLAUDE.md`, `AGENTS.md`, rules, skills, commands, subagents and MCP. |
+| **Mission Control** | Ctrl+Shift+D shows every agent in the window as a live card: status, project and branch, runtime, time since the last output, a miniature of its terminal, and measured CPU and memory. Open, show its files or changes, or stop it (asks first). Status comes from the agent itself when it reports one; otherwise only facts are shown, never guesses. |
 | **Prompt Studio** | Templates with `{{variables}}`. ForgeTerm fills in what it actually knows (project, folder, selected text, file) and inserts the prompt without an Enter. Floating, or docked beside the terminal. Your own templates are plain `.md` files. |
 | **Shell integration** | Every prompt gets a mark in the margin (succeeded, failed, running). Jump between commands with Ctrl+Shift+↑/↓, copy the output of the last command, or put it in your agent's prompt. Never touches your profile or rc files. |
 | **Code viewer** | Read-only viewer with syntax highlighting, line numbers, a minimap, search and copy. Ctrl+click on `src/main.rs:42`, `Program.cs(12,5)` or a Python traceback in the output opens the file at that line. |
@@ -92,6 +93,7 @@ There is no macOS version.
 | Close pane | Ctrl+Shift+W |
 | Previous / next command | Ctrl+Shift+↑ / ↓ |
 | AI workspace | Ctrl+Shift+A |
+| Mission Control (agents dashboard) | Ctrl+Shift+D |
 | Prompt Studio | Ctrl+Shift+I |
 | Explorer | Ctrl+Shift+E |
 | Code viewer | Ctrl+Shift+O |

@@ -14,11 +14,13 @@
 //! Only `stage`, `unstage` and `commit` change anything, and only when the user
 //! asks; a commit runs the repository's hooks exactly like `git commit` would.
 
+mod head;
 mod history;
 mod refs;
 mod run;
 mod status;
 
+pub use head::{Head, head, parse_head};
 pub use history::activity;
 pub use history::{Activity, HistoryEntry, daily_counts, history, parse_history, show_commit};
 pub use refs::{

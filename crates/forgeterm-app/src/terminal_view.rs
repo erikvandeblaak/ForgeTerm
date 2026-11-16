@@ -387,7 +387,7 @@ fn font_for(cell: &CellView) -> Font {
     }
 }
 
-fn draw_snapshot(frame: &mut Frame, snap: &Snapshot, m: Metrics, size: Size, focused: bool) {
+pub fn draw_snapshot(frame: &mut Frame, snap: &Snapshot, m: Metrics, size: Size, focused: bool) {
     let (cw, ch) = (m.cell_width, m.cell_height);
     frame.fill_rectangle(Point::ORIGIN, size, to_color(snap.background));
 
