@@ -407,6 +407,8 @@ Wegwerp-repo `demo-shop` (branch `feature/checkout`, 1 wijziging). Claude Code 2
 | CW8 | *Swap A ⇄ B*: kanten en cijfers wisselen, het gekozen bestand blijft (eerste versie verloor het, opgelost) | ✅ |
 | CW9 | A-keuze via dropdown → `demo-shop · main`: A 0 bestanden, "changed in both" 0 | ✅ |
 | CW10 | Repository-config met `filter.*.clean` + Refresh: kaart *Git is paused*, niets gelezen | ✅ |
+| CW12 | 600 untracked bestanden in B (nagebootste `node_modules`): pagina blijft vlot, lijst stopt na 500 met "… and 104 more files", bestanden voorbij de teltgrens tonen alleen "new" | ✅ |
+| CW13 | Na de reviewfixes: *Open test terminals* typt nog steeds `cargo test` in beide, zonder Enter | ✅ |
 | CW11 | Linux (WSLg) | ⬜ alleen tests en clippy voor `x86_64-unknown-linux-gnu` |
 
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)

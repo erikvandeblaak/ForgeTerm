@@ -219,9 +219,10 @@ pub enum Message {
     ComparePickA(compare_view::Choice),
     ComparePickB(compare_view::Choice),
     CompareSelect(String),
-    /// (load number, path, side-by-side rows and whether git's diff was cut off).
+    /// (the A/B folders it was read from, path, side-by-side rows and whether
+    /// git's diff was cut off).
     CompareDiffLoaded(
-        u64,
+        [PathBuf; 2],
         String,
         Result<(forgeterm_git::SideBySide, bool), String>,
     ),
@@ -1404,6 +1405,14 @@ impl App {
                     return Task::none();
                 }
                 self.compare.busy = false;
+                if self
+                    .compare
+                    .data
+                    .as_ref()
+                    .is_some_and(|d| d.root != data.root)
+                {
+                    self.compare.test_command_edited = false;
+                }
                 if !self.compare.test_command_edited {
                     self.compare.test_command = data.test_command.unwrap_or_default().to_owned();
                 }
@@ -1448,8 +1457,10 @@ impl App {
                 return self.compare_sides_changed();
             }
             Message::CompareSelect(path) => return self.load_compare_diff(path, true),
-            Message::CompareDiffLoaded(seq, path, result) => {
-                if seq == self.compare.seq
+            Message::CompareDiffLoaded(pair, path, result) => {
+                // Only for the pair shown now (sides may have been picked or swapped
+                // meanwhile).
+                if self.compare.paths().as_ref() == Some(&pair)
                     && let Some(d) = &mut self.compare.diff
                     && d.path == path
                 {
@@ -2866,13 +2877,12 @@ impl App {
                 result: None,
             });
         }
-        let seq = self.compare.seq;
         background(
             move || {
                 let r = compare_view::load_diff(&root, &a, &b, &path);
-                (path, r)
+                ([a, b], path, r)
             },
-            move |(path, r)| Message::CompareDiffLoaded(seq, path, r),
+            |(pair, path, r)| Message::CompareDiffLoaded(pair, path, r),
         )
     }
 
@@ -2903,6 +2913,17 @@ impl App {
         };
         let command = self.compare.test_command.trim().to_owned();
         if command.is_empty() {
+            return Task::none();
+        }
+        if let Some(p) = [&a, &b].into_iter().find(|p| {
+            !p.to_str().is_some_and(forgeterm_terminal::is_local_path)
+                || !forgeterm_fs::resolves_locally(p)
+                || !p.is_dir()
+        }) {
+            self.notice = Some(format!(
+                "No test terminals: {} is not a local folder.",
+                p.display()
+            ));
             return Task::none();
         }
         let Some(shell) = self.shell_at(None) else {
@@ -2944,6 +2965,12 @@ impl App {
                 continue;
             };
             let Some(s) = t.session() else {
+                // Not started yet (it starts at its first layout): keep waiting.
+                if t.is_awaiting_size()
+                    && now.duration_since(p.since) <= compare_view::INSERT_GIVE_UP
+                {
+                    self.pending_inserts.push(p);
+                }
                 continue;
             };
             if compare_view::ready_for_insert(s.at_prompt(), t.since_output(now)) {

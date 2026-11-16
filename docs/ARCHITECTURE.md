@@ -236,6 +236,14 @@ Alleen gedocumenteerde interfaces (Claude Code-documentatie op code.claude.com, 
 - **Weergave zonder oordeel:** tegels per kant (bestanden, +/−), "changed in both" (een feit, relevant bij samenvoegen), de bestandenlijst met beide kanten, de side-by-side diff in de kleuren van de kanten (A cyaan, B violet; geen rood/groen, want geen van beide is "oud" of "fout"), en een voettekst met de beperkingen van de cijfers.
 - **Tests:** `CompareOpenTests` opent één tab met een shell in A naast een shell in B. Het commando (voorstel uit `forgeterm_agents::test_command`: `Cargo.toml` → `cargo test`, `package.json` → `npm test`/`pnpm`/`yarn`, Python, Go, .NET, Maven, Gradle, mix, make; aanpasbaar) wordt pas ingevoegd als de shell zijn prompt toont (`Session::at_prompt`, of 1,5 s stille uitvoer zonder shell-integratie; na 20 s een melding). Altijd zonder Enter: de gebruiker start elke run. De pagina toont per kant het laatste commando met exitcode uit OSC 133 (`Session::last_run`), anders "not available".
 - **Eén prompt voor beide agents** (`CompareInsertPrompt`): de tekst gaat als paste naar de eerste agent van dit venster in A en in B, zonder Enter. Een agent zonder bracketed paste krijgt meerregelige tekst niet; de melding zegt waar het wel en niet is ingevoegd.
+- **Uit een onafhankelijke review (verholpen):**
+  - een testcommando ging verloren als de nieuwe pane nog geen layout had (er is dan nog geen sessie); het wacht nu;
+  - de bestandenlijst was O(n²) en werd elke tick opnieuw opgebouwd; nu één keer per laadbeurt (`file_rows`, BTreeMap) en max. 500 rijen getoond;
+  - side-by-side alleen voor bestanden tot 2 MB (`MAX_SIDE_BY_SIDE_BYTES`);
+  - een diff-resultaat hoort bij het A/B-paar waarvoor het gelezen is;
+  - testterminals alleen in lokale mappen;
+  - een getypt testcommando vervalt bij een andere repository.
+  Bewust zo gelaten: zonder shell-integratie geldt 1,5 s stille uitvoer als "prompt"; een te vroeg ingevoegd commando wordt nooit uitgevoerd (geen Enter). CRLF tegen LF toont regels als gewijzigd die er hetzelfde uitzien (git ziet ze ook verschillend).
 - **Getest in de GUI** (TEST_PLAN, *Compare*): cijfers tegen een wegwerp-repo, de diff, Swap/A-B-keuze, testterminals met exitcode 0 en 101, de prompt in twee Claude Code-sessies zonder Enter, en een onvertrouwde repo.
 
 ## 4j. Code-viewer

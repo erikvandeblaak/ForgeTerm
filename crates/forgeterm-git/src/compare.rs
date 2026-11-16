@@ -148,9 +148,21 @@ fn count_lines(path: &Path) -> Option<u32> {
     u32::try_from(newlines + last).ok()
 }
 
+/// Files larger than this are not diffed side by side (git would read them whole,
+/// and Compare diffs the selected file again on every reload).
+pub const MAX_SIDE_BY_SIDE_BYTES: u64 = 2 * 1024 * 1024;
+
 /// Unified diff of two files (`git diff --no-index`), run in `dir`. `None` stands
 /// for a file that does not exist on that side. Equal files give no lines.
 pub fn diff_files(dir: &Path, a: Option<&Path>, b: Option<&Path>) -> Result<Diff, String> {
+    for p in [a, b].into_iter().flatten() {
+        if std::fs::symlink_metadata(p).is_ok_and(|m| m.len() > MAX_SIDE_BY_SIDE_BYTES) {
+            return Err(format!(
+                "larger than {} MB: too large to show side by side",
+                MAX_SIDE_BY_SIDE_BYTES / (1024 * 1024)
+            ));
+        }
+    }
     let side = |p: Option<&Path>| {
         p.map_or_else(
             || "/dev/null".to_owned(),
@@ -358,5 +370,18 @@ mod tests {
         assert!(safe_join(&root, r"C:\Windows\win.ini").is_none());
         #[cfg(not(windows))]
         assert!(safe_join(&root, "/etc/passwd").is_none());
+    }
+
+    #[test]
+    fn large_files_are_not_diffed() {
+        let dir = std::env::temp_dir().join(format!("forgeterm-big-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let big = dir.join("big.txt");
+        let f = std::fs::File::create(&big).unwrap();
+        f.set_len(MAX_SIDE_BY_SIDE_BYTES + 1).unwrap();
+        let e = diff_files(&dir, None, Some(&big)).unwrap_err();
+        assert!(e.contains("too large"), "{e}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

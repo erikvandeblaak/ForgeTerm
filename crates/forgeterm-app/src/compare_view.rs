@@ -69,6 +69,8 @@ pub struct CompareData {
     pub sides: Option<[Side; 2]>,
     /// The common commit, or why there is none.
     pub base: Result<String, String>,
+    /// [`file_rows`] of the two sides (empty when a side was not read).
+    pub rows: Vec<FileRow>,
     pub test_command: Option<&'static str>,
     pub loaded_at: Instant,
 }
@@ -136,31 +138,36 @@ pub fn pick_sides(list: &[Worktree], a: Option<&Path>, b: Option<&Path>) -> Opti
     Some((ia, ib))
 }
 
-/// A file in the list: its counts in A and B (`None`: unchanged on that side).
+/// A file in the list: its index in A's and B's files (`None`: unchanged there).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FileRow<'a> {
-    pub path: &'a str,
-    pub a: Option<&'a ChangedFile>,
-    pub b: Option<&'a ChangedFile>,
+pub struct FileRow {
+    pub path: String,
+    pub a: Option<usize>,
+    pub b: Option<usize>,
 }
 
-impl FileRow<'_> {
+impl FileRow {
     pub fn in_both(&self) -> bool {
         self.a.is_some() && self.b.is_some()
     }
 }
 
-/// Every path changed in A or B, sorted, with both sides' counts.
-pub fn file_rows<'a>(a: &'a [ChangedFile], b: &'a [ChangedFile]) -> Vec<FileRow<'a>> {
-    let mut paths: Vec<&str> = a.iter().chain(b).map(|f| f.path.as_str()).collect();
-    paths.sort_unstable();
-    paths.dedup();
-    paths
-        .into_iter()
-        .map(|path| FileRow {
-            path,
-            a: a.iter().find(|f| f.path == path),
-            b: b.iter().find(|f| f.path == path),
+/// Every path changed in A or B, sorted. Built once per load (a worktree with an
+/// un-ignored `node_modules` can list tens of thousands of files).
+pub fn file_rows(a: &[ChangedFile], b: &[ChangedFile]) -> Vec<FileRow> {
+    let mut map: std::collections::BTreeMap<&str, (Option<usize>, Option<usize>)> =
+        std::collections::BTreeMap::new();
+    for (i, f) in a.iter().enumerate() {
+        map.entry(f.path.as_str()).or_default().0 = Some(i);
+    }
+    for (i, f) in b.iter().enumerate() {
+        map.entry(f.path.as_str()).or_default().1 = Some(i);
+    }
+    map.into_iter()
+        .map(|(path, (a, b))| FileRow {
+            path: path.to_owned(),
+            a,
+            b,
         })
         .collect()
 }
@@ -223,6 +230,10 @@ pub fn load(
             },
         ]);
     }
+    let rows = match &sides {
+        Some([Side { files: Ok(a), .. }, Side { files: Ok(b), .. }]) => file_rows(a, b),
+        _ => Vec::new(),
+    };
     let test_command = sides
         .as_ref()
         .and_then(|[a, _]| forgeterm_agents::test_command(&a.worktree.path))
@@ -233,6 +244,7 @@ pub fn load(
         worktrees,
         sides,
         base,
+        rows,
         test_command,
         loaded_at: Instant::now(),
     }
@@ -382,8 +394,8 @@ fn found<'a>(data: &'a CompareData, v: &View<'a>) -> Element<'a, Message> {
     };
     let choices: Vec<Choice> = list.iter().filter(|w| usable(w)).map(choice).collect();
     let mut page = column![header(data, a, b, choices, v)].spacing(16);
-    page = page.push(tiles(a, b));
-    let files_card = files(a, b, v.compare);
+    page = page.push(tiles(data, a, b));
+    let files_card = files(data, a, b, v.compare);
     let diff_card = diff_panel(a, b, v.compare);
     page = page.push(
         row![
@@ -478,7 +490,7 @@ fn header<'a>(
     )
 }
 
-fn tiles<'a>(a: &'a Side, b: &'a Side) -> Element<'a, Message> {
+fn tiles<'a>(data: &'a CompareData, a: &'a Side, b: &'a Side) -> Element<'a, Message> {
     let side_tile = |label: &'a str, s: &'a Side, accent: Color| match &s.files {
         Ok(f) => {
             let (add, del) = totals(f);
@@ -495,8 +507,8 @@ fn tiles<'a>(a: &'a Side, b: &'a Side) -> Element<'a, Message> {
         Err(e) => tile(label, "—".to_owned(), e.clone(), theme::AMBER),
     };
     let both = match (&a.files, &b.files) {
-        (Ok(fa), Ok(fb)) => {
-            let n = file_rows(fa, fb).iter().filter(|r| r.in_both()).count();
+        (Ok(_), Ok(_)) => {
+            let n = data.rows.iter().filter(|r| r.in_both()).count();
             tile(
                 "CHANGED IN BOTH",
                 n.to_string(),
@@ -536,14 +548,22 @@ fn count_label(f: Option<&ChangedFile>) -> (String, Color) {
     }
 }
 
-fn files<'a>(a: &'a Side, b: &'a Side, c: &'a Compare) -> Element<'a, Message> {
+/// Rows drawn in the file list; the rest is counted.
+const MAX_FILES_SHOWN: usize = 500;
+
+fn files<'a>(
+    data: &'a CompareData,
+    a: &'a Side,
+    b: &'a Side,
+    c: &'a Compare,
+) -> Element<'a, Message> {
     let mut list = column![card_title("FILES CHANGED SINCE THE COMMON COMMIT")].spacing(6);
     let (fa, fb) = match (&a.files, &b.files) {
         (Ok(fa), Ok(fb)) => (fa.as_slice(), fb.as_slice()),
         (Err(e), _) => return card(list.push(muted_owned(format!("A: {e}")))),
         (_, Err(e)) => return card(list.push(muted_owned(format!("B: {e}")))),
     };
-    let rows = file_rows(fa, fb);
+    let rows = &data.rows;
     if rows.is_empty() {
         return card(list.push(muted(
             "Neither worktree changed anything since the common commit.",
@@ -551,7 +571,7 @@ fn files<'a>(a: &'a Side, b: &'a Side, c: &'a Compare) -> Element<'a, Message> {
     }
     let max = rows
         .iter()
-        .flat_map(|r| [r.a, r.b])
+        .flat_map(|r| [r.a.map(|i| &fa[i]), r.b.map(|i| &fb[i])])
         .flatten()
         .map(|f| f.added.unwrap_or(0) + f.deleted.unwrap_or(0))
         .max()
@@ -565,8 +585,9 @@ fn files<'a>(a: &'a Side, b: &'a Side, c: &'a Compare) -> Element<'a, Message> {
         ]
         .spacing(8),
     );
-    for r in rows {
-        let selected = c.selected.as_deref() == Some(r.path);
+    for r in rows.iter().take(MAX_FILES_SHOWN) {
+        let (ra, rb) = (r.a.map(|i| &fa[i]), r.b.map(|i| &fb[i]));
+        let selected = c.selected.as_deref() == Some(r.path.as_str());
         let cell = |f: Option<&ChangedFile>| -> Element<'a, Message> {
             let (label, color) = count_label(f);
             let bar: Element<'a, Message> = match f.and_then(|f| f.added.zip(f.deleted)) {
@@ -582,7 +603,7 @@ fn files<'a>(a: &'a Side, b: &'a Side, c: &'a Compare) -> Element<'a, Message> {
             .into()
         };
         let mut name = row![
-            text(r.path.to_owned())
+            text(r.path.clone())
                 .size(12)
                 .color(if selected { theme::CYAN } else { theme::TEXT })
                 .wrapping(text::Wrapping::None),
@@ -594,8 +615,8 @@ fn files<'a>(a: &'a Side, b: &'a Side, c: &'a Compare) -> Element<'a, Message> {
         }
         let line = row![
             container(name).width(Length::Fill).clip(true),
-            cell(r.a),
-            cell(r.b),
+            cell(ra),
+            cell(rb),
         ]
         .spacing(8)
         .align_y(iced::Alignment::Center);
@@ -613,10 +634,16 @@ fn files<'a>(a: &'a Side, b: &'a Side, c: &'a Compare) -> Element<'a, Message> {
                         ..Default::default()
                     }),
             )
-            .on_press(Message::CompareSelect(r.path.to_owned()))
+            .on_press(Message::CompareSelect(r.path.clone()))
             .interaction(iced::mouse::Interaction::Pointer),
             format!("{}\nClick: this file in A beside B", r.path),
         ));
+    }
+    if rows.len() > MAX_FILES_SHOWN {
+        list = list.push(muted_owned(format!(
+            "… and {} more files (only the first {MAX_FILES_SHOWN} are listed)",
+            rows.len() - MAX_FILES_SHOWN
+        )));
     }
     card(list)
 }
@@ -959,11 +986,12 @@ mod tests {
         let a = vec![f("src/a.rs", 1), f("x.txt", 2)];
         let b = vec![f("src/a.rs", 3), f("b.rs", 4)];
         let rows = file_rows(&a, &b);
-        let paths: Vec<&str> = rows.iter().map(|r| r.path).collect();
+        let paths: Vec<&str> = rows.iter().map(|r| r.path.as_str()).collect();
         assert_eq!(paths, ["b.rs", "src/a.rs", "x.txt"]);
         assert!(rows[1].in_both());
-        assert!(rows[0].a.is_none() && rows[0].b.is_some());
-        assert!(!rows[2].in_both());
+        assert_eq!((rows[1].a, rows[1].b), (Some(0), Some(0)));
+        assert_eq!((rows[0].a, rows[0].b), (None, Some(1)));
+        assert_eq!((rows[2].a, rows[2].b), (Some(1), None));
         assert_eq!(totals(&a), (3, 0));
     }
 
