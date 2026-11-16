@@ -45,7 +45,7 @@ Monitor-paneel (Ctrl+Shift+M): CPU en geheugen van het systeem met 3 minuten his
 
 ## Fase 5 — AI Workspace
 
-Agent Adapter System: detectie + versie ✅ Windows (GUI: Claude Code 2.1.322, codex-cli 0.167.0 gevonden); starten in projectroot als tab/split ✅ Windows · Claude Code-adapter: projectcontext (CLAUDE.md, rules, skills, commands, subagents, settings, MCP) ✅ Windows (GUI), `@pad` invoegen ✅ Windows · Codex-adapter (detectie ✅, start ✅ Windows, AGENTS.md ✅) · Prompt Studio met ingebouwde + eigen sjablonen, `{{variabelen}}`, automatische waarden uit echte state en invoegen zonder Enter ✅ Windows (GUI P1–P6) · Hooks/MCP-details tonen ⬜ · Sessie-/tokeninformatie ⬜ (alleen met gedocumenteerde bron).
+**Mission Control** (Ctrl+Shift+D): live kaart per agent (status uit OSC 7501/bel/proces, project, branch uit `HEAD`, runtime, laatste uitvoer, live miniatuur, gemeten CPU/geheugen, Open/Files/Changes/Stop, afgelopen sessies) ✅ Windows (2026-11-16, Claude Code + Codex in wegwerp-repo); "Needs you/Working/Done" alleen unit-getest (ConPTY, zie beperkingen) · Agent Adapter System: detectie + versie ✅ Windows (GUI: Claude Code 2.1.322, codex-cli 0.167.0 gevonden); starten in projectroot als tab/split ✅ Windows · Claude Code-adapter: projectcontext (CLAUDE.md, rules, skills, commands, subagents, settings, MCP) ✅ Windows (GUI), `@pad` invoegen ✅ Windows · Codex-adapter (detectie ✅, start ✅ Windows, AGENTS.md ✅) · Prompt Studio met ingebouwde + eigen sjablonen, `{{variabelen}}`, automatische waarden uit echte state en invoegen zonder Enter ✅ Windows (GUI P1–P6) · Hooks/MCP-details tonen ⬜ · Sessie-/tokeninformatie ⬜ (alleen met gedocumenteerde bron).
 
 ## Fase 6 — Git en Advanced
 

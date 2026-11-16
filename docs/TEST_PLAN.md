@@ -357,6 +357,23 @@ Rust 1.99.1 per gebruiker (rustup, geen sudo); verse clone in het Linux-bestands
 | V5 | GUI: Go to Folder (palette) → veld met huidig pad geselecteerd; `nope` → rode melding "… is not a folder."; `src` → nieuwe root | ✅ |
 | V6 | GUI: verkenner heeft het toetsenbord, `echo typed` + Enter getypt → komt in de terminal en wordt uitgevoerd door de gebruiker-Enter; verkenner laat los | ✅ |
 
+## Mission Control (2026-11-16, Windows 11, FORGETERM_SETTINGS + FORGETERM_SCREENSHOT naar de scratchpad)
+
+Wegwerp-repo `demo-shop` (branch `feature/checkout`, 1 wijziging). Claude Code 2.1.325 en codex-cli 0.167.0 gestart via de palette; **geen prompt verstuurd en geen vraag beantwoord** (trust- en updatevragen bleven staan).
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| MC1 | Ctrl+Shift+D zonder agents: lege staat met gedetecteerde agents (versie) en startknoppen | ✅ |
+| MC2 | Twee agents: een kaart per agent met project, branch `feature/checkout` (uit HEAD), runtime, "no output for …", live miniatuur (trust-/updatevraag leesbaar), geheugen en aantal processen (gemeten), CPU eerst "measuring…" en daarna een waarde | ✅ |
+| MC3 | Lang pad: ingekort met "…" aan het begin, loopt niet meer de buurkaart in (eerste versie wel, opgelost) | ✅ |
+| MC4 | → selecteert de volgende kaart (cyaan rand); Enter opent die terminal (tab 3, Codex) | ✅ |
+| MC5 | Stop op de Codex-kaart: bevestiging "Codex session (tab 3)" + "node in Codex (tab 3)"; Enter sluit de pane; de Codex-updatevraag kreeg die Enter niet. Codex staat onder Recently ended als "closed by you · ran 32s" | ✅ |
+| MC6 | Changes: dashboard dicht, Claude-terminal met Git-paneel (branch, `main.rs` gewijzigd) | ✅ |
+| MC7 | Files: verkenner naast het dashboard, in de map van de agent | ✅ |
+| MC8 | Miniatuur blijft actueel terwijl het dashboard open is (verversen per seconde) | ✅ |
+| MC9 | Status *Needs you / Working / Done* via OSC 7501 | ⬜ alleen unit-getest (ConPTY geeft het query-antwoord niet door; Claude Code meldt dan niets) |
+| MC10 | Linux (WSLg) | ⬜ alleen clippy voor `x86_64-unknown-linux-gnu` |
+
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)
 
 Gemeten 2026-11-10. Opstarttijden uit de eigen tracing-tijdstempels; geheugen = working set na 5 s, idle prompt.
