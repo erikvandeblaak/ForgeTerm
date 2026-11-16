@@ -44,8 +44,75 @@ pub struct Workspace {
     pub restore_session: bool,
 }
 
+/// The color theme of the whole window: UI, terminal colors and code colors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum ThemeChoice {
+    /// Deep blue-black with cyan; the original ForgeTerm look.
+    #[default]
+    Midnight,
+    /// Neutral dark grey, calmer accents.
+    Graphite,
+    /// Light.
+    Arctic,
+    /// Violet-black with neon accents.
+    Cyber,
+    /// Black and white with strong accents and visible borders.
+    HighContrast,
+}
+
+impl ThemeChoice {
+    pub const ALL: [ThemeChoice; 5] = [
+        ThemeChoice::Midnight,
+        ThemeChoice::Graphite,
+        ThemeChoice::Arctic,
+        ThemeChoice::Cyber,
+        ThemeChoice::HighContrast,
+    ];
+
+    /// The value in settings.toml.
+    pub fn id(self) -> &'static str {
+        match self {
+            ThemeChoice::Midnight => "midnight",
+            ThemeChoice::Graphite => "graphite",
+            ThemeChoice::Arctic => "arctic",
+            ThemeChoice::Cyber => "cyber",
+            ThemeChoice::HighContrast => "high-contrast",
+        }
+    }
+
+    /// Display name.
+    pub fn name(self) -> &'static str {
+        match self {
+            ThemeChoice::Midnight => "Midnight",
+            ThemeChoice::Graphite => "Graphite",
+            ThemeChoice::Arctic => "Arctic",
+            ThemeChoice::Cyber => "Cyber",
+            ThemeChoice::HighContrast => "High Contrast",
+        }
+    }
+
+    /// Inverse of [`Self::id`]; case, spaces and `_` versus `-` do not matter.
+    pub fn from_id(text: &str) -> Option<ThemeChoice> {
+        let norm: String = text
+            .trim()
+            .chars()
+            .map(|c| match c {
+                '_' | ' ' => '-',
+                c => c.to_ascii_lowercase(),
+            })
+            .collect();
+        ThemeChoice::ALL.into_iter().find(|t| t.id() == norm)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Appearance {
+    pub theme: ThemeChoice,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
+    pub appearance: Appearance,
     pub terminal: Terminal,
     pub explorer: Explorer,
     pub workspace: Workspace,
@@ -57,6 +124,9 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            appearance: Appearance {
+                theme: ThemeChoice::Midnight,
+            },
             terminal: Terminal {
                 font_size: 14.0,
                 scrollback: 10_000,
@@ -92,6 +162,12 @@ pub const TEMPLATE: &str = r#"# ForgeTerm settings
 #
 # Changes are applied automatically when you save this file.
 # Remove a line (or comment it out with #) to use the default.
+
+[appearance]
+# Color theme of the window, the terminals and the code viewer:
+# "midnight", "graphite", "arctic" (light), "cyber" or "high-contrast".
+# The command palette ("Theme: …") tries one for the current session.
+theme = "midnight"
 
 [terminal]
 # Font size in points (8 to 32). Ctrl+= / Ctrl+- change it for the current session.
@@ -205,6 +281,9 @@ pub fn parse(text: &str) -> Loaded {
 
     for (key, value) in &table {
         match (key.as_str(), value) {
+            ("appearance", Value::Table(t)) => {
+                parse_appearance(t, &mut settings.appearance, &mut problems)
+            }
             ("terminal", Value::Table(t)) => {
                 parse_terminal(t, &mut settings.terminal, &mut problems)
             }
@@ -228,7 +307,7 @@ pub fn parse(text: &str) -> Loaded {
                     }
                 }
             }
-            ("terminal" | "explorer" | "workspace" | "keys", _) => {
+            ("appearance" | "terminal" | "explorer" | "workspace" | "keys", _) => {
                 problems.push(format!("[{key}] must be a section"))
             }
             _ => problems.push(format!("unknown setting '{key}' (ignored)")),
@@ -238,6 +317,30 @@ pub fn parse(text: &str) -> Loaded {
         settings,
         problems,
         unreadable: false,
+    }
+}
+
+fn parse_appearance(t: &Table, out: &mut Appearance, problems: &mut Vec<String>) {
+    for (key, value) in t {
+        let name = format!("appearance.{key}");
+        match key.as_str() {
+            "theme" => {
+                if let Some(s) = string(&name, value, problems) {
+                    match ThemeChoice::from_id(s) {
+                        Some(theme) => out.theme = theme,
+                        None => {
+                            let names: Vec<_> = ThemeChoice::ALL.iter().map(|t| t.id()).collect();
+                            problems.push(format!(
+                                "{name} = \"{s}\" is not a theme; using {}. Themes: {}",
+                                ThemeChoice::default().id(),
+                                names.join(", ")
+                            ))
+                        }
+                    }
+                }
+            }
+            _ => problems.push(format!("unknown setting '{name}' (ignored)")),
+        }
     }
 }
 
@@ -470,6 +573,34 @@ mod tests {
             "explorer.visible must be true or false",
         ] {
             assert!(all.contains(needle), "missing {needle:?} in\n{all}");
+        }
+    }
+
+    #[test]
+    fn theme_is_parsed_leniently_and_unknown_names_keep_the_default() {
+        for (text, theme) in [
+            ("graphite", ThemeChoice::Graphite),
+            (" Arctic ", ThemeChoice::Arctic),
+            ("high_contrast", ThemeChoice::HighContrast),
+            ("High Contrast", ThemeChoice::HighContrast),
+        ] {
+            let s = parse(&format!("[appearance]\ntheme = \"{text}\"\n"));
+            assert!(s.problems.is_empty(), "{text}: {:?}", s.problems);
+            assert_eq!(s.settings.appearance.theme, theme, "{text}");
+        }
+        let s = parse("[appearance]\ntheme = \"solarized\"\nmotion = 1\n");
+        assert_eq!(s.settings.appearance.theme, ThemeChoice::Midnight);
+        assert_eq!(s.problems.len(), 2, "{:?}", s.problems);
+        let all = s.problems.join("\n");
+        assert!(
+            all.contains("\"solarized\" is not a theme; using midnight"),
+            "{all}"
+        );
+        assert!(all.contains("midnight, graphite, arctic, cyber, high-contrast"));
+        assert!(all.contains("unknown setting 'appearance.motion'"), "{all}");
+        for t in ThemeChoice::ALL {
+            assert_eq!(ThemeChoice::from_id(t.id()), Some(t));
+            assert_eq!(ThemeChoice::from_id(t.name()), Some(t));
         }
     }
 

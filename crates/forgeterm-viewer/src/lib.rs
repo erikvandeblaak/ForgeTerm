@@ -24,11 +24,50 @@ pub const TAB_WIDTH: usize = 4;
 /// Longer lines are cut for display (the copy keeps the full text).
 pub const MAX_DISPLAY_COLUMNS: usize = 2000;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Rgb {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
+/// What a piece of code is; the app maps each role to a color of its theme, so a
+/// theme change needs no new highlighting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CodeRole {
+    Text,
+    Comment,
+    String,
+    /// Numbers, language constants, attribute names.
+    Constant,
+    Keyword,
+    Operator,
+    Function,
+    /// Types, classes, namespaces.
+    Type,
+    /// Tags, deleted lines, invalid code.
+    Error,
+    Parameter,
+}
+
+impl CodeRole {
+    pub const ALL: [CodeRole; 10] = [
+        CodeRole::Text,
+        CodeRole::Comment,
+        CodeRole::String,
+        CodeRole::Constant,
+        CodeRole::Keyword,
+        CodeRole::Operator,
+        CodeRole::Function,
+        CodeRole::Type,
+        CodeRole::Error,
+        CodeRole::Parameter,
+    ];
+
+    /// The role travels through syntect as the red channel of a placeholder color.
+    fn code(self) -> u8 {
+        self as u8
+    }
+
+    fn from_code(code: u8) -> CodeRole {
+        CodeRole::ALL
+            .get(usize::from(code))
+            .copied()
+            .unwrap_or(CodeRole::Text)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -280,7 +319,7 @@ fn syntax_for<'a>(
 pub struct Span {
     pub start: usize,
     pub end: usize,
-    pub color: Rgb,
+    pub role: CodeRole,
     pub bold: bool,
     pub italic: bool,
 }
@@ -313,15 +352,10 @@ pub fn highlight(doc: &Document) -> Option<Vec<Vec<Span>>> {
             if start >= end || piece.trim().is_empty() {
                 continue;
             }
-            let c = style.foreground;
             spans.push(Span {
                 start,
                 end,
-                color: Rgb {
-                    r: c.r,
-                    g: c.g,
-                    b: c.b,
-                },
+                role: CodeRole::from_code(style.foreground.r),
                 bold: style.font_style.contains(FontStyle::BOLD),
                 italic: style.font_style.contains(FontStyle::ITALIC),
             });
@@ -331,24 +365,17 @@ pub fn highlight(doc: &Document) -> Option<Vec<Vec<Span>>> {
     Some(out)
 }
 
-/// Default text color of the theme (the color of unhighlighted text).
-pub const TEXT: Rgb = Rgb {
-    r: 0xD6,
-    g: 0xDE,
-    b: 0xEB,
-};
-
-/// Forge Dark for code: the design tokens mapped onto TextMate scopes.
+/// TextMate scopes mapped onto [`CodeRole`]s (the colors come from the app's theme).
 fn forge_theme() -> &'static Theme {
     static THEME: OnceLock<Theme> = OnceLock::new();
     THEME.get_or_init(|| {
-        let c = |hex: u32| Color {
-            r: (hex >> 16) as u8,
-            g: (hex >> 8) as u8,
-            b: hex as u8,
+        let c = |role: CodeRole| Color {
+            r: role.code(),
+            g: 0,
+            b: 0,
             a: 0xFF,
         };
-        let item = |scopes: &str, color: u32, style: Option<FontStyle>| ThemeItem {
+        let item = |scopes: &str, color: CodeRole, style: Option<FontStyle>| ThemeItem {
             scope: ScopeSelectors::from_str(scopes).expect("valid scope selector"),
             style: StyleModifier {
                 foreground: Some(c(color)),
@@ -357,56 +384,64 @@ fn forge_theme() -> &'static Theme {
             },
         };
         Theme {
-            name: Some("Forge Dark".into()),
+            name: Some("Forge roles".into()),
             author: Some("Erik van de Blaak".into()),
             settings: ThemeSettings {
-                foreground: Some(c(0xD6DEEB)),
-                background: Some(c(0x090D14)),
+                foreground: Some(c(CodeRole::Text)),
+                background: Some(c(CodeRole::Text)),
                 ..ThemeSettings::default()
             },
             scopes: vec![
                 item(
                     "comment, punctuation.definition.comment",
-                    0x6B7890,
+                    CodeRole::Comment,
                     Some(FontStyle::ITALIC),
                 ),
                 item(
                     "string, string.quoted, punctuation.definition.string",
-                    0x55E6B5,
+                    CodeRole::String,
                     None,
                 ),
                 item(
                     "constant.numeric, constant.language, constant.character",
-                    0xF5C978,
+                    CodeRole::Constant,
                     None,
                 ),
-                item("constant.other, variable.other.constant", 0xF5C978, None),
+                item(
+                    "constant.other, variable.other.constant",
+                    CodeRole::Constant,
+                    None,
+                ),
                 item(
                     "keyword, storage, storage.type, storage.modifier",
-                    0xA78BFA,
+                    CodeRole::Keyword,
                     None,
                 ),
-                item("keyword.operator", 0xC9D3E3, None),
+                item("keyword.operator", CodeRole::Operator, None),
                 item(
                     "entity.name.function, support.function, meta.function-call",
-                    0x4DD8E8,
+                    CodeRole::Function,
                     None,
                 ),
                 item(
                     "entity.name.type, entity.name.class, support.type, support.class",
-                    0x7CC4FA,
+                    CodeRole::Type,
                     None,
                 ),
-                item("entity.name.tag", 0xF08080, None),
-                item("entity.other.attribute-name", 0xF5C978, None),
-                item("variable.parameter", 0xE6B8A2, None),
-                item("entity.name.namespace, entity.name.module", 0x7CC4FA, None),
-                item("markup.heading", 0x4DD8E8, Some(FontStyle::BOLD)),
-                item("markup.bold", 0xD6DEEB, Some(FontStyle::BOLD)),
-                item("markup.italic", 0xD6DEEB, Some(FontStyle::ITALIC)),
-                item("markup.inserted", 0x55E6B5, None),
-                item("markup.deleted", 0xF08080, None),
-                item("invalid", 0xF08080, None),
+                item("entity.name.tag", CodeRole::Error, None),
+                item("entity.other.attribute-name", CodeRole::Constant, None),
+                item("variable.parameter", CodeRole::Parameter, None),
+                item(
+                    "entity.name.namespace, entity.name.module",
+                    CodeRole::Type,
+                    None,
+                ),
+                item("markup.heading", CodeRole::Function, Some(FontStyle::BOLD)),
+                item("markup.bold", CodeRole::Text, Some(FontStyle::BOLD)),
+                item("markup.italic", CodeRole::Text, Some(FontStyle::ITALIC)),
+                item("markup.inserted", CodeRole::String, None),
+                item("markup.deleted", CodeRole::Error, None),
+                item("invalid", CodeRole::Error, None),
             ],
         }
     })
@@ -515,7 +550,7 @@ mod tests {
     }
 
     #[test]
-    fn highlights_rust_with_forge_colors() {
+    fn highlights_rust_with_roles() {
         let p = temp("h.rs", b"// note\nfn main() { let s = \"hi\"; }\n");
         let d = load(&p).unwrap();
         let spans = highlight(&d).unwrap();
@@ -525,16 +560,15 @@ mod tests {
             spans[line]
                 .iter()
                 .find(|s| s.start <= start && start < s.end)
-                .map(|s| s.color)
+                .map(|s| s.role)
         };
-        let rgb = |hex: u32| Rgb {
-            r: (hex >> 16) as u8,
-            g: (hex >> 8) as u8,
-            b: hex as u8,
-        };
-        assert_eq!(color_of(0, "note"), Some(rgb(0x6B7890)), "comment");
-        assert_eq!(color_of(1, "fn"), Some(rgb(0xA78BFA)), "keyword");
-        assert_eq!(color_of(1, "hi"), Some(rgb(0x55E6B5)), "string");
+        assert_eq!(color_of(0, "note"), Some(CodeRole::Comment));
+        assert_eq!(color_of(1, "fn"), Some(CodeRole::Keyword));
+        assert_eq!(color_of(1, "hi"), Some(CodeRole::String));
+        assert_eq!(color_of(1, "main"), Some(CodeRole::Function));
+        for role in CodeRole::ALL {
+            assert_eq!(CodeRole::from_code(role.code()), role);
+        }
         // Spans stay inside the display line.
         for (i, line) in spans.iter().enumerate() {
             for s in line {

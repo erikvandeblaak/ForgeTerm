@@ -81,7 +81,7 @@ fn main() -> iced::Result {
     iced::application(app::App::boot, app::App::update, app::App::view)
         .title(app::App::title)
         .subscription(app::App::subscription)
-        .theme(|_: &app::App| Some(theme::forge_dark()))
+        .theme(|_: &app::App| Some(theme::iced_theme()))
         .font(include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf").as_slice())
         .font(include_bytes!("../../../assets/fonts/JetBrainsMono-Bold.ttf").as_slice())
         .font(include_bytes!("../../../assets/fonts/JetBrainsMono-Italic.ttf").as_slice())

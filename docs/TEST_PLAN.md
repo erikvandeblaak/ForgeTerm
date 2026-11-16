@@ -20,7 +20,7 @@
 | `forgeterm-agents` (7) | PATH-zoeken (Windows: `.exe` vóór `.cmd`, `.ps1` overgeslagen; ontbrekend = None), `.cmd` → `cmd.exe /d /c`, `--version` van een echt script (lege regel overgeslagen), falend script = fout, hangend script → timeout en beëindigd; front matter; projectscan vanuit submap (git-root, rules, skills, commands in submappen, subagents, settings, MCP); zonder git = startmap | ✅ |
 | `forgeterm-prompts` (8) | Front matter (BOM, CRLF, quotes, zonder afsluiting = body), variabelen in volgorde zonder dubbelingen (ongeldige `{{a b}}` / `{{}}` genegeerd, `{{{x}}}`), waarden letterlijk (geen herexpansie), leeg = ontbrekend, nooit een afsluitende newline, ingebouwde sjablonen geldig, eigen map: override, `.MD`, geen submappen/`.txt`, niet-UTF-8 gemeld, ontbrekende map = geen probleem | ✅ |
 | `forgeterm-git` (12) | Porcelain v2: branch-headers, rename met origineel pad, spaties in paden, conflicten, untracked, onbekende records genegeerd, initial/detached; log-records; tegen echte git: discover vanuit submap, unborn branch, niet-ASCII + spatie, stage/unstage zonder en met HEAD, lege commit-message geweigerd, commit + log, diff unstaged/staged/untracked, fout bij onbekend pad; echt merge-conflict + rename; **repository-fsmonitor wordt niet uitgevoerd** (controle: gewone `git status` voert hem wél uit); branches parsen (ahead/behind, gone, origin/HEAD weg); tegen echte git: branch maken (lege/`-x`/`bad..name` geweigerd), lijst, wisselen, wissel geweigerd bij lokale wijziging, clone met remote branches + upstream, `--track`, history + `show`, ongeldige hash geweigerd, activiteit van vandaag; `daily_counts` (venster, buiten venster genegeerd) | ✅ |
-| `forgeterm-viewer` (6) | UTF-8/BOM/UTF-16 LE+BE/binair/lossy, tabs en besturingstekens zichtbaar, afkappen, CRLF + slot-newline, kopiëren en zoeken, binair/map/te groot geweigerd, Rust-kleuren (comment/keyword/string uit het Forge-thema, spans binnen de regel), syntax per bestandstype + shebang | ✅ |
+| `forgeterm-viewer` (6) | UTF-8/BOM/UTF-16 LE+BE/binair/lossy, tabs en besturingstekens zichtbaar, afkappen, CRLF + slot-newline, kopiëren en zoeken, binair/map/te groot geweigerd, Rust-rollen (comment/keyword/string/function; de kleur komt uit het thema), spans binnen de regel, syntax per bestandstype + shebang | ✅ |
 | `forgeterm-system` (4) | Echte processen: een shell met `ping`/`sleep` → programma gevonden (conhost genegeerd), wachtende shell → leeg, verdwenen pid → afwezig; `.exe` weg uit namen; sampler: eerste meting zonder CPU, tweede met CPU 0–100 %, procesboom (shell + kind, geheugen > 0, programmanaam), RAM gebruikt ≤ totaal | ✅ |
 | `forgeterm-settings` (11) | Template = exact de defaults, leeg = defaults, alle waarden toegepast, 7 fouten → 7 meldingen met fallback, syntaxfout (één regel, `unreadable`), sectie geen tabel, `ensure_file` maakt één keer aan en overschrijft nooit; sessie: heen-en-terug (tabs, geneste splits, ratio's, paden met spaties/quotes, viewer-bestanden), beschadigd bestand (ontbrekend deel, onbekend split-type, lege shell, rest-items, ratio buiten bereik, active te groot), limiet panes per tab, atomisch opslaan + laden | ✅ |
 | `forgeterm-explorer` (6) | Sortering, verborgen, ontbrekende map = fout, lazy uitklappen/inklappen, verouderde resultaten genegeerd, fouten + selectie | ✅ |
@@ -454,6 +454,22 @@ Zie `docs/PERFORMANCE.md` voor de cijfers. GUI-controles van de wijzigingen:
 | Q6 | Palette "stage all" → *Git: Stage All Changes*: drie bestanden staged (gecontroleerd met `git diff --cached`); "unstage all": leeg, paneel meldt "Unstaged 3 files" | ✅ |
 | Q7 | × van tab 2 (via `CloseTabAt`): tab dicht, "Tab 1/1" | ✅ |
 | Q8 | Na het opsplitsen van `app.rs`: Mission Control, Git Control Center, Compare, Esc terug, verkenner, AI-paneel en palette openen; app blijft responsief; dezelfde 222 tests | ✅ |
+
+### Thema's (2026-11-16, Windows 11, FORGETERM_SETTINGS + FORGETERM_SCREENSHOT naar de scratchpad)
+
+| # | Stap | Resultaat |
+|---|---|---|
+| TH1 | `[appearance] theme = "midnight"`: Forge Dark, met verkenner en gekleurde git/PowerShell-uitvoer. Dezelfde kleurwaarden als vóór de thema's (code-review; de test `midnight_is_the_original_forge_dark` vergelijkt het terminalpalet) | ✅ |
+| TH2 | Palette "Theme: Graphite / Arctic / Cyber / High Contrast / Midnight" na elkaar: UI, terminaltekst en cursor wisselen direct, zonder herstart; terug naar Midnight is pixel-identiek aan TH1 (beeldvergelijking) | ✅ |
+| TH3 | Palette en *View*-menu tonen de vijf thema's; het actieve staat er als "(current)" bij | ✅ |
+| TH4 | Arctic: code-viewer, Git-paneel, Mission Control, Git Control Center, Compare, Prompt Studio, monitor en menu leesbaar; gevulde knoppen leesbaar | ✅ |
+| TH5 | Arctic, eerste ronde: PSReadLine-tekst in ANSI wit (`Green`, `-4`) bijna onzichtbaar → wit/helder wit middengrijs; test eist nu ≥ 3:1 voor elke ANSI-kleur | ✅ na fix |
+| TH6 | High Contrast: dezelfde schermen; randen zichtbaar, accenten fel, cursor amber | ✅ |
+| TH7 | Unix: een programma dat OSC 11 vraagt krijgt na `set_palette` de nieuwe achtergrond (`color_query_follows_set_palette`, WSL) | ✅ |
+| TH8 | Thema in `settings.toml` wijzigen terwijl ForgeTerm draait: Midnight → Cyber zonder herstart. Onbekende naam: melding "is not a theme; using midnight. Themes: …" en terug naar de standaard, zoals bij andere ongeldige waarden | ✅ |
+| TH9 | Gevonden tijdens deze test: About en Keyboard Shortcuts via de palette gingen meteen weer dicht (de Enter van het invoerveld sloot ze). Nu blijven ze open; Esc en een echte Enter sluiten ze. Quit via de palette met een draaiend programma vraagt nog steeds eerst | ✅ na fix |
+| TH10 | Linux (WSLg, `FORGETERM_SCREENSHOT`): Arctic met verkenner; bash-prompt (groen/blauw), tekst en statusbalk leesbaar | ✅ |
+| TH11 | Onafhankelijke review: een afgelopen terminal die openblijft (exitcode ≠ 0) hield na een themawissel de oude kleuren. Nu bewaart het paneel het scherm (`EndedScreen`) en tekent het opnieuw in het nieuwe palet; een paneel zonder shell krijgt een leeg beeld in de nieuwe kleuren (`ended_screen_redraws_in_a_new_palette`). GUI-controle hiervan nog niet gedaan | ✅ (test) |
 
 ### Testvalkuilen (geleerd)
 

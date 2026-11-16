@@ -342,7 +342,7 @@ pub fn view(v: View<'_>) -> Element<'_, Message> {
     .width(Length::Fill)
     .height(Length::Fill)
     .style(|_| container::Style {
-        background: Some(theme::OBSIDIAN.into()),
+        background: Some(theme::obsidian().into()),
         ..Default::default()
     })
     .into()
@@ -384,16 +384,16 @@ fn found<'a>(data: &'a CompareData, v: &View<'a>) -> Element<'a, Message> {
                 action_button(
                     "Agent in new worktree…".to_owned(),
                     Some(Message::Command(CommandId::NewAgentWorktree)),
-                    theme::CYAN,
+                    theme::cyan(),
                     true,
                 ),
             ]
-            .spacing(12),
+            .spacing(theme::space::XL),
         )
         .into();
     };
     let choices: Vec<Choice> = list.iter().filter(|w| usable(w)).map(choice).collect();
-    let mut page = column![header(data, a, b, choices, v)].spacing(16);
+    let mut page = column![header(data, a, b, choices, v)].spacing(theme::space::XXL);
     page = page.push(tiles(data, a, b));
     let files_card = files(data, a, b, v.compare);
     let diff_card = diff_panel(a, b, v.compare);
@@ -402,14 +402,14 @@ fn found<'a>(data: &'a CompareData, v: &View<'a>) -> Element<'a, Message> {
             container(files_card).width(Length::FillPortion(2)),
             container(diff_card).width(Length::FillPortion(3)),
         ]
-        .spacing(16),
+        .spacing(theme::space::XXL),
     );
     page = page.push(
         row![
             container(tests_card(v)).width(Length::FillPortion(1)),
             container(prompt_card(a, b, v)).width(Length::FillPortion(1)),
         ]
-        .spacing(16),
+        .spacing(theme::space::XXL),
     );
     page = page.push(muted(
         "Counts are lines from git diff against the common commit, including uncommitted \
@@ -435,7 +435,7 @@ fn header<'a>(
                 .padding([5, 10])
                 .width(Length::Fixed(300.0)),
         ]
-        .spacing(4)
+        .spacing(theme::space::XS)
     };
     let base = match &data.base {
         Ok(h) => format!("common commit {}", &h[..h.len().min(8)]),
@@ -448,45 +448,50 @@ fn header<'a>(
         format!("updated {age}s ago")
     };
     let actions = row![
-        text(updated).size(11).color(theme::TEXT_MUTED),
+        text(updated)
+            .size(theme::size::TINY)
+            .color(theme::text_muted()),
         action_button(
             "Swap A ⇄ B".to_owned(),
             Some(Message::Command(CommandId::CompareSwap)),
-            theme::CYAN,
+            theme::cyan(),
             false,
         ),
         action_button(
             "Refresh".to_owned(),
             Some(Message::Command(CommandId::GitRefresh)),
-            theme::CYAN,
+            theme::cyan(),
             false,
         ),
     ]
-    .spacing(8)
+    .spacing(theme::space::M)
     .align_y(iced::Alignment::Center);
     card(
         column![
             row![
-                text("⇄").size(20).color(theme::CYAN),
-                text("Compare Worktrees").size(22).color(theme::TEXT),
+                text("⇄").size(20).color(theme::cyan()),
+                text("Compare Worktrees").size(22).color(theme::text()),
                 space::horizontal(),
                 actions,
             ]
-            .spacing(10)
+            .spacing(theme::space::L)
             .align_y(iced::Alignment::Center),
             row![
                 picker("A", a, Message::ComparePickA),
                 picker("B", b, Message::ComparePickB),
                 column![
                     card_title("BASE"),
-                    text(base).size(12).font(TERMINAL_FONT).color(theme::VIOLET),
+                    text(base)
+                        .size(theme::size::SMALL)
+                        .font(TERMINAL_FONT)
+                        .color(theme::violet()),
                 ]
-                .spacing(8),
+                .spacing(theme::space::M),
             ]
             .spacing(20)
             .align_y(iced::Alignment::End),
         ]
-        .spacing(12),
+        .spacing(theme::space::XL),
     )
 }
 
@@ -504,7 +509,7 @@ fn tiles<'a>(data: &'a CompareData, a: &'a Side, b: &'a Side) -> Element<'a, Mes
                 accent,
             )
         }
-        Err(e) => tile(label, "—".to_owned(), e.clone(), theme::AMBER),
+        Err(e) => tile(label, "—".to_owned(), e.clone(), theme::amber()),
     };
     let both = match (&a.files, &b.files) {
         (Ok(_), Ok(_)) => {
@@ -517,33 +522,33 @@ fn tiles<'a>(data: &'a CompareData, a: &'a Side, b: &'a Side) -> Element<'a, Mes
                 } else {
                     "may need care when merging both".to_owned()
                 },
-                theme::AMBER,
+                theme::amber(),
             )
         }
         _ => tile(
             "CHANGED IN BOTH",
             "—".to_owned(),
             "not available".to_owned(),
-            theme::AMBER,
+            theme::amber(),
         ),
     };
     row![
-        side_tile("A · CHANGED", a, theme::CYAN),
-        side_tile("B · CHANGED", b, theme::VIOLET),
+        side_tile("A · CHANGED", a, theme::cyan()),
+        side_tile("B · CHANGED", b, theme::violet()),
         both,
     ]
-    .spacing(12)
+    .spacing(theme::space::XL)
     .into()
 }
 
 fn count_label(f: Option<&ChangedFile>) -> (String, Color) {
     match f {
-        None => ("—".to_owned(), theme::DISABLED),
+        None => ("—".to_owned(), theme::disabled()),
         Some(f) => match (f.added, f.deleted) {
-            (Some(a), Some(_)) if f.untracked => (format!("new +{a}"), theme::TEXT),
-            (Some(a), Some(d)) => (format!("+{a} −{d}"), theme::TEXT),
-            _ if f.untracked => ("new".to_owned(), theme::TEXT),
-            _ => ("binary".to_owned(), theme::TEXT_MUTED),
+            (Some(a), Some(_)) if f.untracked => (format!("new +{a}"), theme::text()),
+            (Some(a), Some(d)) => (format!("+{a} −{d}"), theme::text()),
+            _ if f.untracked => ("new".to_owned(), theme::text()),
+            _ => ("binary".to_owned(), theme::text_muted()),
         },
     }
 }
@@ -557,7 +562,8 @@ fn files<'a>(
     b: &'a Side,
     c: &'a Compare,
 ) -> Element<'a, Message> {
-    let mut list = column![card_title("FILES CHANGED SINCE THE COMMON COMMIT")].spacing(6);
+    let mut list =
+        column![card_title("FILES CHANGED SINCE THE COMMON COMMIT")].spacing(theme::space::S);
     let (fa, fb) = match (&a.files, &b.files) {
         (Ok(fa), Ok(fb)) => (fa.as_slice(), fb.as_slice()),
         (Err(e), _) => return card(list.push(muted_owned(format!("A: {e}")))),
@@ -580,10 +586,10 @@ fn files<'a>(
     list = list.push(
         row![
             container(muted("file")).width(Length::Fill),
-            container(text("A").size(10).color(theme::CYAN)).width(110),
-            container(text("B").size(10).color(theme::VIOLET)).width(110),
+            container(text("A").size(theme::size::CAPTION).color(theme::cyan())).width(110),
+            container(text("B").size(theme::size::CAPTION).color(theme::violet())).width(110),
         ]
-        .spacing(8),
+        .spacing(theme::space::M),
     );
     for r in rows.iter().take(MAX_FILES_SHOWN) {
         let (ra, rb) = (r.a.map(|i| &fa[i]), r.b.map(|i| &fb[i]));
@@ -595,30 +601,37 @@ fn files<'a>(
                 None => space::horizontal().width(0).into(),
             };
             column![
-                text(label).size(11).font(TERMINAL_FONT).color(color),
+                text(label)
+                    .size(theme::size::TINY)
+                    .font(TERMINAL_FONT)
+                    .color(color),
                 container(bar).width(100).clip(true),
             ]
-            .spacing(2)
+            .spacing(theme::space::XXS)
             .width(110)
             .into()
         };
         let mut name = row![
             text(r.path.clone())
-                .size(12)
-                .color(if selected { theme::CYAN } else { theme::TEXT })
+                .size(theme::size::SMALL)
+                .color(if selected {
+                    theme::cyan()
+                } else {
+                    theme::text()
+                })
                 .wrapping(text::Wrapping::None),
         ]
-        .spacing(6)
+        .spacing(theme::space::S)
         .align_y(iced::Alignment::Center);
         if r.in_both() {
-            name = name.push(tag("both", theme::AMBER));
+            name = name.push(tag("both", theme::amber()));
         }
         let line = row![
             container(name).width(Length::Fill).clip(true),
             cell(ra),
             cell(rb),
         ]
-        .spacing(8)
+        .spacing(theme::space::M)
         .align_y(iced::Alignment::Center);
         list = list.push(with_tip(
             mouse_area(
@@ -626,9 +639,9 @@ fn files<'a>(
                     .padding([3, 6])
                     .width(Length::Fill)
                     .style(move |_| container::Style {
-                        background: selected.then(|| theme::ELEVATED.into()),
+                        background: selected.then(|| theme::elevated().into()),
                         border: Border {
-                            radius: 4.0.into(),
+                            radius: theme::radius::S.into(),
                             ..Default::default()
                         },
                         ..Default::default()
@@ -652,26 +665,26 @@ fn diff_panel<'a>(a: &'a Side, b: &'a Side, c: &'a Compare) -> Element<'a, Messa
     let head = row![
         container(
             text(format!("A · {}", tail(&name_of(&a.worktree), 40)))
-                .size(11)
-                .color(theme::CYAN)
+                .size(theme::size::TINY)
+                .color(theme::cyan())
         )
         .width(Length::Fill),
         container(
             text(format!("B · {}", tail(&name_of(&b.worktree), 40)))
-                .size(11)
-                .color(theme::VIOLET)
+                .size(theme::size::TINY)
+                .color(theme::violet())
         )
         .width(Length::Fill),
     ];
-    let mut col = column![card_title("SIDE BY SIDE"), head].spacing(8);
+    let mut col = column![card_title("SIDE BY SIDE"), head].spacing(theme::space::M);
     let Some(d) = &c.diff else {
         return card(col.push(muted("Click a file to see it in A beside B.")));
     };
     col = col.push(
         text(d.path.clone())
-            .size(12)
+            .size(theme::size::SMALL)
             .font(TERMINAL_FONT)
-            .color(theme::TEXT),
+            .color(theme::text()),
     );
     let body: Element<'a, Message> = match &d.result {
         None => muted("Reading…"),
@@ -705,19 +718,24 @@ fn diff_panel<'a>(a: &'a Side, b: &'a Side, c: &'a Compare) -> Element<'a, Messa
 fn diff_row(r: &Row) -> Element<'_, Message> {
     if r.kind == RowKind::Hunk {
         let t = r.left.as_ref().map_or("", |(_, t)| t.as_str());
-        return container(text(t).size(11).font(TERMINAL_FONT).color(theme::VIOLET))
-            .padding([2, 4])
-            .into();
+        return container(
+            text(t)
+                .size(theme::size::TINY)
+                .font(TERMINAL_FONT)
+                .color(theme::violet()),
+        )
+        .padding([2, 4])
+        .into();
     }
     // The sides' own colors, not red/green: neither side is "old" or "wrong".
     let (lc, rc) = match r.kind {
-        RowKind::Changed => (Some(theme::CYAN), Some(theme::VIOLET)),
-        RowKind::Removed => (Some(theme::CYAN), None),
-        RowKind::Added => (None, Some(theme::VIOLET)),
+        RowKind::Changed => (Some(theme::cyan()), Some(theme::violet())),
+        RowKind::Removed => (Some(theme::cyan()), None),
+        RowKind::Added => (None, Some(theme::violet())),
         _ => (None, None),
     };
     row![half(r.left.as_ref(), lc), half(r.right.as_ref(), rc)]
-        .spacing(4)
+        .spacing(theme::space::XS)
         .into()
 }
 
@@ -728,16 +746,21 @@ fn half(cell: Option<&(u32, String)>, tint: Option<Color>) -> Element<'_, Messag
     };
     container(
         row![
-            container(text(no).size(11).font(TERMINAL_FONT).color(theme::DISABLED))
-                .width(40)
-                .align_x(iced::alignment::Horizontal::Right),
+            container(
+                text(no)
+                    .size(theme::size::TINY)
+                    .font(TERMINAL_FONT)
+                    .color(theme::disabled())
+            )
+            .width(40)
+            .align_x(iced::alignment::Horizontal::Right),
             text(line.replace('\t', "    "))
-                .size(12)
+                .size(theme::size::SMALL)
                 .font(TERMINAL_FONT)
-                .color(theme::TEXT)
+                .color(theme::text())
                 .wrapping(text::Wrapping::None),
         ]
-        .spacing(8),
+        .spacing(theme::space::M),
     )
     .width(Length::Fill)
     .clip(true)
@@ -754,7 +777,7 @@ fn tests_card<'a>(v: &View<'a>) -> Element<'a, Message> {
         .id(TEST_INPUT_ID)
         .on_input(Message::CompareTestCommand)
         .font(TERMINAL_FONT)
-        .size(13)
+        .size(theme::size::BODY)
         .padding([6, 8]);
     let can = !c.test_command.trim().is_empty();
     let mut col = column![
@@ -763,79 +786,79 @@ fn tests_card<'a>(v: &View<'a>) -> Element<'a, Message> {
             "Opens a tab with a terminal in A beside one in B and types this command in \
              both, without Enter: you start each run yourself."
         )
-        .size(12)
-        .color(theme::TEXT_MUTED),
+        .size(theme::size::SMALL)
+        .color(theme::text_muted()),
         row![
             input,
             action_button(
                 "Open test terminals".to_owned(),
                 can.then_some(Message::Command(CommandId::CompareOpenTests)),
-                theme::CYAN,
+                theme::cyan(),
                 true,
             ),
         ]
-        .spacing(8)
+        .spacing(theme::space::M)
         .align_y(iced::Alignment::Center),
     ]
-    .spacing(8);
+    .spacing(theme::space::M);
     for (label, (id, state), color) in [
-        ("A", &v.tests[0], theme::CYAN),
-        ("B", &v.tests[1], theme::VIOLET),
+        ("A", &v.tests[0], theme::cyan()),
+        ("B", &v.tests[1], theme::violet()),
     ] {
         let (msg, msg_color) = match state {
-            TestState::None => ("no test terminal".to_owned(), theme::TEXT_MUTED),
+            TestState::None => ("no test terminal".to_owned(), theme::text_muted()),
             TestState::Inserting => (
                 "waiting for the shell's prompt…".to_owned(),
-                theme::TEXT_MUTED,
+                theme::text_muted(),
             ),
-            TestState::Ended => ("the terminal has ended".to_owned(), theme::TEXT_MUTED),
+            TestState::Ended => ("the terminal has ended".to_owned(), theme::text_muted()),
             TestState::NothingYet => (
                 "ready: press Enter in the terminal to run it".to_owned(),
-                theme::TEXT,
+                theme::text(),
             ),
             TestState::Running(cmd) => (
                 format!("running {}", cmd.as_deref().unwrap_or("")),
-                theme::AMBER,
+                theme::amber(),
             ),
             TestState::Finished(cmd, Some(0)) => (
                 format!(
                     "{} finished with exit code 0",
                     cmd.as_deref().unwrap_or("command")
                 ),
-                theme::MINT,
+                theme::mint(),
             ),
             TestState::Finished(cmd, Some(code)) => (
                 format!(
                     "{} finished with exit code {code}",
                     cmd.as_deref().unwrap_or("command")
                 ),
-                theme::CORAL,
+                theme::coral(),
             ),
             TestState::Finished(cmd, None) => (
                 format!(
                     "{} finished; the shell did not report an exit code",
                     cmd.as_deref().unwrap_or("command")
                 ),
-                theme::TEXT,
+                theme::text(),
             ),
             TestState::NotReported => (
                 "exit code not available: this shell does not report commands (see the terminal)"
                     .to_owned(),
-                theme::TEXT_MUTED,
+                theme::text_muted(),
             ),
         };
         let mut line = row![
-            text(label).size(12).color(color),
-            text(msg).size(12).color(msg_color),
+            text(label).size(theme::size::SMALL).color(color),
+            text(msg).size(theme::size::SMALL).color(msg_color),
             space::horizontal(),
         ]
-        .spacing(10)
+        .spacing(theme::space::L)
         .align_y(iced::Alignment::Center);
         if let Some(id) = id {
             line = line.push(action_button(
                 "Go to".to_owned(),
                 Some(Message::Command(CommandId::GoToTerminal(*id))),
-                theme::CYAN,
+                theme::cyan(),
                 false,
             ));
         }
@@ -853,22 +876,26 @@ fn prompt_card<'a>(a: &'a Side, b: &'a Side, v: &View<'a>) -> Element<'a, Messag
     let editor = text_editor(&c.prompt)
         .placeholder("The same instruction for both agents")
         .on_action(Message::ComparePromptEdit)
-        .size(12)
+        .size(theme::size::SMALL)
         .padding([6, 8])
         .min_height(60.0)
         .max_height(160.0)
         .style(|_, status| {
             let focused = matches!(status, text_editor::Status::Focused { .. });
             text_editor::Style {
-                background: theme::OBSIDIAN.into(),
+                background: theme::obsidian().into(),
                 border: Border {
-                    color: if focused { theme::CYAN } else { theme::BORDER },
+                    color: if focused {
+                        theme::cyan()
+                    } else {
+                        theme::border()
+                    },
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: theme::radius::M.into(),
                 },
-                placeholder: theme::TEXT_MUTED,
-                value: theme::TEXT,
-                selection: theme::SELECTION,
+                placeholder: theme::text_muted(),
+                value: theme::text(),
+                selection: theme::selection(),
             }
         });
     let has_text = !c.prompt.text().trim().is_empty();
@@ -881,26 +908,26 @@ fn prompt_card<'a>(a: &'a Side, b: &'a Side, v: &View<'a>) -> Element<'a, Messag
             action_button(
                 "Insert into both (no Enter)".to_owned(),
                 (has_text && any_agent).then_some(Message::Command(CommandId::CompareInsertPrompt)),
-                theme::CYAN,
+                theme::cyan(),
                 true,
             ),
         ],
     ]
-    .spacing(8);
+    .spacing(theme::space::M);
     for (label, side, agents, color) in [
-        ("A", a, &v.agents[0], theme::CYAN),
-        ("B", b, &v.agents[1], theme::VIOLET),
+        ("A", a, &v.agents[0], theme::cyan()),
+        ("B", b, &v.agents[1], theme::violet()),
     ] {
-        let mut line = row![text(label).size(12).color(color)]
-            .spacing(10)
+        let mut line = row![text(label).size(theme::size::SMALL).color(color)]
+            .spacing(theme::space::L)
             .align_y(iced::Alignment::Center);
         match agents.first() {
             Some(ag) => {
                 line = line.push(agent_badge(ag.kind));
                 line = line.push(
                     text(format!("{} · tab {}", ag.kind.name(), ag.tab + 1))
-                        .size(12)
-                        .color(theme::TEXT),
+                        .size(theme::size::SMALL)
+                        .color(theme::text()),
                 );
             }
             None => {
@@ -909,8 +936,8 @@ fn prompt_card<'a>(a: &'a Side, b: &'a Side, v: &View<'a>) -> Element<'a, Messag
                         "no agent of this window works in {}",
                         name_of(&side.worktree)
                     ))
-                    .size(12)
-                    .color(theme::TEXT_MUTED),
+                    .size(theme::size::SMALL)
+                    .color(theme::text_muted()),
                 );
             }
         }

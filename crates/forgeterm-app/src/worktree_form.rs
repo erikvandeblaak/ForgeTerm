@@ -67,7 +67,7 @@ pub fn view<'a>(
     form: &'a WorktreeForm,
     agents: &'a [(AgentKind, AgentState)],
 ) -> Element<'a, Message> {
-    let mut choices = row![].spacing(8);
+    let mut choices = row![].spacing(theme::space::M);
     for (kind, state) in agents {
         let found = matches!(state, AgentState::Found(_));
         let selected = form.kind == *kind;
@@ -78,8 +78,8 @@ pub fn view<'a>(
         };
         choices = choices.push(
             iced::widget::button(
-                row![agent_badge(*kind), text(label).size(13)]
-                    .spacing(8)
+                row![agent_badge(*kind), text(label).size(theme::size::BODY)]
+                    .spacing(theme::space::M)
                     .align_y(iced::Alignment::Center),
             )
             .padding([6, 10])
@@ -94,20 +94,28 @@ pub fn view<'a>(
                         if selected {
                             Color {
                                 a: 0.16,
-                                ..theme::CYAN
+                                ..theme::cyan()
                             }
                         } else if hovered && found {
-                            theme::ELEVATED
+                            theme::elevated()
                         } else {
-                            theme::GRAPHITE
+                            theme::graphite()
                         }
                         .into(),
                     ),
-                    text_color: if found { theme::TEXT } else { theme::DISABLED },
+                    text_color: if found {
+                        theme::text()
+                    } else {
+                        theme::disabled()
+                    },
                     border: Border {
-                        color: if selected { theme::CYAN } else { theme::BORDER },
+                        color: if selected {
+                            theme::cyan()
+                        } else {
+                            theme::border()
+                        },
                         width: 1.0,
-                        radius: 8.0.into(),
+                        radius: theme::radius::L.into(),
                     },
                     ..Default::default()
                 }
@@ -118,26 +126,28 @@ pub fn view<'a>(
     let path = forgeterm_git::default_worktree_path(&form.root, &form.branch);
     let path_line = match &path {
         Some(p) => text(tail(&p.display().to_string(), 80))
-            .size(12)
+            .size(theme::size::SMALL)
             .font(crate::terminal_view::TERMINAL_FONT)
-            .color(theme::TEXT_MUTED),
-        None => text("Type a branch name").size(12).color(theme::TEXT_MUTED),
+            .color(theme::text_muted()),
+        None => text("Type a branch name")
+            .size(theme::size::SMALL)
+            .color(theme::text_muted()),
     };
     let input = text_input("agent/claude-1", &form.branch)
         .id(BRANCH_INPUT_ID)
         .on_input_maybe((!form.busy).then_some(Message::WorktreeFormBranch))
         .on_submit(Message::WorktreeFormSubmit)
         .padding([6, 8])
-        .size(14);
+        .size(theme::size::LARGE);
 
     let mut card = column![
-        text("Agent in a new worktree").size(18).color(theme::TEXT),
+        text("Agent in a new worktree").size(theme::size::HEADING).color(theme::text()),
         text(format!(
             "A new branch from the current commit of {}, checked out in its own folder, so the agent works without touching your working tree.",
             form.root.file_name().map_or_else(|| form.root.display().to_string(), |n| n.to_string_lossy().into_owned())
         ))
-        .size(12)
-        .color(theme::TEXT_MUTED),
+        .size(theme::size::SMALL)
+        .color(theme::text_muted()),
         label("AGENT"),
         choices,
         label("NEW BRANCH"),
@@ -145,14 +155,18 @@ pub fn view<'a>(
         label("FOLDER (beside the repository)"),
         path_line,
     ]
-    .spacing(8);
+    .spacing(theme::space::M);
     if let Some(e) = &form.error {
-        card = card.push(text(e.clone()).size(12).color(theme::CORAL));
+        card = card.push(
+            text(e.clone())
+                .size(theme::size::SMALL)
+                .color(theme::coral()),
+        );
     }
     card = card.push(
         text("Runs git worktree add -b, including the repository's checkout hook, like the git command. Nothing is forced.")
-            .size(11)
-            .color(theme::DISABLED),
+            .size(theme::size::TINY)
+            .color(theme::disabled()),
     );
     let can = !form.busy && path.is_some();
     card = card.push(
@@ -161,7 +175,7 @@ pub fn view<'a>(
             action_button(
                 "Cancel (Esc)".to_owned(),
                 Some(Message::WorktreeFormCancel),
-                theme::CYAN,
+                theme::cyan(),
                 false
             ),
             action_button(
@@ -171,11 +185,11 @@ pub fn view<'a>(
                     "Create and start (Enter)".to_owned()
                 },
                 can.then_some(Message::WorktreeFormSubmit),
-                theme::CYAN,
+                theme::cyan(),
                 true,
             ),
         ]
-        .spacing(8),
+        .spacing(theme::space::M),
     );
     modal(card, Message::WorktreeFormCancel)
 }
@@ -183,30 +197,33 @@ pub fn view<'a>(
 /// Confirmation before `git worktree remove` (never forced).
 pub fn view_remove<'a>(path: &'a Path, branch: Option<&'a str>) -> Element<'a, Message> {
     let card = column![
-        text("Remove this worktree?").size(18).color(theme::TEXT),
+        text("Remove this worktree?").size(theme::size::HEADING).color(theme::text()),
         text(path.display().to_string())
-            .size(12)
+            .size(theme::size::SMALL)
             .font(crate::terminal_view::TERMINAL_FONT)
-            .color(theme::TEXT_MUTED),
+            .color(theme::text_muted()),
         text(format!(
             "The folder is deleted. The branch{} is kept, with all its commits. Git refuses if the worktree has uncommitted changes or untracked files; nothing is forced.",
             branch.map_or_else(String::new, |b| format!(" {b}"))
         ))
-        .size(12)
-        .color(theme::TEXT),
+        .size(theme::size::SMALL)
+        .color(theme::text()),
         row![
             space::horizontal(),
-            action_button("Cancel (Esc)".to_owned(), Some(Message::WorktreeRemoveCancel), theme::CYAN, false),
-            action_button("Remove (Enter)".to_owned(), Some(Message::WorktreeRemoveConfirm), theme::CORAL, true),
+            action_button("Cancel (Esc)".to_owned(), Some(Message::WorktreeRemoveCancel), theme::cyan(), false),
+            action_button("Remove (Enter)".to_owned(), Some(Message::WorktreeRemoveConfirm), theme::coral(), true),
         ]
-        .spacing(8),
+        .spacing(theme::space::M),
     ]
-    .spacing(10);
+    .spacing(theme::space::L);
     modal(card, Message::WorktreeRemoveCancel)
 }
 
 fn label<'a>(s: &'a str) -> Element<'a, Message> {
-    text(s).size(10).color(theme::TEXT_MUTED).into()
+    text(s)
+        .size(theme::size::CAPTION)
+        .color(theme::text_muted())
+        .into()
 }
 
 /// Centered card over a dimmed page; a click beside it cancels.
@@ -215,9 +232,9 @@ fn modal<'a>(card: impl Into<Element<'a, Message>>, cancel: Message) -> Element<
         .padding(22)
         .max_width(620)
         .style(|_| container::Style {
-            background: Some(theme::SURFACE.into()),
+            background: Some(theme::surface().into()),
             border: Border {
-                color: theme::BORDER,
+                color: theme::border(),
                 width: 1.0,
                 radius: 12.0.into(),
             },

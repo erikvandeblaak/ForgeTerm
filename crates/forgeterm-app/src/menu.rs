@@ -10,6 +10,7 @@ use iced::{Border, Color, Element, Length, Shadow, Vector};
 use crate::app::Message;
 use crate::commands::{CommandId, Dir};
 use crate::theme;
+use forgeterm_settings::ThemeChoice;
 
 /// Height of the top bar; dropdowns open directly below it.
 pub const BAR_HEIGHT: f32 = 40.0;
@@ -88,6 +89,12 @@ pub fn menus(shell_count: usize) -> Vec<Menu> {
                 C(ZoomIn),
                 C(ZoomOut),
                 C(ZoomReset),
+                Sep,
+                C(SetTheme(ThemeChoice::Midnight)),
+                C(SetTheme(ThemeChoice::Graphite)),
+                C(SetTheme(ThemeChoice::Arctic)),
+                C(SetTheme(ThemeChoice::Cyber)),
+                C(SetTheme(ThemeChoice::HighContrast)),
                 Sep,
                 C(NextTab),
                 C(PreviousTab),
@@ -273,15 +280,15 @@ pub fn view_titles<'a>(menus: &[Menu], state: Option<&MenuState>) -> Element<'a,
     let mut titles = row![].align_y(iced::Alignment::Center);
     for (index, menu) in menus.iter().enumerate() {
         let open = state.is_some_and(|s| s.open == index);
-        let label = container(text(menu.title).size(13).color(if open {
-            theme::CYAN
+        let label = container(text(menu.title).size(theme::size::BODY).color(if open {
+            theme::cyan()
         } else {
-            theme::TEXT
+            theme::text()
         }))
         .center_x(Length::Fixed(title_width(menu.title)))
         .padding([5, 0])
         .style(move |_| container::Style {
-            background: open.then(|| theme::ELEVATED.into()),
+            background: open.then(|| theme::elevated().into()),
             border: Border {
                 radius: 5.0.into(),
                 ..Default::default()
@@ -309,11 +316,11 @@ pub fn view_dropdown<'a>(x: f32, rows: &[Row], state: &MenuState) -> Element<'a,
         .padding(5)
         .width(Length::Fixed(DROPDOWN_WIDTH))
         .style(|_| container::Style {
-            background: Some(theme::SURFACE.into()),
+            background: Some(theme::surface().into()),
             border: Border {
-                color: theme::BORDER,
+                color: theme::border(),
                 width: 1.0,
-                radius: 8.0.into(),
+                radius: theme::radius::L.into(),
             },
             shadow: Shadow {
                 color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
@@ -337,7 +344,7 @@ fn view_row<'a>(index: usize, r: &Row, highlighted: bool) -> Element<'a, Message
     match r {
         Row::Separator => container(container(space().height(1).width(Length::Fill)).style(|_| {
             container::Style {
-                background: Some(theme::BORDER.into()),
+                background: Some(theme::border().into()),
                 ..Default::default()
             }
         }))
@@ -350,28 +357,28 @@ fn view_row<'a>(index: usize, r: &Row, highlighted: bool) -> Element<'a, Message
             ..
         } => {
             let (fg, hint_fg) = if *enabled {
-                (theme::TEXT, theme::TEXT_MUTED)
+                (theme::text(), theme::text_muted())
             } else {
-                (theme::DISABLED, theme::DISABLED)
+                (theme::disabled(), theme::disabled())
             };
             let content = row![
-                text(label.clone()).size(13).color(fg),
+                text(label.clone()).size(theme::size::BODY).color(fg),
                 space::horizontal(),
                 text(hint.clone().unwrap_or_default())
-                    .size(11)
+                    .size(theme::size::TINY)
                     .color(hint_fg),
             ]
-            .spacing(16)
+            .spacing(theme::space::XXL)
             .align_y(iced::Alignment::Center);
             let highlighted = highlighted && *enabled;
             let body = container(content)
                 .padding([6, 10])
                 .width(Length::Fill)
                 .style(move |_| container::Style {
-                    background: highlighted.then(|| theme::ELEVATED.into()),
+                    background: highlighted.then(|| theme::elevated().into()),
                     border: Border {
                         color: if highlighted {
-                            theme::CYAN
+                            theme::cyan()
                         } else {
                             Color::TRANSPARENT
                         },

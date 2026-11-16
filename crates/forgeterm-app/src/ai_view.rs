@@ -23,13 +23,15 @@ pub fn view<'a>(
     context: Option<&'a ProjectContext>,
 ) -> Element<'a, Message> {
     let header = row![
-        text("AI WORKSPACE").size(11).color(theme::TEXT_MUTED),
+        text("AI WORKSPACE")
+            .size(theme::size::TINY)
+            .color(theme::text_muted()),
         space::horizontal(),
         small_button("↻", Some(Message::Command(CommandId::AiRefresh)), false),
     ]
     .align_y(iced::Alignment::Center);
 
-    let mut body = column![].spacing(10);
+    let mut body = column![].spacing(theme::space::L);
     body = body.push(section("AGENTS"));
     for (kind, state) in agents {
         body = body.push(agent_card(*kind, state));
@@ -45,10 +47,10 @@ pub fn view<'a>(
             );
             body = body.push(
                 column![
-                    text(name).size(13).color(theme::TEXT),
+                    text(name).size(theme::size::BODY).color(theme::text()),
                     text(ctx.root.display().to_string())
-                        .size(11)
-                        .color(theme::TEXT_MUTED)
+                        .size(theme::size::TINY)
+                        .color(theme::text_muted())
                         .wrapping(text::Wrapping::None),
                     muted(if ctx.is_git {
                         "Git repository root"
@@ -82,14 +84,14 @@ pub fn view<'a>(
                 ))
                 .height(Length::Fill),
         ]
-        .spacing(2),
+        .spacing(theme::space::XXS),
     )
     .width(Length::Fixed(WIDTH))
     .height(Length::Fill)
     .style(|_| container::Style {
-        background: Some(theme::GRAPHITE.into()),
+        background: Some(theme::graphite().into()),
         border: Border {
-            color: theme::BORDER,
+            color: theme::border(),
             width: 1.0,
             radius: 0.0.into(),
         },
@@ -100,14 +102,14 @@ pub fn view<'a>(
 
 fn agent_card(kind: AgentKind, state: &AgentState) -> Element<'_, Message> {
     let (dot, detail): (Color, String) = match state {
-        AgentState::Detecting => (theme::TEXT_MUTED, "Detecting…".into()),
+        AgentState::Detecting => (theme::text_muted(), "Detecting…".into()),
         AgentState::Missing => (
-            theme::DISABLED,
+            theme::disabled(),
             format!("`{}` not found on PATH", kind.program()),
         ),
         AgentState::Found(agent) => match &agent.version {
-            Ok(v) => (theme::MINT, v.clone()),
-            Err(e) => (theme::AMBER, format!("version unknown: {e}")),
+            Ok(v) => (theme::mint(), v.clone()),
+            Err(e) => (theme::amber(), format!("version unknown: {e}")),
         },
     };
     let found = matches!(state, AgentState::Found(_));
@@ -120,35 +122,39 @@ fn agent_card(kind: AgentKind, state: &AgentState) -> Element<'_, Message> {
     };
     let mut card = column![
         row![
-            text("●").size(10).color(dot),
-            text(kind.name()).size(13).color(theme::TEXT),
+            text("●").size(theme::size::CAPTION).color(dot),
+            text(kind.name())
+                .size(theme::size::BODY)
+                .color(theme::text()),
         ]
-        .spacing(6)
+        .spacing(theme::space::S)
         .align_y(iced::Alignment::Center),
         text(detail)
-            .size(11)
-            .color(theme::TEXT_MUTED)
+            .size(theme::size::TINY)
+            .color(theme::text_muted())
             .wrapping(text::Wrapping::None),
     ]
     .spacing(3);
     if let AgentState::Found(agent) = state {
         card = card.push(
             text(agent.path.display().to_string())
-                .size(10)
-                .color(theme::DISABLED)
+                .size(theme::size::CAPTION)
+                .color(theme::disabled())
                 .wrapping(text::Wrapping::None),
         );
     }
-    card = card.push(row![start("Start in project", false), start("In split", true)].spacing(4));
+    card = card.push(
+        row![start("Start in project", false), start("In split", true)].spacing(theme::space::XS),
+    );
     container(card)
         .padding(8)
         .width(Length::Fill)
         .style(|_| container::Style {
-            background: Some(theme::SURFACE.into()),
+            background: Some(theme::surface().into()),
             border: Border {
-                color: theme::BORDER,
+                color: theme::border(),
                 width: 1.0,
-                radius: 6.0.into(),
+                radius: theme::radius::M.into(),
             },
             ..Default::default()
         })
@@ -157,10 +163,15 @@ fn agent_card(kind: AgentKind, state: &AgentState) -> Element<'_, Message> {
 
 fn context_row(item: &ContextItem) -> Element<'_, Message> {
     let label = row![
-        container(text(item.kind.label()).size(10).color(theme::CYAN)).width(64),
+        container(
+            text(item.kind.label())
+                .size(theme::size::CAPTION)
+                .color(theme::cyan())
+        )
+        .width(64),
         text(item.name.clone())
-            .size(12)
-            .color(theme::TEXT)
+            .size(theme::size::SMALL)
+            .color(theme::text())
             .wrapping(text::Wrapping::None),
     ]
     .align_y(iced::Alignment::Center);
@@ -170,7 +181,7 @@ fn context_row(item: &ContextItem) -> Element<'_, Message> {
             .width(Length::Fill)
             .style(|_| container::Style {
                 border: Border {
-                    radius: 4.0.into(),
+                    radius: theme::radius::S.into(),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -184,15 +195,15 @@ fn context_row(item: &ContextItem) -> Element<'_, Message> {
     };
     tooltip(
         row_box,
-        container(text(tip).size(11).color(theme::TEXT))
+        container(text(tip).size(theme::size::TINY).color(theme::text()))
             .padding([3, 6])
             .max_width(320)
             .style(|_| container::Style {
-                background: Some(theme::ELEVATED.into()),
+                background: Some(theme::elevated().into()),
                 border: Border {
-                    color: theme::BORDER,
+                    color: theme::border(),
                     width: 1.0,
-                    radius: 4.0.into(),
+                    radius: theme::radius::S.into(),
                 },
                 ..Default::default()
             }),
@@ -202,19 +213,25 @@ fn context_row(item: &ContextItem) -> Element<'_, Message> {
 }
 
 fn section(title: &str) -> Element<'_, Message> {
-    text(title).size(10).color(theme::TEXT_MUTED).into()
+    text(title)
+        .size(theme::size::CAPTION)
+        .color(theme::text_muted())
+        .into()
 }
 
 fn muted<'a>(s: &'a str) -> Element<'a, Message> {
-    text(s).size(11).color(theme::TEXT_MUTED).into()
+    text(s)
+        .size(theme::size::TINY)
+        .color(theme::text_muted())
+        .into()
 }
 
 fn small_button<'a>(label: &'a str, msg: Option<Message>, active: bool) -> Element<'a, Message> {
     let enabled = msg.is_some();
-    button(text(label).size(12).color(if enabled {
-        theme::TEXT
+    button(text(label).size(theme::size::SMALL).color(if enabled {
+        theme::text()
     } else {
-        theme::DISABLED
+        theme::disabled()
     }))
     .padding([3, 8])
     .on_press_maybe(msg)
@@ -224,15 +241,19 @@ fn small_button<'a>(label: &'a str, msg: Option<Message>, active: bool) -> Eleme
         button::Style {
             background: Some(
                 if hovered || active {
-                    theme::ELEVATED
+                    theme::elevated()
                 } else {
-                    theme::GRAPHITE
+                    theme::graphite()
                 }
                 .into(),
             ),
-            text_color: if hovered { theme::CYAN } else { theme::TEXT },
+            text_color: if hovered {
+                theme::cyan()
+            } else {
+                theme::text()
+            },
             border: Border {
-                color: theme::BORDER,
+                color: theme::border(),
                 width: 1.0,
                 radius: 5.0.into(),
             },

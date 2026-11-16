@@ -5,7 +5,8 @@ use std::time::{Duration, Instant};
 
 use forgeterm_terminal::status::{ProgramState, StatusRecord};
 use forgeterm_terminal::{
-    GridSize, Modes, Palette, Session, SessionConfig, SessionEvent, ShellSpec, Snapshot,
+    EndedScreen, GridSize, Modes, Palette, Session, SessionConfig, SessionEvent, ShellSpec,
+    Snapshot,
 };
 use iced::Task;
 use iced::futures::channel::mpsc;
@@ -84,6 +85,9 @@ pub struct TerminalPane {
     working_directory: Option<PathBuf>,
     options: SessionOptions,
     session: Option<Session>,
+    /// What an ended session left on screen (a failure stays visible), so a theme
+    /// change can redraw it.
+    ended: Option<EndedScreen>,
     /// Incremented on every (re)start so events of a previous session are ignored.
     generation: u64,
     pub status: Status,
@@ -128,6 +132,7 @@ impl TerminalPane {
             working_directory,
             options,
             session: None,
+            ended: None,
             generation: 0,
             status: Status::Running,
             snapshot: blank_snapshot(palette, 80, 24),
@@ -195,6 +200,7 @@ impl TerminalPane {
         }) {
             Ok(session) => {
                 self.session = Some(session);
+                self.ended = None;
                 self.status = Status::Running;
                 self.started_at = Some(Instant::now());
                 self.ended_at = None;
@@ -244,12 +250,26 @@ impl TerminalPane {
             tracing::trace!(changed = snapshot.is_some(), "terminal refresh");
             // Same screen as drawn: keep the cached geometry (no redraw).
             if let Some(snapshot) = snapshot {
-                self.snapshot = snapshot;
-                self.cache.clear();
-                self.preview_cache.clear();
+                self.set_snapshot(snapshot);
+            }
+        } else {
+            // No live shell (ended, failed to start, not started yet): only the
+            // colors can change, after a theme switch.
+            let snapshot = match &self.ended {
+                Some(screen) => screen.snapshot(palette),
+                None => blank_snapshot(palette, self.snapshot.cols, self.snapshot.rows),
+            };
+            if snapshot != self.snapshot {
+                self.set_snapshot(snapshot);
             }
         }
         self.dirty = false;
+    }
+
+    fn set_snapshot(&mut self, snapshot: Snapshot) {
+        self.snapshot = snapshot;
+        self.cache.clear();
+        self.preview_cache.clear();
     }
 
     pub fn refresh_if_dirty(&mut self, palette: &Palette) {
@@ -308,7 +328,7 @@ impl TerminalPane {
             SessionEvent::ClipboardStore(t) => return Outcome::Clipboard(t),
             SessionEvent::Exited(code) => {
                 self.refresh(palette);
-                self.session = None;
+                self.ended = self.session.take().map(|s| s.ended_screen());
                 self.status = Status::Exited(code);
                 self.ended_at = Some(Instant::now());
                 // Like most terminals: a clean exit closes the pane, a failure stays

@@ -255,7 +255,8 @@ type Sink = Box<dyn Fn(SessionEvent) + Send + Sync>;
 struct ListenerInner {
     sender: OnceLock<EventLoopSender>,
     size: Mutex<GridSize>,
-    palette: Palette,
+    /// Answers color queries (OSC 4/10/11/12); the app's theme can change it.
+    palette: Mutex<Palette>,
     wakeup_pending: AtomicBool,
     sink: Sink,
 }
@@ -283,7 +284,11 @@ impl EventListener for Listener {
             // Replies the terminal must send back to the program (DA, DSR, ...).
             AlacEvent::PtyWrite(text) => self.write(text.into_bytes()),
             AlacEvent::ColorRequest(index, format) => {
-                let c = inner.palette.by_index(index);
+                let c = inner
+                    .palette
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .by_index(index);
                 let rgb = alacritty_terminal::vte::ansi::Rgb {
                     r: c.r,
                     g: c.g,
@@ -495,7 +500,7 @@ impl Session {
         let listener = Listener(Arc::new(ListenerInner {
             sender: OnceLock::new(),
             size: Mutex::new(size),
-            palette: config.palette,
+            palette: Mutex::new(config.palette),
             wakeup_pending: AtomicBool::new(false),
             sink: Box::new(sink),
         }));
@@ -580,6 +585,17 @@ impl Session {
         if !bytes.is_empty() {
             self.input(bytes);
         }
+    }
+
+    /// The colors reported to programs that ask (OSC 4/10/11/12), for example
+    /// after a theme change. Snapshots take their palette per call.
+    pub fn set_palette(&self, palette: &Palette) {
+        *self
+            .listener
+            .0
+            .palette
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = palette.clone();
     }
 
     pub fn resize(&mut self, size: GridSize) {
@@ -826,6 +842,31 @@ impl Session {
         let term = self.term.lock();
         let reported = self.reported();
         build_snapshot(&term, palette, Some(&reported.commands))
+    }
+}
+
+/// The screen a session left when its program ended: no PTY, no process, only the
+/// emulator state, so the pane can still be drawn (for example in a new theme).
+pub struct EndedScreen {
+    term: Arc<FairMutex<Term<Listener>>>,
+    reported: Arc<Mutex<Reported>>,
+}
+
+impl EndedScreen {
+    pub fn snapshot(&self, palette: &Palette) -> Snapshot {
+        let term = self.term.lock();
+        let reported = self.reported.lock().unwrap_or_else(|e| e.into_inner());
+        build_snapshot(&term, palette, Some(&reported.commands))
+    }
+}
+
+impl Session {
+    /// Keeps the screen for after the session is dropped.
+    pub fn ended_screen(&self) -> EndedScreen {
+        EndedScreen {
+            term: self.term.clone(),
+            reported: self.reported.clone(),
+        }
     }
 }
 

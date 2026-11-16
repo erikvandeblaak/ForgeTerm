@@ -15,20 +15,23 @@ impl App {
             ids.push(CommandId::StartAgent(k, true));
         }
         ids.sort_by_key(|id| id.category());
-        let mut list = column![].spacing(2);
+        let mut list = column![].spacing(theme::space::XXS);
         let mut last_category = "";
         for id in ids {
             if id.category() != last_category {
                 last_category = id.category();
                 list = list.push(
-                    container(text(last_category).size(11).color(theme::TEXT_MUTED)).padding(
-                        iced::Padding {
-                            top: 8.0,
-                            right: 0.0,
-                            bottom: 2.0,
-                            left: 0.0,
-                        },
-                    ),
+                    container(
+                        text(last_category)
+                            .size(theme::size::TINY)
+                            .color(theme::text_muted()),
+                    )
+                    .padding(iced::Padding {
+                        top: 8.0,
+                        right: 0.0,
+                        bottom: 2.0,
+                        left: 0.0,
+                    }),
                 );
             }
             let keys: Vec<String> = self
@@ -40,28 +43,28 @@ impl App {
             list = list.push(
                 row![
                     text(self.command_title(id))
-                        .size(13)
-                        .color(theme::TEXT)
+                        .size(theme::size::BODY)
+                        .color(theme::text())
                         .width(Length::FillPortion(5)),
                     text(if keys.is_empty() {
                         "—".to_owned()
                     } else {
                         keys.join("  ")
                     })
-                    .size(12)
+                    .size(theme::size::SMALL)
                     .color(if keys.is_empty() {
-                        theme::DISABLED
+                        theme::disabled()
                     } else {
-                        theme::CYAN
+                        theme::cyan()
                     })
                     .width(Length::FillPortion(4)),
                     text(id.config_name())
-                        .size(11)
+                        .size(theme::size::TINY)
                         .font(crate::terminal_view::TERMINAL_FONT)
-                        .color(theme::TEXT_MUTED)
+                        .color(theme::text_muted())
                         .width(Length::FillPortion(4)),
                 ]
-                .spacing(10)
+                .spacing(theme::space::L)
                 .align_y(iced::Alignment::Center),
             );
         }
@@ -80,37 +83,37 @@ impl App {
                 .collect::<Vec<_>>()
                 .join(" · "),
         )
-        .size(12)
-        .color(theme::TEXT_MUTED);
+        .size(theme::size::SMALL)
+        .color(theme::text_muted());
         let card = container(
             column![
                 row![
-                    text("Keyboard Shortcuts").size(18).color(theme::TEXT),
+                    text("Keyboard Shortcuts").size(theme::size::HEADING).color(theme::text()),
                     space::horizontal(),
-                    button(text("Close (Esc)").size(12))
+                    button(text("Close (Esc)").size(theme::size::SMALL))
                         .on_press(Message::ShortcutsClose)
                         .padding([5, 12])
-                        .style(|_, status| ghost_button(status, theme::CYAN)),
+                        .style(|_, status| ghost_button(status, theme::cyan())),
                 ]
                 .align_y(iced::Alignment::Center),
                 text("Change them in settings.toml under [keys]: \"Ctrl+K\" = \"command_palette\", or \"none\" to remove one.")
-                    .size(12)
-                    .color(theme::TEXT_MUTED),
+                    .size(theme::size::SMALL)
+                    .color(theme::text_muted()),
                 alt_n,
                 scrollable(list).height(Length::Fill),
             ]
-            .spacing(8),
+            .spacing(theme::space::M),
         )
         .padding(18)
         .width(Length::Fixed(760.0))
         .height(Length::Fill)
         .max_height(680.0)
         .style(|_| container::Style {
-            background: Some(theme::SURFACE.into()),
+            background: Some(theme::surface().into()),
             border: Border {
-                color: theme::BORDER,
+                color: theme::border(),
                 width: 1.0,
-                radius: 10.0.into(),
+                radius: theme::radius::XL.into(),
             },
             shadow: Shadow {
                 color: Color::from_rgba(0.0, 0.0, 0.0, 0.55),
@@ -144,7 +147,7 @@ impl App {
             layout = layout.push(term_find_bar(f));
         }
         let body: Element<'_, Message> = match (&self.error, self.workspace.active_tab()) {
-            (Some(err), _) => container(text(err.as_str()).color(theme::CORAL))
+            (Some(err), _) => container(text(err.as_str()).color(theme::coral()))
                 .center(Length::Fill)
                 .into(),
             (None, _) if self.mission.visible => self.view_mission(),
@@ -251,26 +254,28 @@ impl App {
             .max_by_key(|s| s.state);
         let bell = terminals.iter().any(|t| t.bell);
         match status.map(|s| (s.state, s.progress)) {
-            Some((ProgramState::Blocked, _)) => Some(("needs you".into(), theme::AMBER)),
-            Some((ProgramState::Error, _)) => Some(("failed".into(), theme::CORAL)),
-            Some((ProgramState::Done, _)) => Some(("done".into(), theme::MINT)),
-            _ if bell => Some(("bell".into(), theme::AMBER)),
-            Some((ProgramState::Working, Some(p))) => Some((format!("{p}%"), theme::CYAN)),
-            Some((ProgramState::Working, None)) => Some(("working".into(), theme::CYAN)),
+            Some((ProgramState::Blocked, _)) => Some(("needs you".into(), theme::amber())),
+            Some((ProgramState::Error, _)) => Some(("failed".into(), theme::coral())),
+            Some((ProgramState::Done, _)) => Some(("done".into(), theme::mint())),
+            _ if bell => Some(("bell".into(), theme::amber())),
+            Some((ProgramState::Working, Some(p))) => Some((format!("{p}%"), theme::cyan())),
+            Some((ProgramState::Working, None)) => Some(("working".into(), theme::cyan())),
             _ => None,
         }
     }
 
     pub(super) fn view_top_bar(&self) -> Element<'_, Message> {
-        let mut tabs = row![].spacing(4).align_y(iced::Alignment::Center);
+        let mut tabs = row![]
+            .spacing(theme::space::XS)
+            .align_y(iced::Alignment::Center);
         for (index, tab) in self.workspace.tabs.iter().enumerate() {
             let active = index == self.workspace.active;
             let focused = tab.focused().and_then(|id| self.terminals.get(&id));
             let title = focused.map_or_else(|| "—".to_owned(), TerminalPane::display_title);
             let dot = match focused.map(|t| &t.status) {
-                Some(Status::Running) | None => theme::MINT,
-                Some(Status::Exited(_)) => theme::AMBER,
-                Some(Status::Failed(_)) => theme::CORAL,
+                Some(Status::Running) | None => theme::mint(),
+                Some(Status::Exited(_)) => theme::amber(),
+                Some(Status::Failed(_)) => theme::coral(),
             };
             let panes = tab.panes.len();
             let label = if panes > 1 {
@@ -280,29 +285,29 @@ impl App {
             };
             let mut content = row![
                 text("●").size(9).color(dot),
-                text(label).size(12).color(if active {
-                    theme::TEXT
+                text(label).size(theme::size::SMALL).color(if active {
+                    theme::text()
                 } else {
-                    theme::TEXT_MUTED
+                    theme::text_muted()
                 }),
             ]
             .spacing(7)
             .align_y(iced::Alignment::Center);
             if let Some((badge, color)) = self.tab_badge(tab) {
-                content = content.push(text(badge).size(11).color(color));
+                content = content.push(text(badge).size(theme::size::TINY).color(color));
             }
             let select = button(content)
                 .on_press(Message::SelectTab(index))
                 .padding([5, 4])
                 .style(|_, _| button::Style::default());
-            let close = button(text("×").size(13).color(theme::TEXT_MUTED))
+            let close = button(text("×").size(theme::size::BODY).color(theme::text_muted()))
                 .on_press(Message::Command(CommandId::CloseTabAt(index)))
                 .padding([1, 6])
-                .style(|_, status| ghost_button(status, theme::CORAL));
+                .style(|_, status| ghost_button(status, theme::coral()));
             tabs = tabs.push(
                 container(
                     row![select, close]
-                        .spacing(2)
+                        .spacing(theme::space::XXS)
                         .align_y(iced::Alignment::Center),
                 )
                 .padding([0, 6])
@@ -319,10 +324,10 @@ impl App {
                 name: s.name.clone(),
             })
             .collect();
-        let new_tab = button(text("+").size(15).color(theme::TEXT))
+        let new_tab = button(text("+").size(theme::size::TITLE).color(theme::text()))
             .on_press(Message::Command(CommandId::NewTab))
             .padding([2, 9])
-            .style(|_, status| ghost_button(status, theme::CYAN));
+            .style(|_, status| ghost_button(status, theme::cyan()));
         let shell_menu = pick_list(choices, None::<ShellChoice>, Message::ShellPicked)
             .placeholder("New tab with…")
             .width(Length::Fixed(150.0))
@@ -332,9 +337,11 @@ impl App {
         let brand = container(
             row![
                 svg(svg::Handle::from_memory(LOGO)).width(22).height(22),
-                text("ForgeTerm").size(15).color(theme::TEXT),
+                text("ForgeTerm")
+                    .size(theme::size::TITLE)
+                    .color(theme::text()),
             ]
-            .spacing(8)
+            .spacing(theme::space::M)
             .align_y(iced::Alignment::Center),
         )
         .width(Length::Fixed(menu::BRAND_WIDTH));
@@ -348,7 +355,7 @@ impl App {
                 // the branding out of the window.
                 scrollable(
                     row![tabs, new_tab, shell_menu]
-                        .spacing(8)
+                        .spacing(theme::space::M)
                         .align_y(iced::Alignment::Center)
                 )
                 .id(TABS_ID)
@@ -357,11 +364,11 @@ impl App {
                 ))
                 .width(Length::Fill),
                 text("Erik van de Blaak Edition")
-                    .size(12)
-                    .color(theme::TEXT_MUTED)
+                    .size(theme::size::SMALL)
+                    .color(theme::text_muted())
                     .wrapping(text::Wrapping::None),
             ]
-            .spacing(8)
+            .spacing(theme::space::M)
             .align_y(iced::Alignment::Center),
         )
         .padding([0, 14])
@@ -385,9 +392,9 @@ impl App {
             pane_grid::Content::new(body).style(move |_| container::Style {
                 border: Border {
                     color: if multiple && focused {
-                        theme::CYAN
+                        theme::cyan()
                     } else {
-                        theme::BORDER
+                        theme::border()
                     },
                     width: if multiple { 1.0 } else { 0.0 },
                     radius: 0.0.into(),
@@ -395,7 +402,7 @@ impl App {
                 ..Default::default()
             })
         })
-        .spacing(2)
+        .spacing(theme::space::XXS)
         .on_click(Message::FocusPane)
         .on_resize(6, Message::PaneResized)
         .into()
@@ -428,22 +435,22 @@ impl App {
                         .map(|k| format!(" · {k}: close"))
                         .unwrap_or_default()
                 ),
-                theme::AMBER,
+                theme::amber(),
             )),
             Status::Failed(e) => Some((
                 format!("Could not start {}: {e}", t.shell.name),
-                theme::CORAL,
+                theme::coral(),
             )),
         };
         match notice {
             None => canvas.into(),
             Some((msg, color)) => column![
                 canvas,
-                container(text(msg).size(12).color(color))
+                container(text(msg).size(theme::size::SMALL).color(color))
                     .padding([6, 12])
                     .width(Length::Fill)
                     .style(|_| container::Style {
-                        background: Some(theme::SURFACE.into()),
+                        background: Some(theme::surface().into()),
                         ..Default::default()
                     }),
             ]
@@ -454,11 +461,11 @@ impl App {
     pub(super) fn view_status_bar(&self) -> Element<'_, Message> {
         let focused = self.focused();
         let (status, color) = match focused.map(|t| &t.status) {
-            Some(Status::Running) => ("● Running".to_owned(), theme::MINT),
-            Some(Status::Exited(Some(code))) => (format!("● Exited ({code})"), theme::AMBER),
-            Some(Status::Exited(None)) => ("● Exited".to_owned(), theme::AMBER),
-            Some(Status::Failed(_)) => ("● Failed".to_owned(), theme::CORAL),
-            None => ("—".to_owned(), theme::TEXT_MUTED),
+            Some(Status::Running) => ("● Running".to_owned(), theme::mint()),
+            Some(Status::Exited(Some(code))) => (format!("● Exited ({code})"), theme::amber()),
+            Some(Status::Exited(None)) => ("● Exited".to_owned(), theme::amber()),
+            Some(Status::Failed(_)) => ("● Failed".to_owned(), theme::coral()),
+            None => ("—".to_owned(), theme::text_muted()),
         };
         let shell = focused.map_or_else(|| "—".to_owned(), |t| t.shell.name.clone());
         let grid = focused.map_or_else(String::new, |t| format!("{}×{}", t.grid.0, t.grid.1));
@@ -473,7 +480,7 @@ impl App {
         let git_summary: Element<'_, Message> = match self.git.summary() {
             Some((summary, color)) => mouse_area(
                 text(summary)
-                    .size(12)
+                    .size(theme::size::SMALL)
                     .color(color)
                     .wrapping(text::Wrapping::None),
             )
@@ -501,22 +508,28 @@ impl App {
 
         container(
             row![
-                text(status).size(12).color(color),
-                text(shell).size(12).color(theme::TEXT),
+                text(status).size(theme::size::SMALL).color(color),
+                text(shell).size(theme::size::SMALL).color(theme::text()),
                 text(cwd)
-                    .size(12)
-                    .color(theme::TEXT)
+                    .size(theme::size::SMALL)
+                    .color(theme::text())
                     .wrapping(text::Wrapping::None),
                 git_summary,
-                text(grid).size(12).color(theme::TEXT_MUTED),
-                text(layout).size(12).color(theme::TEXT_MUTED),
-                text(scrolled).size(12).color(theme::VIOLET),
+                text(grid)
+                    .size(theme::size::SMALL)
+                    .color(theme::text_muted()),
+                text(layout)
+                    .size(theme::size::SMALL)
+                    .color(theme::text_muted()),
+                text(scrolled)
+                    .size(theme::size::SMALL)
+                    .color(theme::violet()),
                 space::horizontal(),
                 text("Created by Erik van de Blaak")
-                    .size(12)
-                    .color(theme::TEXT_MUTED),
+                    .size(theme::size::SMALL)
+                    .color(theme::text_muted()),
             ]
-            .spacing(16)
+            .spacing(theme::space::XXL)
             .align_y(iced::Alignment::Center),
         )
         .padding([5, 14])

@@ -152,22 +152,22 @@ impl CommandPalette {
             .id(Id::new(INPUT_ID))
             .on_input(Message::PaletteQuery)
             .on_submit(Message::PaletteRun(None))
-            .size(14)
+            .size(theme::size::LARGE)
             .padding([10, 12])
             .style(|_, _| text_input::Style {
-                background: theme::GRAPHITE.into(),
+                background: theme::graphite().into(),
                 border: Border {
-                    color: theme::CYAN,
+                    color: theme::cyan(),
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: theme::radius::M.into(),
                 },
-                icon: theme::TEXT_MUTED,
-                placeholder: theme::TEXT_MUTED,
-                value: theme::TEXT,
-                selection: theme::SELECTION,
+                icon: theme::text_muted(),
+                placeholder: theme::text_muted(),
+                value: theme::text(),
+                selection: theme::selection(),
             });
 
-        let mut list = column![].spacing(2);
+        let mut list = column![].spacing(theme::space::XXS);
         for index in self.visible_range() {
             list = list.push(self.view_row(index));
         }
@@ -186,18 +186,20 @@ impl CommandPalette {
             column![
                 input,
                 list,
-                text(footer_text).size(11).color(theme::TEXT_MUTED)
+                text(footer_text)
+                    .size(theme::size::TINY)
+                    .color(theme::text_muted())
             ]
-            .spacing(8),
+            .spacing(theme::space::M),
         )
         .padding(10)
         .width(Length::Fixed(600.0))
         .style(|_| container::Style {
-            background: Some(theme::SURFACE.into()),
+            background: Some(theme::surface().into()),
             border: Border {
-                color: theme::BORDER,
+                color: theme::border(),
                 width: 1.0,
-                radius: 10.0.into(),
+                radius: theme::radius::XL.into(),
             },
             shadow: Shadow {
                 color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.55),
@@ -241,25 +243,29 @@ impl CommandPalette {
         }
 
         let hint = text(m.entry.hint.clone().unwrap_or_default())
-            .size(11)
-            .color(theme::TEXT_MUTED);
-        let content = row![rich_text(spans).size(13), space::horizontal(), hint]
-            .align_y(iced::Alignment::Center);
+            .size(theme::size::TINY)
+            .color(theme::text_muted());
+        let content = row![
+            rich_text(spans).size(theme::size::BODY),
+            space::horizontal(),
+            hint
+        ]
+        .align_y(iced::Alignment::Center);
 
         mouse_area(
             container(content)
                 .padding([7, 10])
                 .width(Length::Fill)
                 .style(move |_| container::Style {
-                    background: selected.then(|| theme::ELEVATED.into()),
+                    background: selected.then(|| theme::elevated().into()),
                     border: Border {
                         color: if selected {
-                            theme::CYAN
+                            theme::cyan()
                         } else {
                             iced::Color::TRANSPARENT
                         },
                         width: if selected { 1.0 } else { 0.0 },
-                        radius: 6.0.into(),
+                        radius: theme::radius::M.into(),
                     },
                     ..Default::default()
                 }),
@@ -272,9 +278,9 @@ impl CommandPalette {
 
 fn styled_span<'a>(s: String, highlighted: bool) -> iced::widget::text::Span<'a, Message> {
     span(s).color(if highlighted {
-        theme::CYAN
+        theme::cyan()
     } else {
-        theme::TEXT
+        theme::text()
     })
 }
 

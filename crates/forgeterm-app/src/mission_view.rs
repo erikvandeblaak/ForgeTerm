@@ -126,12 +126,12 @@ pub struct View<'a> {
 
 pub fn status_color(s: Status) -> Color {
     match s {
-        Status::NeedsYou | Status::Bell => theme::AMBER,
-        Status::Failed => theme::CORAL,
-        Status::Working => theme::CYAN,
-        Status::Done | Status::Running => theme::MINT,
-        Status::Idle => theme::VIOLET,
-        Status::Starting | Status::Exited => theme::TEXT_MUTED,
+        Status::NeedsYou | Status::Bell => theme::amber(),
+        Status::Failed => theme::coral(),
+        Status::Working => theme::cyan(),
+        Status::Done | Status::Running => theme::mint(),
+        Status::Idle => theme::violet(),
+        Status::Starting | Status::Exited => theme::text_muted(),
     }
 }
 
@@ -162,8 +162,8 @@ pub fn view(v: View<'_>) -> Element<'_, Message> {
              only shows facts: process state, output time and measured CPU/memory. \
              Esc closes · ←/→ select · Enter opens.",
         )
-        .size(11)
-        .color(theme::DISABLED),
+        .size(theme::size::TINY)
+        .color(theme::disabled()),
     );
 
     container(
@@ -175,12 +175,12 @@ pub fn view(v: View<'_>) -> Element<'_, Message> {
                 ))
                 .height(Length::Fill),
         ]
-        .spacing(10),
+        .spacing(theme::space::L),
     )
     .width(Length::Fill)
     .height(Length::Fill)
     .style(|_| container::Style {
-        background: Some(theme::OBSIDIAN.into()),
+        background: Some(theme::obsidian().into()),
         ..Default::default()
     })
     .into()
@@ -194,39 +194,41 @@ fn header<'a>(v: &View<'a>, attention: usize) -> Element<'a, Message> {
         .count();
     let title = column![
         row![
-            text("◆").size(16).color(theme::CYAN),
-            text("Mission Control").size(20).color(theme::TEXT),
+            text("◆").size(16).color(theme::cyan()),
+            text("Mission Control").size(20).color(theme::text()),
         ]
-        .spacing(10)
+        .spacing(theme::space::L)
         .align_y(iced::Alignment::Center),
         text("Your AI agents in this window, live")
-            .size(12)
-            .color(theme::TEXT_MUTED),
+            .size(theme::size::SMALL)
+            .color(theme::text_muted()),
     ]
-    .spacing(2);
+    .spacing(theme::space::XXS);
 
     let mut chips = row![
-        chip(format!("{running} running"), theme::MINT, running > 0),
+        chip(format!("{running} running"), theme::mint(), running > 0),
         chip(
             format!(
                 "{attention} need{} you",
                 if attention == 1 { "s" } else { "" }
             ),
-            theme::AMBER,
+            theme::amber(),
             attention > 0
         ),
     ]
-    .spacing(8)
+    .spacing(theme::space::M)
     .align_y(iced::Alignment::Center);
     if !v.mission.ended.is_empty() {
         chips = chips.push(chip(
             format!("{} ended", v.mission.ended.len()),
-            theme::TEXT_MUTED,
+            theme::text_muted(),
             false,
         ));
     }
 
-    let mut starts = row![].spacing(8).align_y(iced::Alignment::Center);
+    let mut starts = row![]
+        .spacing(theme::space::M)
+        .align_y(iced::Alignment::Center);
     for (kind, state) in v.agents {
         starts = starts.push(start_button(*kind, state, v.start_root));
     }
@@ -235,7 +237,7 @@ fn header<'a>(v: &View<'a>, attention: usize) -> Element<'a, Message> {
             "+ In new worktree…".to_owned(),
             v.worktree_ok
                 .then_some(Message::Command(CommandId::NewAgentWorktree)),
-            theme::CYAN,
+            theme::cyan(),
             false,
         ),
         if v.worktree_ok {
@@ -258,9 +260,9 @@ fn header<'a>(v: &View<'a>, attention: usize) -> Element<'a, Message> {
     .padding([16, 22])
     .width(Length::Fill)
     .style(|_| container::Style {
-        background: Some(theme::GRAPHITE.into()),
+        background: Some(theme::graphite().into()),
         border: Border {
-            color: theme::BORDER,
+            color: theme::border(),
             width: 1.0,
             radius: 0.0.into(),
         },
@@ -271,11 +273,14 @@ fn header<'a>(v: &View<'a>, attention: usize) -> Element<'a, Message> {
 
 /// Summary pill; `lit` = coloured, else muted.
 pub fn chip<'a>(label: String, color: Color, lit: bool) -> Element<'a, Message> {
-    let fg = if lit { color } else { theme::TEXT_MUTED };
+    let fg = if lit { color } else { theme::text_muted() };
     container(
-        row![text("●").size(9).color(fg), text(label).size(12).color(fg)]
-            .spacing(6)
-            .align_y(iced::Alignment::Center),
+        row![
+            text("●").size(9).color(fg),
+            text(label).size(theme::size::SMALL).color(fg)
+        ]
+        .spacing(theme::space::S)
+        .align_y(iced::Alignment::Center),
     )
     .padding([4, 10])
     .style(move |_| container::Style {
@@ -290,7 +295,7 @@ pub fn chip<'a>(label: String, color: Color, lit: bool) -> Element<'a, Message> 
             color: if lit {
                 Color { a: 0.45, ..color }
             } else {
-                theme::BORDER
+                theme::border()
             },
             width: 1.0,
             radius: 12.0.into(),
@@ -315,7 +320,7 @@ fn start_button<'a>(
     let b = action_button(
         format!("+ {kind}"),
         found.then_some(Message::Command(CommandId::StartAgent(kind, false))),
-        theme::CYAN,
+        theme::cyan(),
         true,
     );
     with_tip(b, tip)
@@ -351,8 +356,12 @@ fn card_view(c: Card<'_>) -> Element<'_, Message> {
     let title_row = row![
         agent_badge(c.kind),
         column![
-            text(c.kind.name()).size(15).color(theme::TEXT),
-            text(place).size(11).color(theme::TEXT_MUTED),
+            text(c.kind.name())
+                .size(theme::size::TITLE)
+                .color(theme::text()),
+            text(place)
+                .size(theme::size::TINY)
+                .color(theme::text_muted()),
         ]
         .spacing(1),
         space::horizontal(),
@@ -361,7 +370,7 @@ fn card_view(c: Card<'_>) -> Element<'_, Message> {
             c.status.source().to_owned()
         ),
     ]
-    .spacing(10)
+    .spacing(theme::space::L)
     .align_y(iced::Alignment::Center);
 
     // Project, branch, folder.
@@ -369,8 +378,8 @@ fn card_view(c: Card<'_>) -> Element<'_, Message> {
         || c.root.display().to_string(),
         |n| n.to_string_lossy().into_owned(),
     );
-    let mut where_row = row![text(project).size(13).color(theme::TEXT)]
-        .spacing(8)
+    let mut where_row = row![text(project).size(theme::size::BODY).color(theme::text())]
+        .spacing(theme::space::M)
         .align_y(iced::Alignment::Center);
     match c.head {
         Some(h) => {
@@ -379,18 +388,24 @@ fn card_view(c: Card<'_>) -> Element<'_, Message> {
             } else {
                 format!("⎇ {}", h.name)
             };
-            where_row = where_row.push(text(label).size(12).color(theme::VIOLET));
+            where_row = where_row.push(text(label).size(theme::size::SMALL).color(theme::violet()));
             if h.linked_worktree {
-                where_row = where_row.push(tag("worktree", theme::VIOLET));
+                where_row = where_row.push(tag("worktree", theme::violet()));
             }
         }
-        None => where_row = where_row.push(text("no git").size(11).color(theme::DISABLED)),
+        None => {
+            where_row = where_row.push(
+                text("no git")
+                    .size(theme::size::TINY)
+                    .color(theme::disabled()),
+            )
+        }
     }
     // Long paths keep their end (the project), and never spill out of the card.
     let folder = container(
         text(tail(&c.root.display().to_string(), 68))
-            .size(11)
-            .color(theme::TEXT_MUTED)
+            .size(theme::size::TINY)
+            .color(theme::text_muted())
             .wrapping(text::Wrapping::None),
     )
     .width(Length::Fill)
@@ -398,13 +413,13 @@ fn card_view(c: Card<'_>) -> Element<'_, Message> {
 
     // What the agent itself said, when it reports a status.
     let said: Option<Element<'_, Message>> = c.message.map(|m| {
-        container(text(format!("“{m}”")).size(12).color(color))
+        container(text(format!("“{m}”")).size(theme::size::SMALL).color(color))
             .padding([4, 8])
             .width(Length::Fill)
             .style(move |_| container::Style {
                 background: Some(Color { a: 0.08, ..color }.into()),
                 border: Border {
-                    radius: 4.0.into(),
+                    radius: theme::radius::S.into(),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -425,11 +440,11 @@ fn card_view(c: Card<'_>) -> Element<'_, Message> {
     .width(Length::Fill)
     .clip(true)
     .style(|_| container::Style {
-        background: Some(theme::OBSIDIAN.into()),
+        background: Some(theme::obsidian().into()),
         border: Border {
-            color: theme::BORDER,
+            color: theme::border(),
             width: 1.0,
-            radius: 6.0.into(),
+            radius: theme::radius::M.into(),
         },
         ..Default::default()
     });
@@ -449,14 +464,14 @@ fn card_view(c: Card<'_>) -> Element<'_, Message> {
     };
     let time = column![
         stat_label("RUNTIME"),
-        text(elapsed).size(14).color(theme::TEXT),
-        text(recency).size(11).color(if live > 0.0 {
-            theme::CYAN
+        text(elapsed).size(theme::size::LARGE).color(theme::text()),
+        text(recency).size(theme::size::TINY).color(if live > 0.0 {
+            theme::cyan()
         } else {
-            theme::TEXT_MUTED
+            theme::text_muted()
         }),
     ]
-    .spacing(2)
+    .spacing(theme::space::XXS)
     .width(Length::FillPortion(3));
 
     let (cpu_now, mem, procs) = match c.usage {
@@ -476,22 +491,24 @@ fn card_view(c: Card<'_>) -> Element<'_, Message> {
     let cpu = column![
         stat_label("CPU"),
         row![
-            text(cpu_now).size(14).color(theme::TEXT),
+            text(cpu_now).size(theme::size::LARGE).color(theme::text()),
             Canvas::new(Spark { history: c.cpu })
                 .width(Length::Fill)
                 .height(20),
         ]
-        .spacing(8)
+        .spacing(theme::space::M)
         .align_y(iced::Alignment::Center),
     ]
-    .spacing(2)
+    .spacing(theme::space::XXS)
     .width(Length::FillPortion(4));
     let memory = column![
         stat_label("MEMORY"),
-        text(mem).size(14).color(theme::TEXT),
-        text(procs).size(11).color(theme::TEXT_MUTED),
+        text(mem).size(theme::size::LARGE).color(theme::text()),
+        text(procs)
+            .size(theme::size::TINY)
+            .color(theme::text_muted()),
     ]
-    .spacing(2)
+    .spacing(theme::space::XXS)
     .width(Length::FillPortion(3));
     let stats = with_tip(
         row![time, cpu, memory].spacing(14),
@@ -505,14 +522,14 @@ fn card_view(c: Card<'_>) -> Element<'_, Message> {
         action_button(
             "Open".to_owned(),
             Some(Message::Command(CommandId::GoToTerminal(c.id))),
-            theme::CYAN,
+            theme::cyan(),
             true,
         ),
         with_tip(
             action_button(
                 "Files".to_owned(),
                 Some(Message::Command(CommandId::TerminalFolder(c.id))),
-                theme::CYAN,
+                theme::cyan(),
                 false,
             ),
             "Show this agent's folder in the explorer".to_owned(),
@@ -521,7 +538,7 @@ fn card_view(c: Card<'_>) -> Element<'_, Message> {
             action_button(
                 "Changes".to_owned(),
                 Some(Message::Command(CommandId::TerminalGit(c.id))),
-                theme::CYAN,
+                theme::cyan(),
                 false,
             ),
             "Open the terminal with the Git panel: status, diffs, history".to_owned(),
@@ -531,7 +548,7 @@ fn card_view(c: Card<'_>) -> Element<'_, Message> {
             action_button(
                 stop_label.to_owned(),
                 Some(Message::Command(CommandId::StopTerminal(c.id))),
-                theme::CORAL,
+                theme::coral(),
                 false,
             ),
             if running {
@@ -541,10 +558,14 @@ fn card_view(c: Card<'_>) -> Element<'_, Message> {
             },
         ),
     ]
-    .spacing(6)
+    .spacing(theme::space::S)
     .align_y(iced::Alignment::Center);
 
-    let mut content = column![title_row, column![where_row, folder].spacing(2)].spacing(12);
+    let mut content = column![
+        title_row,
+        column![where_row, folder].spacing(theme::space::XXS)
+    ]
+    .spacing(theme::space::XL);
     if let Some(s) = said {
         content = content.push(s);
     }
@@ -572,17 +593,17 @@ fn card_view(c: Card<'_>) -> Element<'_, Message> {
     )
     .width(CARD_WIDTH)
     .style(move |_| container::Style {
-        background: Some(theme::SURFACE.into()),
+        background: Some(theme::surface().into()),
         border: Border {
             color: if selected {
-                theme::CYAN
+                theme::cyan()
             } else if attention {
                 Color { a: 0.6, ..color }
             } else {
-                theme::BORDER
+                theme::border()
             },
             width: if selected { 1.5 } else { 1.0 },
-            radius: 10.0.into(),
+            radius: theme::radius::XL.into(),
         },
         shadow: Shadow {
             color: Color::from_rgba(0.0, 0.0, 0.0, 0.35),
@@ -596,8 +617,8 @@ fn card_view(c: Card<'_>) -> Element<'_, Message> {
 
 pub fn agent_badge<'a>(kind: AgentKind) -> Element<'a, Message> {
     let (glyph, color) = match kind {
-        AgentKind::ClaudeCode => ("✶", theme::AMBER),
-        AgentKind::Codex => ("◎", theme::CYAN),
+        AgentKind::ClaudeCode => ("✶", theme::amber()),
+        AgentKind::Codex => ("◎", theme::cyan()),
     };
     container(text(glyph).size(16).color(color))
         .center_x(34)
@@ -607,7 +628,7 @@ pub fn agent_badge<'a>(kind: AgentKind) -> Element<'a, Message> {
             border: Border {
                 color: Color { a: 0.35, ..color },
                 width: 1.0,
-                radius: 8.0.into(),
+                radius: theme::radius::L.into(),
             },
             ..Default::default()
         })
@@ -623,10 +644,10 @@ fn status_pill<'a>(s: Status, live: f32) -> Element<'a, Message> {
     };
     container(
         row![
-            text("●").size(10).color(dot),
-            text(s.label()).size(12).color(color),
+            text("●").size(theme::size::CAPTION).color(dot),
+            text(s.label()).size(theme::size::SMALL).color(color),
         ]
-        .spacing(6)
+        .spacing(theme::space::S)
         .align_y(iced::Alignment::Center),
     )
     .padding([4, 10])
@@ -643,13 +664,13 @@ fn status_pill<'a>(s: Status, live: f32) -> Element<'a, Message> {
 }
 
 pub fn tag<'a>(label: &'a str, color: Color) -> Element<'a, Message> {
-    container(text(label).size(10).color(color))
+    container(text(label).size(theme::size::CAPTION).color(color))
         .padding([1, 6])
         .style(move |_| container::Style {
             border: Border {
                 color: Color { a: 0.5, ..color },
                 width: 1.0,
-                radius: 4.0.into(),
+                radius: theme::radius::S.into(),
             },
             ..Default::default()
         })
@@ -657,37 +678,44 @@ pub fn tag<'a>(label: &'a str, color: Color) -> Element<'a, Message> {
 }
 
 pub fn stat_label<'a>(s: &'a str) -> Element<'a, Message> {
-    text(s).size(10).color(theme::TEXT_MUTED).into()
+    text(s)
+        .size(theme::size::CAPTION)
+        .color(theme::text_muted())
+        .into()
 }
 
 fn empty_state<'a>(v: &View<'a>) -> Element<'a, Message> {
-    let mut agents = column![].spacing(8);
+    let mut agents = column![].spacing(theme::space::M);
     for (kind, state) in v.agents {
         let (dot, detail) = match state {
-            AgentState::Detecting => (theme::TEXT_MUTED, "detecting…".to_owned()),
-            AgentState::Missing => (theme::DISABLED, "not installed (not on PATH)".to_owned()),
+            AgentState::Detecting => (theme::text_muted(), "detecting…".to_owned()),
+            AgentState::Missing => (theme::disabled(), "not installed (not on PATH)".to_owned()),
             AgentState::Found(a) => match &a.version {
-                Ok(ver) => (theme::MINT, ver.clone()),
-                Err(_) => (theme::AMBER, "found, version unknown".to_owned()),
+                Ok(ver) => (theme::mint(), ver.clone()),
+                Err(_) => (theme::amber(), "found, version unknown".to_owned()),
             },
         };
         agents = agents.push(
             row![
                 agent_badge(*kind),
                 column![
-                    text(kind.name()).size(14).color(theme::TEXT),
+                    text(kind.name())
+                        .size(theme::size::LARGE)
+                        .color(theme::text()),
                     row![
                         text("●").size(9).color(dot),
-                        text(detail).size(11).color(theme::TEXT_MUTED)
+                        text(detail)
+                            .size(theme::size::TINY)
+                            .color(theme::text_muted())
                     ]
-                    .spacing(6)
+                    .spacing(theme::space::S)
                     .align_y(iced::Alignment::Center),
                 ]
-                .spacing(2),
+                .spacing(theme::space::XXS),
                 space::horizontal(),
                 start_button(*kind, state, v.start_root),
             ]
-            .spacing(12)
+            .spacing(theme::space::XL)
             .align_y(iced::Alignment::Center),
         );
     }
@@ -697,7 +725,9 @@ fn empty_state<'a>(v: &View<'a>) -> Element<'a, Message> {
     );
     container(
         column![
-            text("No agents running").size(18).color(theme::TEXT),
+            text("No agents running")
+                .size(theme::size::HEADING)
+                .color(theme::text()),
             text(format!(
                 "Start one in {where_}. It opens in its own tab{}.",
                 v.back_hint
@@ -705,20 +735,20 @@ fn empty_state<'a>(v: &View<'a>) -> Element<'a, Message> {
                     .map(|k| format!("; {k} brings you back here"))
                     .unwrap_or_default()
             ))
-            .size(12)
-            .color(theme::TEXT_MUTED),
+            .size(theme::size::SMALL)
+            .color(theme::text_muted()),
             container(agents).padding([8, 0]),
         ]
-        .spacing(8),
+        .spacing(theme::space::M),
     )
     .padding(22)
     .max_width(620)
     .style(|_| container::Style {
-        background: Some(theme::SURFACE.into()),
+        background: Some(theme::surface().into()),
         border: Border {
-            color: theme::BORDER,
+            color: theme::border(),
             width: 1.0,
-            radius: 10.0.into(),
+            radius: theme::radius::XL.into(),
         },
         ..Default::default()
     })
@@ -726,14 +756,19 @@ fn empty_state<'a>(v: &View<'a>) -> Element<'a, Message> {
 }
 
 fn ended_list(ended: &VecDeque<Ended>, now: Instant) -> Element<'_, Message> {
-    let mut list = column![text("RECENTLY ENDED").size(10).color(theme::TEXT_MUTED)].spacing(6);
+    let mut list = column![
+        text("RECENTLY ENDED")
+            .size(theme::size::CAPTION)
+            .color(theme::text_muted())
+    ]
+    .spacing(theme::space::S);
     for e in ended {
         let (label, color) = match e.how {
-            EndKind::Exited(Some(0)) => ("finished · exit 0".to_owned(), theme::MINT),
-            EndKind::Exited(Some(c)) => (format!("exited with code {c}"), theme::CORAL),
-            EndKind::Exited(None) => ("ended (no exit code)".to_owned(), theme::AMBER),
-            EndKind::FailedToStart => ("failed to start".to_owned(), theme::CORAL),
-            EndKind::Closed => ("closed by you".to_owned(), theme::TEXT_MUTED),
+            EndKind::Exited(Some(0)) => ("finished · exit 0".to_owned(), theme::mint()),
+            EndKind::Exited(Some(c)) => (format!("exited with code {c}"), theme::coral()),
+            EndKind::Exited(None) => ("ended (no exit code)".to_owned(), theme::amber()),
+            EndKind::FailedToStart => ("failed to start".to_owned(), theme::coral()),
+            EndKind::Closed => ("closed by you".to_owned(), theme::text_muted()),
         };
         let ran = e.ran.map_or_else(String::new, |d| {
             format!("ran {}", mission::format_duration(d))
@@ -745,13 +780,30 @@ fn ended_list(ended: &VecDeque<Ended>, now: Instant) -> Element<'_, Message> {
         list = list.push(
             row![
                 text("●").size(9).color(color),
-                container(text(e.kind.name()).size(12).color(theme::TEXT)).width(96),
-                container(text(e.project.clone()).size(12).color(theme::TEXT)).width(180),
-                container(text(label).size(12).color(color)).width(170),
-                container(text(ran).size(12).color(theme::TEXT_MUTED)).width(110),
-                text(ago).size(12).color(theme::TEXT_MUTED),
+                container(
+                    text(e.kind.name())
+                        .size(theme::size::SMALL)
+                        .color(theme::text())
+                )
+                .width(96),
+                container(
+                    text(e.project.clone())
+                        .size(theme::size::SMALL)
+                        .color(theme::text())
+                )
+                .width(180),
+                container(text(label).size(theme::size::SMALL).color(color)).width(170),
+                container(
+                    text(ran)
+                        .size(theme::size::SMALL)
+                        .color(theme::text_muted())
+                )
+                .width(110),
+                text(ago)
+                    .size(theme::size::SMALL)
+                    .color(theme::text_muted()),
             ]
-            .spacing(10)
+            .spacing(theme::space::L)
             .align_y(iced::Alignment::Center),
         );
     }
@@ -759,11 +811,11 @@ fn ended_list(ended: &VecDeque<Ended>, now: Instant) -> Element<'_, Message> {
         .padding([12, 16])
         .max_width(CARD_WIDTH * 2.0 + 14.0)
         .style(|_| container::Style {
-            background: Some(theme::GRAPHITE.into()),
+            background: Some(theme::graphite().into()),
             border: Border {
-                color: theme::BORDER,
+                color: theme::border(),
                 width: 1.0,
-                radius: 10.0.into(),
+                radius: theme::radius::XL.into(),
             },
             ..Default::default()
         })
@@ -773,15 +825,15 @@ fn ended_list(ended: &VecDeque<Ended>, now: Instant) -> Element<'_, Message> {
 pub fn with_tip<'a>(content: impl Into<Element<'a, Message>>, tip: String) -> Element<'a, Message> {
     tooltip(
         content,
-        container(text(tip).size(11).color(theme::TEXT))
+        container(text(tip).size(theme::size::TINY).color(theme::text()))
             .padding([4, 8])
             .max_width(340)
             .style(|_| container::Style {
-                background: Some(theme::ELEVATED.into()),
+                background: Some(theme::elevated().into()),
                 border: Border {
-                    color: theme::BORDER,
+                    color: theme::border(),
                     width: 1.0,
-                    radius: 4.0.into(),
+                    radius: theme::radius::S.into(),
                 },
                 ..Default::default()
             }),
@@ -800,40 +852,44 @@ pub fn action_button<'a>(
 ) -> Element<'a, Message> {
     let enabled = msg.is_some();
     // Labels never wrap: a two-line button breaks the row's rhythm.
-    button(text(label).size(12).wrapping(text::Wrapping::None))
-        .padding([5, 12])
-        .on_press_maybe(msg)
-        .style(move |_, status| {
-            let hovered =
-                enabled && matches!(status, button::Status::Hovered | button::Status::Pressed);
-            let (bg, fg, border) = if !enabled {
-                (theme::GRAPHITE, theme::DISABLED, theme::BORDER)
-            } else if primary {
-                (
-                    Color {
-                        a: if hovered { 0.28 } else { 0.16 },
-                        ..accent
-                    },
-                    accent,
-                    Color { a: 0.5, ..accent },
-                )
-            } else if hovered {
-                (theme::ELEVATED, accent, Color { a: 0.5, ..accent })
-            } else {
-                (theme::GRAPHITE, theme::TEXT, theme::BORDER)
-            };
-            button::Style {
-                background: Some(bg.into()),
-                text_color: fg,
-                border: Border {
-                    color: border,
-                    width: 1.0,
-                    radius: 6.0.into(),
+    button(
+        text(label)
+            .size(theme::size::SMALL)
+            .wrapping(text::Wrapping::None),
+    )
+    .padding([5, 12])
+    .on_press_maybe(msg)
+    .style(move |_, status| {
+        let hovered =
+            enabled && matches!(status, button::Status::Hovered | button::Status::Pressed);
+        let (bg, fg, border) = if !enabled {
+            (theme::graphite(), theme::disabled(), theme::border())
+        } else if primary {
+            (
+                Color {
+                    a: if hovered { 0.28 } else { 0.16 },
+                    ..accent
                 },
-                ..Default::default()
-            }
-        })
-        .into()
+                accent,
+                Color { a: 0.5, ..accent },
+            )
+        } else if hovered {
+            (theme::elevated(), accent, Color { a: 0.5, ..accent })
+        } else {
+            (theme::graphite(), theme::text(), theme::border())
+        };
+        button::Style {
+            background: Some(bg.into()),
+            text_color: fg,
+            border: Border {
+                color: border,
+                width: 1.0,
+                radius: theme::radius::M.into(),
+            },
+            ..Default::default()
+        }
+    })
+    .into()
 }
 
 /// The last `max` characters of `s`, with a leading ellipsis when cut.
@@ -937,7 +993,7 @@ impl canvas::Program<Message> for Spark<'_> {
     ) -> Vec<Geometry> {
         let mut frame = Frame::new(renderer, bounds.size());
         let (w, h) = (bounds.width, bounds.height);
-        frame.fill_rectangle(Point::new(0.0, h - 1.0), Size::new(w, 1.0), theme::BORDER);
+        frame.fill_rectangle(Point::new(0.0, h - 1.0), Size::new(w, 1.0), theme::border());
         if let Some(history) = self.history.filter(|h| h.len() >= 2) {
             let max = history.iter().copied().fold(5.0_f32, f32::max);
             let n = history.len();
@@ -960,7 +1016,7 @@ impl canvas::Program<Message> for Spark<'_> {
                 &area,
                 Color {
                     a: 0.18,
-                    ..theme::CHART_CYAN
+                    ..theme::chart_cyan()
                 },
             );
             let line = CanvasPath::new(|p| {
@@ -975,7 +1031,7 @@ impl canvas::Program<Message> for Spark<'_> {
             frame.stroke(
                 &line,
                 Stroke::default()
-                    .with_color(theme::CHART_CYAN)
+                    .with_color(theme::chart_cyan())
                     .with_width(1.5),
             );
         }

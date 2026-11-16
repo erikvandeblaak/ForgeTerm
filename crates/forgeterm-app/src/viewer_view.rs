@@ -224,18 +224,20 @@ pub fn view<'a>(v: &'a Viewer, font_size: f32) -> Element<'a, Message> {
     let msg = |m: ViewerMsg| Message::Viewer(m);
 
     // Tabs.
-    let mut tabs = row![].spacing(4).align_y(iced::Alignment::Center);
+    let mut tabs = row![]
+        .spacing(theme::space::XS)
+        .align_y(iced::Alignment::Center);
     for (i, t) in v.tabs.iter().enumerate() {
         let active = i == v.active;
         let name = t.doc.path.file_name().map_or_else(
             || t.doc.path.display().to_string(),
             |n| n.to_string_lossy().into_owned(),
         );
-        let label = button(text(name).size(12))
+        let label = button(text(name).size(theme::size::SMALL))
             .on_press(msg(ViewerMsg::SelectTab(i)))
             .padding([3, 8])
             .style(move |_, status| tab_style(active, status));
-        let close = button(text("×").size(12))
+        let close = button(text("×").size(theme::size::SMALL))
             .on_press(msg(ViewerMsg::CloseTab(i)))
             .padding([3, 6])
             .style(|_, status| ghost(status));
@@ -253,12 +255,16 @@ pub fn view<'a>(v: &'a Viewer, font_size: f32) -> Element<'a, Message> {
         small("Reload", v.tab().map(|_| msg(ViewerMsg::Reload))),
         small("×", Some(msg(ViewerMsg::ClosePanel))),
     ]
-    .spacing(4)
+    .spacing(theme::space::XS)
     .align_y(iced::Alignment::Center);
 
-    let mut body = column![header].spacing(6);
+    let mut body = column![header].spacing(theme::space::S);
     if let Some(e) = &v.error {
-        body = body.push(text(e.as_str()).size(12).color(theme::CORAL));
+        body = body.push(
+            text(e.as_str())
+                .size(theme::size::SMALL)
+                .color(theme::coral()),
+        );
     }
     if v.find_open {
         let count = match (v.current_match, v.matches.len()) {
@@ -273,31 +279,33 @@ pub fn view<'a>(v: &'a Viewer, font_size: f32) -> Element<'a, Message> {
                     .id(Id::new(FIND_INPUT_ID))
                     .on_input(|q| Message::Viewer(ViewerMsg::FindQuery(q)))
                     .on_submit(msg(ViewerMsg::FindNext))
-                    .size(12)
+                    .size(theme::size::SMALL)
                     .padding([4, 8])
                     .width(Length::Fill)
                     .style(|_, status| text_input::Style {
-                        background: theme::OBSIDIAN.into(),
+                        background: theme::obsidian().into(),
                         border: Border {
                             color: if matches!(status, text_input::Status::Focused { .. }) {
-                                theme::CYAN
+                                theme::cyan()
                             } else {
-                                theme::BORDER
+                                theme::border()
                             },
                             width: 1.0,
-                            radius: 4.0.into(),
+                            radius: theme::radius::S.into(),
                         },
-                        icon: theme::TEXT_MUTED,
-                        placeholder: theme::TEXT_MUTED,
-                        value: theme::TEXT,
-                        selection: theme::SELECTION,
+                        icon: theme::text_muted(),
+                        placeholder: theme::text_muted(),
+                        value: theme::text(),
+                        selection: theme::selection(),
                     }),
-                text(count).size(11).color(theme::TEXT_MUTED),
+                text(count)
+                    .size(theme::size::TINY)
+                    .color(theme::text_muted()),
                 small("↑", Some(msg(ViewerMsg::FindPrev))),
                 small("↓", Some(msg(ViewerMsg::FindNext))),
                 small("×", Some(msg(ViewerMsg::CloseFind))),
             ]
-            .spacing(4)
+            .spacing(theme::space::XS)
             .align_y(iced::Alignment::Center),
         );
     }
@@ -307,8 +315,8 @@ pub fn view<'a>(v: &'a Viewer, font_size: f32) -> Element<'a, Message> {
             body = body.push(
                 container(
                     text("Open a file from the explorer (View) or from a Git diff.")
-                        .size(12)
-                        .color(theme::TEXT_MUTED),
+                        .size(theme::size::SMALL)
+                        .color(theme::text_muted()),
                 )
                 .center(Length::Fill),
             );
@@ -332,12 +340,12 @@ pub fn view<'a>(v: &'a Viewer, font_size: f32) -> Element<'a, Message> {
                     .style(move |_| container::Style {
                         border: Border {
                             color: if v.focused {
-                                theme::CYAN
+                                theme::cyan()
                             } else {
-                                theme::BORDER
+                                theme::border()
                             },
                             width: 1.0,
-                            radius: 4.0.into(),
+                            radius: theme::radius::S.into(),
                         },
                         ..Default::default()
                     })
@@ -352,9 +360,9 @@ pub fn view<'a>(v: &'a Viewer, font_size: f32) -> Element<'a, Message> {
         .width(Length::Fill)
         .height(Length::Fill)
         .style(|_| container::Style {
-            background: Some(theme::GRAPHITE.into()),
+            background: Some(theme::graphite().into()),
             border: Border {
-                color: theme::BORDER,
+                color: theme::border(),
                 width: 1.0,
                 radius: 0.0.into(),
             },
@@ -398,8 +406,8 @@ fn status_line(tab: &ViewerTab) -> Element<'_, Message> {
         ));
     }
     text(parts.join(" · "))
-        .size(11)
-        .color(theme::TEXT_MUTED)
+        .size(theme::size::TINY)
+        .color(theme::text_muted())
         .wrapping(text::Wrapping::None)
         .into()
 }
@@ -572,14 +580,10 @@ impl canvas::Program<Message> for ViewerCanvas<'_> {
     }
 }
 
-fn to_color(c: forgeterm_viewer::Rgb) -> Color {
-    Color::from_rgb8(c.r, c.g, c.b)
-}
-
 impl ViewerCanvas<'_> {
     fn draw_text(&self, frame: &mut Frame, size: Size) {
         let l = self.layout(size);
-        frame.fill_rectangle(Point::ORIGIN, size, theme::OBSIDIAN);
+        frame.fill_rectangle(Point::ORIGIN, size, theme::obsidian());
         let doc = &self.tab.doc;
         let selected = self.tab.selected_range();
         let text_x = l.gutter;
@@ -620,7 +624,7 @@ impl ViewerCanvas<'_> {
                 frame.fill_rectangle(
                     Point::new(0.0, y),
                     Size::new(l.minimap_x, l.ch),
-                    theme::SELECTION,
+                    theme::selection(),
                 );
             } else if is_match {
                 let alpha = if self.current == Some(line) {
@@ -633,7 +637,7 @@ impl ViewerCanvas<'_> {
                     Size::new(l.minimap_x, l.ch),
                     Color {
                         a: alpha,
-                        ..theme::AMBER
+                        ..theme::amber()
                     },
                 );
             }
@@ -645,9 +649,9 @@ impl ViewerCanvas<'_> {
                 Point::new(nx, y),
                 // Muted numbers would vanish on the selection / match background.
                 if is_selected || is_match {
-                    theme::TEXT
+                    theme::text()
                 } else {
-                    theme::DISABLED
+                    theme::disabled()
                 },
                 TERMINAL_FONT,
             ));
@@ -668,7 +672,7 @@ impl ViewerCanvas<'_> {
                         frame.fill_text(label(
                             piece,
                             Point::new(text_x + col as f32 * l.cw, y),
-                            to_color(span.color),
+                            theme::code(span.role),
                             font(span.bold, span.italic),
                         ));
                     }
@@ -678,7 +682,7 @@ impl ViewerCanvas<'_> {
                         frame.fill_text(label(
                             visible(display),
                             Point::new(text_x, y),
-                            theme::TEXT,
+                            theme::text(),
                             TERMINAL_FONT,
                         ));
                     }
@@ -689,7 +693,7 @@ impl ViewerCanvas<'_> {
         frame.fill_rectangle(
             Point::new(l.gutter - 6.0, 0.0),
             Size::new(1.0, size.height),
-            theme::BORDER,
+            theme::border(),
         );
     }
 
@@ -699,12 +703,12 @@ impl ViewerCanvas<'_> {
         frame.fill_rectangle(
             Point::new(x0, 0.0),
             Size::new(MINIMAP_WIDTH, size.height),
-            theme::GRAPHITE,
+            theme::graphite(),
         );
         frame.fill_rectangle(
             Point::new(x0, 0.0),
             Size::new(1.0, size.height),
-            theme::BORDER,
+            theme::border(),
         );
         let doc = &self.tab.doc;
         let (start, lh) = self.minimap_window(size.height);
@@ -732,7 +736,7 @@ impl ViewerCanvas<'_> {
                     Size::new(MINIMAP_WIDTH - 1.0, lh),
                     Color {
                         a: 0.55,
-                        ..theme::AMBER
+                        ..theme::amber()
                     },
                 );
             }
@@ -753,7 +757,7 @@ impl ViewerCanvas<'_> {
                             ink,
                             Color {
                                 a: 0.8,
-                                ..to_color(span.color)
+                                ..theme::code(span.role)
                             },
                         );
                     }
@@ -768,7 +772,7 @@ impl ViewerCanvas<'_> {
                         len,
                         Color {
                             a: 0.45,
-                            ..theme::TEXT
+                            ..theme::text()
                         },
                     );
                 }
@@ -782,7 +786,7 @@ impl ViewerCanvas<'_> {
             Size::new(MINIMAP_WIDTH - 1.0, height),
             Color {
                 a: 0.10,
-                ..theme::CYAN
+                ..theme::cyan()
             },
         );
         frame.stroke(
@@ -793,7 +797,7 @@ impl ViewerCanvas<'_> {
             canvas::Stroke::default()
                 .with_color(Color {
                     a: 0.5,
-                    ..theme::CYAN
+                    ..theme::cyan()
                 })
                 .with_width(1.0),
         );
@@ -805,21 +809,25 @@ fn tab_style(active: bool, status: button::Status) -> button::Style {
     button::Style {
         background: Some(
             if active {
-                theme::ELEVATED
+                theme::elevated()
             } else {
-                theme::GRAPHITE
+                theme::graphite()
             }
             .into(),
         ),
         text_color: if active || hovered {
-            theme::TEXT
+            theme::text()
         } else {
-            theme::TEXT_MUTED
+            theme::text_muted()
         },
         border: Border {
-            color: if active { theme::CYAN } else { theme::BORDER },
+            color: if active {
+                theme::cyan()
+            } else {
+                theme::border()
+            },
             width: 1.0,
-            radius: 4.0.into(),
+            radius: theme::radius::S.into(),
         },
         ..Default::default()
     }
@@ -828,14 +836,14 @@ fn tab_style(active: bool, status: button::Status) -> button::Style {
 fn ghost(status: button::Status) -> button::Style {
     let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
     button::Style {
-        background: hovered.then(|| theme::ELEVATED.into()),
+        background: hovered.then(|| theme::elevated().into()),
         text_color: if hovered {
-            theme::CORAL
+            theme::coral()
         } else {
-            theme::TEXT_MUTED
+            theme::text_muted()
         },
         border: Border {
-            radius: 4.0.into(),
+            radius: theme::radius::S.into(),
             ..Default::default()
         },
         ..Default::default()
@@ -844,7 +852,7 @@ fn ghost(status: button::Status) -> button::Style {
 
 fn small(label: &str, on_press: Option<Message>) -> Element<'_, Message> {
     let enabled = on_press.is_some();
-    button(text(label).size(11))
+    button(text(label).size(theme::size::TINY))
         .on_press_maybe(on_press)
         .padding([3, 8])
         .style(move |_, status| {
@@ -852,23 +860,23 @@ fn small(label: &str, on_press: Option<Message>) -> Element<'_, Message> {
             button::Style {
                 background: Some(
                     if hovered {
-                        theme::ELEVATED
+                        theme::elevated()
                     } else {
-                        theme::SURFACE
+                        theme::surface()
                     }
                     .into(),
                 ),
                 text_color: if !enabled {
-                    theme::DISABLED
+                    theme::disabled()
                 } else if hovered {
-                    theme::CYAN
+                    theme::cyan()
                 } else {
-                    theme::TEXT
+                    theme::text()
                 },
                 border: Border {
-                    color: theme::BORDER,
+                    color: theme::border(),
                     width: 1.0,
-                    radius: 4.0.into(),
+                    radius: theme::radius::S.into(),
                 },
                 ..Default::default()
             }

@@ -124,7 +124,7 @@ Stap 1–4 gedaan (branch `feature/p2-performance`, 2026-11-16): metingen en bes
 4. **P5:** `GitTick` pauzeren als het venster geen focus heeft; één langlevende worker in plaats van een thread per taak.
 5. **T3–T8:** hints uit de keymap; CommandIds voor git/prompt-acties; `is_applicable` bij sneltoetsen; zichtbare melding bij een mislukte sessie-opslag.
 6. **`app.rs` opsplitsen** (zie audit §8), gedrag ongewijzigd, met tests vóór en na.
-7. **Design tokens** voor typografie, ruimte en radius; daarna thema's (Midnight = huidige Forge Dark, Graphite, Arctic, Cyber, High Contrast) met dezelfde semantische structuur, plus reduced motion.
+7. ✅ **Design tokens** voor typografie, ruimte en radius; daarna thema's (Midnight = huidige Forge Dark, Graphite, Arctic, Cyber, High Contrast) met dezelfde semantische structuur (2026-11-16). Reduced motion vervalt tot er animaties zijn: ForgeTerm heeft er geen, dus de instelling zou niets doen.
 8. **Docs-drift** wegwerken (ARCHITECTURE-kop, §3, §7, testaantallen, CI).
 
 ## P3 — Developer Platform (fase 4)

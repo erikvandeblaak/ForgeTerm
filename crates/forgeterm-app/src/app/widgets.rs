@@ -36,16 +36,20 @@ pub(super) fn tab_style(active: bool) -> container::Style {
     container::Style {
         background: Some(
             if active {
-                theme::OBSIDIAN
+                theme::obsidian()
             } else {
-                theme::GRAPHITE
+                theme::graphite()
             }
             .into(),
         ),
         border: Border {
-            color: if active { theme::CYAN } else { theme::BORDER },
+            color: if active {
+                theme::cyan()
+            } else {
+                theme::border()
+            },
             width: 1.0,
-            radius: 6.0.into(),
+            radius: theme::radius::M.into(),
         },
         ..Default::default()
     }
@@ -54,8 +58,8 @@ pub(super) fn tab_style(active: bool) -> container::Style {
 pub(super) fn ghost_button(status: button::Status, hover: Color) -> button::Style {
     let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
     button::Style {
-        background: hovered.then(|| theme::ELEVATED.into()),
-        text_color: if hovered { hover } else { theme::TEXT },
+        background: hovered.then(|| theme::elevated().into()),
+        text_color: if hovered { hover } else { theme::text() },
         border: Border {
             radius: 5.0.into(),
             ..Default::default()
@@ -71,50 +75,50 @@ pub(super) fn paste_banner(text_to_paste: &str) -> Element<'_, Message> {
             background: Some(
                 match status {
                     button::Status::Hovered | button::Status::Pressed => accent,
-                    _ => theme::ELEVATED,
+                    _ => theme::elevated(),
                 }
                 .into(),
             ),
             text_color: match status {
-                button::Status::Hovered | button::Status::Pressed => theme::OBSIDIAN,
-                _ => theme::TEXT,
+                button::Status::Hovered | button::Status::Pressed => theme::obsidian(),
+                _ => theme::text(),
             },
             border: Border {
                 color: accent,
                 width: 1.0,
-                radius: 6.0.into(),
+                radius: theme::radius::M.into(),
             },
             ..Default::default()
         }
     };
     container(
         row![
-            text("⚠").size(16).color(theme::AMBER),
+            text("⚠").size(16).color(theme::amber()),
             column![
-                text(format!("Paste {lines} lines?")).size(13).color(theme::TEXT),
+                text(format!("Paste {lines} lines?")).size(theme::size::BODY).color(theme::text()),
                 text("This shell has not enabled bracketed paste: every line will run as soon as it is pasted.")
-                    .size(12)
-                    .color(theme::TEXT_MUTED),
+                    .size(theme::size::SMALL)
+                    .color(theme::text_muted()),
             ]
-            .spacing(2),
+            .spacing(theme::space::XXS),
             space::horizontal(),
-            button(text("Paste and run (Enter)").size(12))
+            button(text("Paste and run (Enter)").size(theme::size::SMALL))
                 .on_press(Message::ConfirmPaste)
                 .padding([6, 12])
-                .style(button_style(theme::AMBER)),
-            button(text("Cancel (Esc)").size(12))
+                .style(button_style(theme::amber())),
+            button(text("Cancel (Esc)").size(theme::size::SMALL))
                 .on_press(Message::CancelPaste)
                 .padding([6, 12])
-                .style(button_style(theme::CYAN)),
+                .style(button_style(theme::cyan())),
         ]
-        .spacing(12)
+        .spacing(theme::space::XL)
         .align_y(iced::Alignment::Center),
     )
     .padding([10, 14])
     .width(Length::Fill)
     .style(|_| container::Style {
-        background: Some(theme::SURFACE.into()),
-        border: Border { color: theme::AMBER, width: 1.0, radius: 0.0.into() },
+        background: Some(theme::surface().into()),
+        border: Border { color: theme::amber(), width: 1.0, radius: 0.0.into() },
         ..Default::default()
     })
     .into()
@@ -124,23 +128,25 @@ pub(super) fn paste_banner(text_to_paste: &str) -> Element<'_, Message> {
 pub(super) fn drop_hint(shell: &str) -> Element<'_, Message> {
     let card = container(
         column![
-            text("Drop to insert the path").size(16).color(theme::TEXT),
+            text("Drop to insert the path")
+                .size(16)
+                .color(theme::text()),
             text(format!(
                 "Quoted for {shell} · inserted at the prompt, not executed"
             ))
-            .size(12)
-            .color(theme::TEXT_MUTED),
+            .size(theme::size::SMALL)
+            .color(theme::text_muted()),
         ]
-        .spacing(4)
+        .spacing(theme::space::XS)
         .align_x(iced::Alignment::Center),
     )
     .padding([16, 24])
     .style(|_| container::Style {
-        background: Some(theme::SURFACE.into()),
+        background: Some(theme::surface().into()),
         border: Border {
-            color: theme::CYAN,
+            color: theme::cyan(),
             width: 2.0,
-            radius: 10.0.into(),
+            radius: theme::radius::XL.into(),
         },
         ..Default::default()
     });
@@ -157,23 +163,23 @@ pub(super) fn drop_hint(shell: &str) -> Element<'_, Message> {
 pub(super) fn notice_banner(message: &str) -> Element<'_, Message> {
     container(
         row![
-            text("!").size(15).color(theme::AMBER),
-            text(message).size(12).color(theme::TEXT),
+            text("!").size(theme::size::TITLE).color(theme::amber()),
+            text(message).size(theme::size::SMALL).color(theme::text()),
             space::horizontal(),
-            button(text("Dismiss").size(12))
+            button(text("Dismiss").size(theme::size::SMALL))
                 .on_press(Message::DismissNotice)
                 .padding([4, 10])
-                .style(|_, status| ghost_button(status, theme::CYAN)),
+                .style(|_, status| ghost_button(status, theme::cyan())),
         ]
-        .spacing(10)
+        .spacing(theme::space::L)
         .align_y(iced::Alignment::Center),
     )
     .padding([6, 14])
     .width(Length::Fill)
     .style(|_| container::Style {
-        background: Some(theme::SURFACE.into()),
+        background: Some(theme::surface().into()),
         border: Border {
-            color: theme::AMBER,
+            color: theme::amber(),
             width: 1.0,
             radius: 0.0.into(),
         },
@@ -194,58 +200,60 @@ pub(super) fn term_find_bar(f: &TermFind) -> Element<'_, Message> {
     };
     let not_found = f.outcome == Some(forgeterm_terminal::SearchOutcome::NotFound);
     let small = |label: &'static str, msg: Message| {
-        button(text(label).size(12))
+        button(text(label).size(theme::size::SMALL))
             .on_press(msg)
             .padding([3, 9])
-            .style(|_, status| ghost_button(status, theme::CYAN))
+            .style(|_, status| ghost_button(status, theme::cyan()))
     };
     container(
         row![
-            text("Find").size(12).color(theme::TEXT_MUTED),
+            text("Find")
+                .size(theme::size::SMALL)
+                .color(theme::text_muted()),
             text_input("in terminal output", &f.query)
                 .id(iced::widget::Id::new(TERM_FIND_ID))
                 .on_input(Message::TermFindQuery)
                 .on_submit(Message::TermFindStep(true))
-                .size(13)
+                .size(theme::size::BODY)
                 .padding([4, 8])
                 .width(Length::Fixed(320.0))
                 .style(move |_, status| text_input::Style {
-                    background: theme::OBSIDIAN.into(),
+                    background: theme::obsidian().into(),
                     border: Border {
                         color: if not_found {
-                            theme::CORAL
+                            theme::coral()
                         } else if matches!(status, text_input::Status::Focused { .. }) {
-                            theme::CYAN
+                            theme::cyan()
                         } else {
-                            theme::BORDER
+                            theme::border()
                         },
                         width: 1.0,
-                        radius: 4.0.into(),
+                        radius: theme::radius::S.into(),
                     },
-                    icon: theme::TEXT_MUTED,
-                    placeholder: theme::TEXT_MUTED,
-                    value: theme::TEXT,
-                    selection: theme::SELECTION,
+                    icon: theme::text_muted(),
+                    placeholder: theme::text_muted(),
+                    value: theme::text(),
+                    selection: theme::selection(),
                 }),
             small("↑", Message::TermFindStep(true)),
             small("↓", Message::TermFindStep(false)),
-            text(status).size(12).color(if not_found {
-                theme::CORAL
+            text(status).size(theme::size::SMALL).color(if not_found {
+                theme::coral()
             } else {
-                theme::TEXT_MUTED
+                theme::text_muted()
             }),
             space::horizontal(),
             small("× (Esc)", Message::TermFindClose),
         ]
-        .spacing(8)
+        .spacing(theme::space::M)
         .align_y(iced::Alignment::Center),
     )
     .padding([6, 12])
     .width(Length::Fill)
     .style(|_| container::Style {
-        background: Some(theme::SURFACE.into()),
+        background: Some(theme::surface().into()),
         border: Border {
-            color: theme::BORDER,
+            color: theme::border(),
             width: 1.0,
             radius: 0.0.into(),
         },
@@ -264,15 +272,19 @@ pub(super) fn view_close_confirm<'a>(
         CloseTarget::Tab(_) => ("Close this tab?", "Close tab (Enter)"),
         CloseTarget::Pane(_) => ("Close this pane?", "Close pane (Enter)"),
     };
-    let mut list = column![].spacing(4);
+    let mut list = column![].spacing(theme::space::XS);
     for p in programs.iter().take(8) {
-        list = list.push(text(format!("• {p}")).size(13).color(theme::TEXT));
+        list = list.push(
+            text(format!("• {p}"))
+                .size(theme::size::BODY)
+                .color(theme::text()),
+        );
     }
     if programs.len() > 8 {
         list = list.push(
             text(format!("… and {} more", programs.len() - 8))
-                .size(12)
-                .color(theme::TEXT_MUTED),
+                .size(theme::size::SMALL)
+                .color(theme::text_muted()),
         );
     }
     let button_style = |accent: Color| {
@@ -280,56 +292,56 @@ pub(super) fn view_close_confirm<'a>(
             background: Some(
                 match status {
                     button::Status::Hovered | button::Status::Pressed => accent,
-                    _ => theme::ELEVATED,
+                    _ => theme::elevated(),
                 }
                 .into(),
             ),
             text_color: match status {
-                button::Status::Hovered | button::Status::Pressed => theme::OBSIDIAN,
-                _ => theme::TEXT,
+                button::Status::Hovered | button::Status::Pressed => theme::obsidian(),
+                _ => theme::text(),
             },
             border: Border {
                 color: accent,
                 width: 1.0,
-                radius: 6.0.into(),
+                radius: theme::radius::M.into(),
             },
             ..Default::default()
         }
     };
     let card = container(
         column![
-            text(title).size(18).color(theme::TEXT),
+            text(title).size(theme::size::HEADING).color(theme::text()),
             text(if programs.len() == 1 {
                 "This program is still running and will be ended:"
             } else {
                 "These programs are still running and will be ended:"
             })
-            .size(13)
-            .color(theme::TEXT_MUTED),
+            .size(theme::size::BODY)
+            .color(theme::text_muted()),
             list,
             row![
                 space::horizontal(),
-                button(text("Cancel (Esc)").size(13))
+                button(text("Cancel (Esc)").size(theme::size::BODY))
                     .on_press(Message::CancelClose)
                     .padding([6, 14])
-                    .style(button_style(theme::CYAN)),
-                button(text(action).size(13))
+                    .style(button_style(theme::cyan())),
+                button(text(action).size(theme::size::BODY))
                     .on_press(Message::ConfirmClose)
                     .padding([6, 14])
-                    .style(button_style(theme::CORAL)),
+                    .style(button_style(theme::coral())),
             ]
-            .spacing(8),
+            .spacing(theme::space::M),
         ]
-        .spacing(12),
+        .spacing(theme::space::XL),
     )
     .padding(22)
     .width(Length::Fixed(480.0))
     .style(|_| container::Style {
-        background: Some(theme::SURFACE.into()),
+        background: Some(theme::surface().into()),
         border: Border {
-            color: theme::AMBER,
+            color: theme::amber(),
             width: 1.0,
-            radius: 10.0.into(),
+            radius: theme::radius::XL.into(),
         },
         shadow: Shadow {
             color: Color::from_rgba(0.0, 0.0, 0.0, 0.55),
@@ -349,32 +361,32 @@ pub(super) fn view_close_confirm<'a>(
 
 /// Help → About: version, creator and the open-source components ForgeTerm is built on.
 pub(super) fn view_about<'a>() -> Element<'a, Message> {
-    let muted = |s: &'static str| text(s).size(12).color(theme::TEXT_MUTED);
-    let close = button(text("Close (Esc)").size(12))
+    let muted = |s: &'static str| text(s).size(theme::size::SMALL).color(theme::text_muted());
+    let close = button(text("Close (Esc)").size(theme::size::SMALL))
         .on_press(Message::AboutClose)
         .padding([6, 14])
-        .style(|_, status| ghost_button(status, theme::CYAN));
+        .style(|_, status| ghost_button(status, theme::cyan()));
     let card = container(
         column![
             row![
                 svg(svg::Handle::from_memory(LOGO)).width(44).height(44),
                 column![
-                    text("ForgeTerm").size(22).color(theme::TEXT),
+                    text("ForgeTerm").size(22).color(theme::text()),
                     text(format!("Version {}", env!("CARGO_PKG_VERSION")))
-                        .size(12)
-                        .color(theme::TEXT_MUTED),
+                        .size(theme::size::SMALL)
+                        .color(theme::text_muted()),
                 ]
-                .spacing(2),
+                .spacing(theme::space::XXS),
             ]
             .spacing(14)
             .align_y(iced::Alignment::Center),
             text("Erik van de Blaak Edition")
-                .size(13)
-                .color(theme::CYAN),
+                .size(theme::size::BODY)
+                .color(theme::cyan()),
             text("Created by Erik van de Blaak")
-                .size(13)
-                .color(theme::TEXT),
-            button(text(crate::commands::WEBSITE).size(13))
+                .size(theme::size::BODY)
+                .color(theme::text()),
+            button(text(crate::commands::WEBSITE).size(theme::size::BODY))
                 .on_press(Message::Command(CommandId::Website))
                 .padding(0)
                 .style(|_, status| link_button(status)),
@@ -382,7 +394,7 @@ pub(super) fn view_about<'a>() -> Element<'a, Message> {
                 muted("Built with Rust, iced 0.14 (MIT) and alacritty_terminal 0.26 (Apache-2.0)."),
                 muted("Terminal font: JetBrains Mono (SIL Open Font License 1.1)."),
             ]
-            .spacing(4),
+            .spacing(theme::space::XS),
             row![space::horizontal(), close],
         ]
         .spacing(14),
@@ -390,11 +402,11 @@ pub(super) fn view_about<'a>() -> Element<'a, Message> {
     .padding(22)
     .width(Length::Fixed(460.0))
     .style(|_| container::Style {
-        background: Some(theme::SURFACE.into()),
+        background: Some(theme::surface().into()),
         border: Border {
-            color: theme::BORDER,
+            color: theme::border(),
             width: 1.0,
-            radius: 10.0.into(),
+            radius: theme::radius::XL.into(),
         },
         shadow: Shadow {
             color: Color::from_rgba(0.0, 0.0, 0.0, 0.55),
@@ -421,12 +433,16 @@ pub(super) fn settings_banner(problems: &[String]) -> Element<'_, Message> {
             problems.len(),
             if problems.len() == 1 { "" } else { "s" }
         ))
-        .size(13)
-        .color(theme::TEXT)
+        .size(theme::size::BODY)
+        .color(theme::text())
     ]
-    .spacing(2);
+    .spacing(theme::space::XXS);
     for p in problems.iter().take(SHOWN) {
-        lines = lines.push(text(format!("• {p}")).size(12).color(theme::TEXT_MUTED));
+        lines = lines.push(
+            text(format!("• {p}"))
+                .size(theme::size::SMALL)
+                .color(theme::text_muted()),
+        );
     }
     if problems.len() > SHOWN {
         lines = lines.push(
@@ -434,33 +450,33 @@ pub(super) fn settings_banner(problems: &[String]) -> Element<'_, Message> {
                 "… and {} more (see the log)",
                 problems.len() - SHOWN
             ))
-            .size(12)
-            .color(theme::TEXT_MUTED),
+            .size(theme::size::SMALL)
+            .color(theme::text_muted()),
         );
     }
     let action = |label: &'static str, msg: Message| {
-        button(text(label).size(12))
+        button(text(label).size(theme::size::SMALL))
             .on_press(msg)
             .padding([5, 10])
-            .style(|_, status| ghost_button(status, theme::CYAN))
+            .style(|_, status| ghost_button(status, theme::cyan()))
     };
     container(
         row![
-            text("⚙").size(16).color(theme::AMBER),
+            text("⚙").size(16).color(theme::amber()),
             lines,
             space::horizontal(),
             action("Open settings", Message::Command(CommandId::OpenSettings)),
             action("Dismiss", Message::DismissSettingsProblems),
         ]
-        .spacing(12)
+        .spacing(theme::space::XL)
         .align_y(iced::Alignment::Center),
     )
     .padding([8, 14])
     .width(Length::Fill)
     .style(|_| container::Style {
-        background: Some(theme::SURFACE.into()),
+        background: Some(theme::surface().into()),
         border: Border {
-            color: theme::AMBER,
+            color: theme::amber(),
             width: 1.0,
             radius: 0.0.into(),
         },
@@ -474,8 +490,8 @@ pub(super) fn link_button(status: button::Status) -> button::Style {
     button::Style {
         background: None,
         text_color: match status {
-            button::Status::Hovered | button::Status::Pressed => theme::TEXT,
-            _ => theme::CYAN,
+            button::Status::Hovered | button::Status::Pressed => theme::text(),
+            _ => theme::cyan(),
         },
         ..Default::default()
     }
@@ -483,9 +499,9 @@ pub(super) fn link_button(status: button::Status) -> button::Style {
 
 pub(super) fn bar_style() -> container::Style {
     container::Style {
-        background: Some(theme::GRAPHITE.into()),
+        background: Some(theme::graphite().into()),
         border: Border {
-            color: theme::BORDER,
+            color: theme::border(),
             width: 1.0,
             radius: 0.0.into(),
         },
