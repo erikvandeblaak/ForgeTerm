@@ -243,6 +243,15 @@ pub enum Message {
 
 const TERM_FIND_ID: &str = "forgeterm-terminal-find";
 
+/// The side panels beside the terminals; at most one is shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SidePanel {
+    Explorer,
+    Ai,
+    Git,
+    Monitor,
+}
+
 /// The terminal search bar: query and the outcome of the last search.
 #[derive(Debug, Default)]
 struct TermFind {
@@ -309,7 +318,6 @@ pub struct App {
     /// The window has keyboard focus (attention for unseen terminals otherwise).
     window_focused: bool,
     explorer: Tree,
-    explorer_visible: bool,
     /// The explorer has the keyboard (after a click in it or Ctrl+Shift+E).
     explorer_focused: bool,
     /// "Go to Folder" field: text and the last problem.
@@ -337,7 +345,6 @@ pub struct App {
     settings_problems: Vec<String>,
     /// Where the first tab starts and the fallback for unknown shell directories.
     start_dir: PathBuf,
-    ai_visible: bool,
     agents: Vec<(AgentKind, AgentState)>,
     ai_context: Option<ProjectContext>,
     /// Folder the context was (or is being) scanned for.
@@ -348,7 +355,6 @@ pub struct App {
     /// The docked studio has the keyboard (set by editing in it; Esc or a click in a
     /// terminal gives the keyboard back to the terminal).
     prompt_focused: bool,
-    git_visible: bool,
     git: GitState,
     viewer: Viewer,
     /// A close that waits for confirmation, with the programs it would end.
@@ -358,6 +364,8 @@ pub struct App {
     notice: Option<String>,
     /// The session file text last written, to save only on changes.
     saved_session: Option<String>,
+    /// The last session save error shown (shown once, not at every attempt).
+    session_save_error: Option<String>,
     monitor: Monitor,
     mission: Mission,
     git_dash: GitDash,
@@ -365,6 +373,8 @@ pub struct App {
     /// Worktree removal waiting for confirmation: (repository root, folder, branch).
     pending_worktree_remove: Option<(PathBuf, PathBuf, Option<String>)>,
     shortcuts_open: bool,
+    /// The side panel shown (at most one).
+    side: Option<SidePanel>,
     compare: Compare,
     /// Text to type into a new terminal once its shell shows a prompt (never Enter).
     pending_inserts: Vec<PendingInsert>,
@@ -395,7 +405,6 @@ impl App {
             about_open: false,
             window_focused: true,
             explorer: Tree::new(launch_dir()),
-            explorer_visible: false,
             explorer_focused: false,
             explorer_goto: None,
             explorer_scroll: (0.0, 0.0),
@@ -409,7 +418,6 @@ impl App {
             settings_mtime: None,
             settings_problems: Vec::new(),
             start_dir: launch_dir(),
-            ai_visible: false,
             agents: AgentKind::ALL
                 .iter()
                 .map(|k| (*k, AgentState::Detecting))
@@ -419,19 +427,20 @@ impl App {
             prompt_studio: None,
             prompt_docked: false,
             prompt_focused: false,
-            git_visible: false,
             git: GitState::default(),
             viewer: Viewer::default(),
             pending_close: None,
             term_find: None,
             notice: None,
             saved_session: None,
+            session_save_error: None,
             monitor: Monitor::default(),
             mission: Mission::default(),
             git_dash: GitDash::default(),
             worktree_form: None,
             pending_worktree_remove: None,
             shortcuts_open: false,
+            side: None,
             compare: Compare::default(),
             pending_inserts: Vec::new(),
         };
@@ -531,7 +540,20 @@ impl App {
                 available.join(", ")
             ));
         }
+        // Only a local folder is checked: `is_dir` on a network path can block the
+        // window for as long as the share takes to answer.
         self.start_dir = match &new.terminal.start_directory {
+            Some(dir)
+                if !dir.to_str().is_some_and(forgeterm_terminal::is_local_path)
+                    || !forgeterm_fs::resolves_locally(dir) =>
+            {
+                problems.push(format!(
+                    "terminal.start_directory = \"{}\" is not a local folder; using {}",
+                    dir.display(),
+                    launch_dir().display()
+                ));
+                launch_dir()
+            }
             Some(dir) if dir.is_dir() => dir.clone(),
             Some(dir) => {
                 problems.push(format!(
@@ -550,7 +572,13 @@ impl App {
         }
         let (e_old, e_new) = (&old.explorer, &new.explorer);
         if startup || e_old.visible != e_new.visible {
-            self.explorer_visible = e_new.visible;
+            // `explorer.visible = true` opens it (closing any other side panel);
+            // false closes it only if it is the one shown.
+            if e_new.visible {
+                self.side = Some(SidePanel::Explorer);
+            } else if self.panel_open(SidePanel::Explorer) {
+                self.side = None;
+            }
         }
         if startup || e_old.follow_terminal != e_new.follow_terminal {
             self.explorer_follow = e_new.follow_terminal;
@@ -687,7 +715,7 @@ impl App {
     /// Moves the explorer to the focused shell's directory when that directory (or
     /// the focused shell) changed since the last sync.
     fn sync_explorer(&mut self) -> Option<Task<Message>> {
-        if !self.explorer_visible || !self.explorer_follow {
+        if !self.panel_open(SidePanel::Explorer) || !self.explorer_follow {
             return None;
         }
         let cwd = self.focused_cwd()?;
@@ -763,6 +791,18 @@ impl App {
         }
     }
 
+    // ---- side panels ----------------------------------------------------------------
+
+    fn panel_open(&self, panel: SidePanel) -> bool {
+        self.side == Some(panel)
+    }
+
+    /// Shows `panel` (replacing any other) or hides it; returns whether it is shown.
+    fn toggle_panel(&mut self, panel: SidePanel) -> bool {
+        self.side = (!self.panel_open(panel)).then_some(panel);
+        self.side.is_some()
+    }
+
     // ---- iced entry points --------------------------------------------------------
 
     pub fn title(&self) -> String {
@@ -816,7 +856,7 @@ impl App {
         } else {
             Subscription::none()
         };
-        let explorer = if self.explorer_visible {
+        let explorer = if self.panel_open(SidePanel::Explorer) {
             iced::time::every(Duration::from_secs(2)).map(|_| Message::ExplorerTick)
         } else {
             Subscription::none()
@@ -858,7 +898,7 @@ impl App {
     /// Rescans the project context when the AI panel is visible and the focused
     /// shell's folder changed.
     fn sync_ai_context(&mut self) -> Option<Task<Message>> {
-        if !self.ai_visible {
+        if !self.panel_open(SidePanel::Ai) {
             return None;
         }
         let dir = self.focused_cwd().unwrap_or_else(|| self.start_dir.clone());
@@ -1206,7 +1246,7 @@ impl App {
             }
             Message::ExplorerActivate(path, false) => self.insert_paths(&[path]),
             Message::ExplorerTick => {
-                if self.explorer_visible && !self.explorer_checking {
+                if self.panel_open(SidePanel::Explorer) && !self.explorer_checking {
                     let shown = self.explorer.shown_dirs();
                     if !shown.is_empty() {
                         self.explorer_checking = true;
@@ -1261,7 +1301,7 @@ impl App {
             Message::ExplorerGoToResult(result) => match result {
                 Ok(dir) => {
                     self.explorer_goto = None;
-                    self.explorer_visible = true;
+                    self.side = Some(SidePanel::Explorer);
                     self.focus_explorer();
                     return Task::batch([load_dir(self.explorer.set_root(dir)), unfocus_widgets()]);
                 }
@@ -1570,6 +1610,9 @@ impl App {
                 if result.is_ok() && self.git.last_action_was_commit {
                     self.git.commit_message = iced::widget::text_editor::Content::new();
                 }
+                if result.is_ok() && self.git.last_action_was_create {
+                    self.git.new_branch.clear();
+                }
                 self.git.last_action = Some(result);
                 return self.refresh_git(true);
             }
@@ -1871,7 +1914,7 @@ impl App {
 
         // The focused explorer takes navigation keys (Esc gives the keyboard back
         // to the terminal); app shortcuts still work; other keys go to the terminal.
-        if self.explorer_visible && self.explorer_focused {
+        if self.panel_open(SidePanel::Explorer) && self.explorer_focused {
             if matches!(key, keyboard::Key::Named(Named::Escape)) {
                 self.explorer_focused = false;
                 return Task::none();
@@ -2083,6 +2126,12 @@ impl App {
         if matches!(id, CommandId::FocusPane(_)) && !self.has_splits() {
             return None;
         }
+        // A shortcut follows the same rule as the menu and the palette: a command
+        // that does not apply now does nothing. The key is still ForgeTerm's, so
+        // it does not fall through to the program either.
+        if !self.is_applicable(id) {
+            return Some(Task::none());
+        }
         Some(self.run_command(id))
     }
 
@@ -2249,24 +2298,18 @@ impl App {
             // Like VS Code: hidden → show with the keyboard, shown → take the
             // keyboard, already focused → hide (keyboard back to the terminal).
             CommandId::ToggleExplorer => {
-                if self.explorer_visible && self.explorer_focused {
-                    self.explorer_visible = false;
+                if self.panel_open(SidePanel::Explorer) && self.explorer_focused {
+                    self.side = None;
                     self.explorer_focused = false;
                     self.explorer_goto = None;
                 } else {
-                    self.explorer_visible = true;
-                    self.ai_visible = false;
-                    self.git_visible = false;
-                    self.monitor.visible = false;
+                    self.side = Some(SidePanel::Explorer);
                     self.focus_explorer();
                     return unfocus_widgets();
                 }
             }
             CommandId::ExplorerGoToFolder => {
-                self.explorer_visible = true;
-                self.ai_visible = false;
-                self.git_visible = false;
-                self.monitor.visible = false;
+                self.side = Some(SidePanel::Explorer);
                 self.focus_explorer();
                 let current = self.explorer.root().to_string_lossy().into_owned();
                 self.explorer_goto = Some((current, None));
@@ -2276,12 +2319,7 @@ impl App {
                 ]);
             }
             CommandId::ToggleAiPanel => {
-                self.ai_visible = !self.ai_visible;
-                if self.ai_visible {
-                    self.explorer_visible = false;
-                    self.git_visible = false;
-                    self.monitor.visible = false;
-                }
+                self.toggle_panel(SidePanel::Ai);
             }
             CommandId::AiRefresh => {
                 self.agents = AgentKind::ALL
@@ -2304,27 +2342,17 @@ impl App {
                 else {
                     return Task::none();
                 };
-                self.explorer_visible = true;
-                self.ai_visible = false;
-                self.git_visible = false;
-                self.monitor.visible = false;
+                self.side = Some(SidePanel::Explorer);
                 return load_dir(self.explorer.set_root(dir));
             }
             CommandId::TerminalGit(id) => {
                 self.go_to_terminal(id);
-                self.git_visible = true;
-                self.explorer_visible = false;
-                self.ai_visible = false;
-                self.monitor.visible = false;
+                self.side = Some(SidePanel::Git);
                 return self.refresh_git(true);
             }
             CommandId::StopTerminal(id) => return self.request_close(CloseTarget::Pane(id)),
             CommandId::ToggleMonitor => {
-                self.monitor.visible = !self.monitor.visible;
-                if self.monitor.visible {
-                    self.explorer_visible = false;
-                    self.ai_visible = false;
-                    self.git_visible = false;
+                if self.toggle_panel(SidePanel::Monitor) {
                     return self.sample_monitor().unwrap_or_else(Task::none);
                 }
             }
@@ -2345,11 +2373,7 @@ impl App {
                 }
             }
             CommandId::ToggleGitPanel => {
-                self.git_visible = !self.git_visible;
-                if self.git_visible {
-                    self.explorer_visible = false;
-                    self.ai_visible = false;
-                    self.monitor.visible = false;
+                if self.toggle_panel(SidePanel::Git) {
                     return self.refresh_git(true);
                 }
             }
@@ -2629,17 +2653,20 @@ impl App {
             CommandId::OpenSettings | CommandId::ReloadSettings => self.settings_path.is_some(),
             CommandId::ExplorerToggleHidden
             | CommandId::ExplorerRefresh
-            | CommandId::ExplorerToggleFollow => self.explorer_visible,
-            CommandId::ExplorerParent => self.explorer_visible && self.explorer.parent().is_some(),
+            | CommandId::ExplorerToggleFollow => self.panel_open(SidePanel::Explorer),
+            CommandId::ExplorerParent => {
+                self.panel_open(SidePanel::Explorer) && self.explorer.parent().is_some()
+            }
             CommandId::ExplorerGoToFolder => true,
             CommandId::ExplorerOpenSelected => {
-                self.explorer_visible && self.explorer.selected().is_some_and(|e| e.is_dir)
+                self.panel_open(SidePanel::Explorer)
+                    && self.explorer.selected().is_some_and(|e| e.is_dir)
             }
             CommandId::CopySelectedPath | CommandId::NewTabInSelectedFolder => {
-                self.explorer_visible && self.explorer.selected().is_some()
+                self.panel_open(SidePanel::Explorer) && self.explorer.selected().is_some()
             }
             CommandId::InsertSelectedPath => {
-                self.explorer_visible
+                self.panel_open(SidePanel::Explorer)
                     && self.explorer.selected().is_some()
                     && focused.is_some_and(TerminalPane::is_running)
             }
@@ -2758,9 +2785,23 @@ impl App {
                 .align_y(iced::Alignment::Center),
             );
         }
-        let alt_n = text("Alt+1…9 switch tabs · Ctrl+Shift+1…9 new tab with shell n")
-            .size(12)
-            .color(theme::TEXT_MUTED);
+        let families = [
+            self.keymap
+                .range_hint(CommandId::SelectTab(0), CommandId::SelectTab(8))
+                .map(|k| format!("{k} switch tabs")),
+            self.keymap
+                .range_hint(CommandId::NewTabWithShell(0), CommandId::NewTabWithShell(8))
+                .map(|k| format!("{k} new tab with shell n")),
+        ];
+        let alt_n = text(
+            families
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>()
+                .join(" · "),
+        )
+        .size(12)
+        .color(theme::TEXT_MUTED);
         let card = container(
             column![
                 row![
@@ -3164,6 +3205,8 @@ impl App {
                 .values()
                 .filter_map(|t| t.directory().map(Path::to_path_buf))
                 .collect(),
+            panel_hint: self.keymap.hint(CommandId::ToggleGitPanel),
+            compare_hint: self.keymap.hint(CommandId::ToggleCompare),
             dir: self.focused().and_then(TerminalPane::directory),
             now: std::time::Instant::now(),
         })
@@ -3281,6 +3324,7 @@ impl App {
             start_root,
             now,
             worktree_ok: self.is_applicable(CommandId::NewAgentWorktree),
+            back_hint: self.keymap.hint(CommandId::ToggleMissionControl),
         })
     }
 
@@ -3423,7 +3467,7 @@ impl App {
 
     /// Starts a measurement when the monitor is open and none is running.
     fn sample_monitor(&mut self) -> Option<Task<Message>> {
-        if !(self.monitor.visible || self.mission.visible) || self.monitor.busy {
+        if !(self.panel_open(SidePanel::Monitor) || self.mission.visible) || self.monitor.busy {
             return None;
         }
         self.monitor.busy = true;
@@ -3610,8 +3654,23 @@ impl App {
             return;
         }
         match forgeterm_settings::session::save(&path, &session) {
-            Ok(()) => self.saved_session = Some(text),
-            Err(e) => tracing::warn!("could not save {}: {e}", path.display()),
+            Ok(()) => {
+                self.saved_session = Some(text);
+                self.session_save_error = None;
+            }
+            Err(e) => {
+                let e = e.to_string();
+                // Saving is retried at every change: report a failure once, not
+                // every 2 s.
+                if self.session_save_error.as_ref() != Some(&e) {
+                    tracing::warn!("could not save {}: {e}", path.display());
+                    self.notice = Some(format!(
+                        "Could not save the session to {}: {e}. Tabs and folders will not come back at the next start until this works.",
+                        path.display()
+                    ));
+                    self.session_save_error = Some(e);
+                }
+            }
         }
     }
 
@@ -3967,7 +4026,7 @@ impl App {
 
     fn start_git_refresh(&mut self, dir: PathBuf, known_root: Option<PathBuf>) -> Task<Message> {
         self.git.refreshing = Some(dir.clone());
-        let with_log = self.git_visible;
+        let with_log = self.panel_open(SidePanel::Git);
         let trusted: Vec<PathBuf> = self.git.trusted.iter().cloned().collect();
         background(
             move || git_snapshot(dir, known_root, with_log, &trusted),
@@ -3985,9 +4044,7 @@ impl App {
         let has_commits = self.git.status().is_some_and(|s| s.branch.has_commits());
         self.git.action_running = true;
         self.git.last_action_was_commit = matches!(action, GitAction::Commit(_));
-        if matches!(action, GitAction::Create(_)) {
-            self.git.new_branch.clear();
-        }
+        self.git.last_action_was_create = matches!(action, GitAction::Create(_));
         background(
             move || match action {
                 GitAction::Stage(paths) => forgeterm_git::stage(&root, &paths)
@@ -4318,7 +4375,7 @@ impl App {
             (None, Some(tab)) => self.view_panes(tab),
             (None, None) => space::vertical().into(),
         };
-        let body: Element<'_, Message> = if self.explorer_visible {
+        let body: Element<'_, Message> = if self.panel_open(SidePanel::Explorer) {
             row![
                 explorer_view::view(
                     &self.explorer,
@@ -4329,11 +4386,11 @@ impl App {
                 body
             ]
             .into()
-        } else if self.ai_visible {
+        } else if self.panel_open(SidePanel::Ai) {
             row![ai_view::view(&self.agents, self.ai_context.as_ref()), body].into()
-        } else if self.git_visible {
+        } else if self.panel_open(SidePanel::Git) {
             row![git_view::view(&self.git), body].into()
-        } else if self.monitor.visible {
+        } else if self.panel_open(SidePanel::Monitor) {
             row![monitor_view::view(&self.monitor, self.monitor_rows()), body].into()
         } else {
             body
@@ -4571,7 +4628,7 @@ impl App {
             // Hollow cursor while the docked Prompt Studio has the keyboard.
             focused: self.workspace.focused() == Some(t.id)
                 && !(self.prompt_docked && self.prompt_focused)
-                && !(self.explorer_visible && self.explorer_focused),
+                && !(self.panel_open(SidePanel::Explorer) && self.explorer_focused),
             id: t.id,
             snapshot: &t.snapshot,
             cache: &t.cache,
@@ -4586,8 +4643,12 @@ impl App {
             Status::Running => None,
             Status::Exited(code) => Some((
                 format!(
-                    "Process exited{} — Enter: restart · Ctrl+Shift+W: close",
-                    code.map(|c| format!(" with code {c}")).unwrap_or_default()
+                    "Process exited{} — Enter: restart{}",
+                    code.map(|c| format!(" with code {c}")).unwrap_or_default(),
+                    self.keymap
+                        .hint(CommandId::ClosePane)
+                        .map(|k| format!(" · {k}: close"))
+                        .unwrap_or_default()
                 ),
                 theme::AMBER,
             )),
@@ -4650,9 +4711,12 @@ impl App {
                 tab.panes.len(),
                 if tab.panes.len() == 1 { "" } else { "s" },
                 if tab.panes.maximized().is_some() {
-                    " · zoomed (Ctrl+Shift+Enter)"
+                    match self.keymap.hint(CommandId::TogglePaneZoom) {
+                        Some(k) => format!(" · zoomed ({k})"),
+                        None => " · zoomed".to_owned(),
+                    }
                 } else {
-                    ""
+                    String::new()
                 }
             )
         });

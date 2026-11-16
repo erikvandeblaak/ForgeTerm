@@ -66,13 +66,13 @@ forgeterm-app (iced 0.14, binary)
 | # | Bevinding | Plaats | Verif. |
 |---|---|---|---|
 | T1 ✅ opgelost 2026-11-16 (`Message::WorkerPanicked`: logt, zet alle busy-vlaggen terug, melding; de instellingenbanner blijft) | Een gecrashte achtergrondtaak wordt `Message::DismissSettingsProblems`. Dat wist de instellingenbanner, en busy-vlaggen (`git.refreshing`, `git.action_running`, `monitor.busy`, `explorer_checking`) blijven dan voor altijd staan. Git, monitor of verkenner stoppen stil tot je herstart. | `app.rs` `background()` | [Z] |
-| T2 | De zijpanelen zijn 4 losse booleans, op 5 plaatsen met de hand exclusief gemaakt. `load_settings` en `ExplorerGoToResult` slaan dat over, waardoor git en verkenner tegelijk "zichtbaar" kunnen zijn (git haalt dan onzichtbaar zijn log op). | `app.rs` `load_settings`, `ExplorerGoToResult` | [Z] |
-| T3 | Sneltoetshints staan hardcoded ("Ctrl+Shift+W", "Ctrl+Shift+Enter", "Alt+1…9") en kloppen niet meer na `[keys]`. | `app.rs` view-functies, shortcuts-overlay | [C] |
+| T2 ✅ opgelost 2026-11-16 (één veld `side: Option<SidePanel>`: twee zijpanelen tegelijk kan per type niet meer; `load_settings` en `ExplorerGoToResult` gebruiken het ook) | De zijpanelen zijn 4 losse booleans, op 5 plaatsen met de hand exclusief gemaakt. `load_settings` en `ExplorerGoToResult` slaan dat over, waardoor git en verkenner tegelijk "zichtbaar" kunnen zijn (git haalt dan onzichtbaar zijn log op). | `app.rs` `load_settings`, `ExplorerGoToResult` | [Z] |
+| T3 ✅ opgelost 2026-11-16 (`Keymap::hint`/`range_hint`: hints volgen `[keys]`, een verwijderde toets verdwijnt uit de tekst; getest) | Sneltoetshints staan hardcoded ("Ctrl+Shift+W", "Ctrl+Shift+Enter", "Alt+1…9") en kloppen niet meer na `[keys]`. | `app.rs` view-functies, shortcuts-overlay | [C] |
 | T4 | Ongeveer 30 `Message`-varianten voeren gebruikersacties direct uit (git stage/commit, prompt insert, tab select/close). Die staan dus niet in de palette en hebben geen sneltoets, in strijd met CLAUDE.md. | `app.rs` `handle` | [C] |
-| T5 | Sneltoetsen controleren `is_applicable` niet. | `app.rs` `app_shortcut` | [C] |
-| T6 | Een mislukte `session.toml`-opslag is alleen een log-waarschuwing. De gebruiker merkt pas bij herstart dat herstel niet werkt. | `app.rs` `save_session` | [C] |
-| T7 | `GitAction::Create` wist de getypte branchnaam vóór het resultaat bekend is. Bij een fout ben je de invoer kwijt. | `app.rs` `git_action` | [C] |
-| T8 | `start_directory.is_dir()` op de UI-thread, zonder `is_local_path`. Een UNC-pad in de instellingen kan de UI blokkeren. | `app.rs` `load_settings` | [C] |
+| T5 ✅ opgelost 2026-11-16 (een niet-toepasselijke sneltoets doet niets en gaat ook niet naar het programma) | Sneltoetsen controleren `is_applicable` niet. | `app.rs` `app_shortcut` | [C] |
+| T6 ✅ opgelost 2026-11-16 (melding met pad en gevolg, één keer per foutsoort; ook de logregel) | Een mislukte `session.toml`-opslag is alleen een log-waarschuwing. De gebruiker merkt pas bij herstart dat herstel niet werkt. | `app.rs` `save_session` | [C] |
+| T7 ✅ opgelost 2026-11-16 (naam wordt pas na succes gewist) | `GitAction::Create` wist de getypte branchnaam vóór het resultaat bekend is. Bij een fout ben je de invoer kwijt. | `app.rs` `git_action` | [C] |
+| T8 ✅ opgelost 2026-11-16 (eerst `is_local_path` + `resolves_locally`, pas dan `is_dir`) | `start_directory.is_dir()` op de UI-thread, zonder `is_local_path`. Een UNC-pad in de instellingen kan de UI blokkeren. | `app.rs` `load_settings` | [C] |
 
 ## 5. Securityrisico's
 

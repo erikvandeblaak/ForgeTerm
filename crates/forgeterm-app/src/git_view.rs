@@ -84,6 +84,9 @@ pub struct GitState {
     pub action_running: bool,
     /// The running (or last) action is a commit: clear the message on success.
     pub last_action_was_commit: bool,
+    /// The running (or last) action creates a branch: clear the typed name on
+    /// success only, so a refused name can be corrected.
+    pub last_action_was_create: bool,
     /// Outcome of the last action, shown until the next one.
     pub last_action: Option<Result<String, String>>,
     pub commit_message: text_editor::Content,

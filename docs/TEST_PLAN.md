@@ -442,6 +442,16 @@ Zie `docs/PERFORMANCE.md` voor de cijfers. GUI-controles van de wijzigingen:
 | PF3 | Minimaliseren met Win+↓: idem, 0 ms CPU in 12 s | ✅ (trace) |
 | PF4 | Een TUI met 60 fps en 1 MB uitvoer worden correct getekend na de refresh-wijziging | ✅ |
 
+### Kwaliteit uit de audit (2026-11-16, Windows 11)
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| Q1 | `session.toml` is een map (opslaan faalt): melding met pad en gevolg; in het log één waarschuwing in plaats van elke 2 s | ✅ |
+| Q2 | Ctrl+Shift+E, G, M na elkaar: steeds één zijpaneel, het vorige gaat dicht | ✅ |
+| Q3 | Split + zoom: statusbalk "zoomed (Ctrl+Shift+Enter)" uit de keymap | ✅ |
+| Q4 | Branch "bad..x" aanmaken: fout getoond, naam blijft staan; daarna "feature-x": aangemaakt, veld leeg | ✅ |
+| Q5 | Sneltoets van een niet-toepasselijk commando: doet niets, gaat niet naar de shell | ✅ unit (`is_applicable`) + code |
+
 ### Testvalkuilen (geleerd)
 
 - **Focus testen met echte invoer (2026-11-16):** `SetForegroundWindow`/`ShowWindow` vanuit een ander proces geeft in winit géén `Focused(false)`; Alt+Tab of Win+↓ via `keybd_event` wel.

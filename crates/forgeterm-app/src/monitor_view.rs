@@ -21,7 +21,6 @@ pub const INTERVAL_SECS: u32 = 2;
 pub const HISTORY: usize = 90;
 
 pub struct Monitor {
-    pub visible: bool,
     pub sampler: Arc<Mutex<Sampler>>,
     pub busy: bool,
     pub last: Option<Sample>,
@@ -32,7 +31,6 @@ pub struct Monitor {
 impl Default for Monitor {
     fn default() -> Self {
         Self {
-            visible: false,
             sampler: Arc::new(Mutex::new(Sampler::new())),
             busy: false,
             last: None,

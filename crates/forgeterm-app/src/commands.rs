@@ -733,6 +733,20 @@ impl Keymap {
             .find_map(|(binding, cmd)| (*cmd == id).then_some(*binding))
     }
 
+    /// The primary binding as text ("Ctrl+Shift+W"), for hints in the UI: they
+    /// follow `[keys]`, and a removed binding disappears from the text.
+    pub fn hint(&self, id: CommandId) -> Option<String> {
+        self.binding_for(id).map(|b| b.to_string())
+    }
+
+    /// "Alt+1…Alt+9" for a numbered family (`first`..=`last`), or what is bound.
+    pub fn range_hint(&self, first: CommandId, last: CommandId) -> Option<String> {
+        match (self.hint(first), self.hint(last)) {
+            (Some(a), Some(b)) => Some(format!("{a}…{b}")),
+            (a, b) => a.or(b),
+        }
+    }
+
     /// No two different commands may share a binding.
     #[cfg(test)]
     fn conflicts(&self) -> Vec<(KeyBinding, CommandId, CommandId)> {
@@ -754,6 +768,27 @@ mod tests {
 
     fn key(ctrl: bool, shift: bool, alt: bool, key: KeyCode) -> KeyBinding {
         KeyBinding::new(ctrl, shift, alt, key)
+    }
+
+    #[test]
+    fn hints_follow_the_keymap() {
+        let km = Keymap::default();
+        assert_eq!(
+            km.hint(CommandId::ClosePane).as_deref(),
+            Some("Ctrl+Shift+W")
+        );
+        assert_eq!(
+            km.range_hint(CommandId::SelectTab(0), CommandId::SelectTab(8))
+                .as_deref(),
+            Some("Alt+1…Alt+9")
+        );
+        // A rebound key shows the new one; a removed one disappears from hints.
+        let (km, _) = Keymap::with_overrides(&[
+            ("Ctrl+Alt+W".to_owned(), "close_pane".to_owned()),
+            ("Ctrl+Shift+G".to_owned(), "none".to_owned()),
+        ]);
+        assert_eq!(km.hint(CommandId::ClosePane).as_deref(), Some("Ctrl+Alt+W"));
+        assert_eq!(km.hint(CommandId::ToggleGitPanel), None);
     }
 
     #[test]
