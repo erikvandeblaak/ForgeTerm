@@ -70,6 +70,10 @@ fn gitdir_from_file(text: &str, root: &Path) -> Option<PathBuf> {
 
 /// At most 4 KB of a regular file (HEAD and `.git` files are one line).
 fn read_small(path: &Path) -> Option<String> {
+    // `.git` (or HEAD) could be a link to a network share in a copied repository.
+    if !forgeterm_fs::resolves_locally(path) {
+        return None;
+    }
     let file = fs::File::open(path).ok()?;
     if !file.metadata().ok()?.is_file() {
         return None;

@@ -119,12 +119,7 @@ fn windows_path(path: &str) -> String {
 /// drives count as local), never `\\server\share`, `//server`, `\\?\UNC`
 /// or device paths; elsewhere an absolute path.
 pub fn is_local_path(path: &str) -> bool {
-    if cfg!(windows) {
-        let b = path.as_bytes();
-        has_drive(path) && (b.len() == 2 || b[2] == b'\\' || b[2] == b'/')
-    } else {
-        path.starts_with('/')
-    }
+    forgeterm_fs::is_local_path(path)
 }
 
 fn has_drive(p: &str) -> bool {

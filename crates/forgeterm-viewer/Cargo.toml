@@ -9,6 +9,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+forgeterm-fs.workspace = true
 # Pure-Rust regex engine (no C onig): builds the same on Windows and Linux.
 syntect = { version = "5", default-features = false, features = ["default-syntaxes", "parsing", "regex-fancy"] }
 

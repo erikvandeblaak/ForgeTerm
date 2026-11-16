@@ -1135,7 +1135,9 @@ impl App {
                     move || {
                         let dir = wanted?;
                         // Same rule as folders reported by shells: never a network path.
-                        if !dir.to_str().is_some_and(forgeterm_terminal::is_local_path) {
+                        if !dir.to_str().is_some_and(forgeterm_terminal::is_local_path)
+                            || !forgeterm_fs::resolves_locally(&dir)
+                        {
                             return Err(format!("{} is not a local folder.", dir.display()));
                         }
                         if dir.is_dir() {
@@ -2789,7 +2791,11 @@ impl App {
         let files: Vec<PathBuf> = saved
             .viewer_files
             .into_iter()
-            .filter(|p| forgeterm_terminal::is_local_path(&p.to_string_lossy()) && p.is_file())
+            .filter(|p| {
+                forgeterm_terminal::is_local_path(&p.to_string_lossy())
+                    && forgeterm_fs::resolves_locally(p)
+                    && p.is_file()
+            })
             .collect();
         if !files.is_empty() {
             self.viewer.visible = true;
@@ -2812,7 +2818,9 @@ impl App {
                     .cloned()
                     .or_else(|| self.shell_at(None));
                 let cwd = spec.cwd.clone().filter(|d| {
-                    forgeterm_terminal::is_local_path(&d.to_string_lossy()) && d.is_dir()
+                    forgeterm_terminal::is_local_path(&d.to_string_lossy())
+                        && forgeterm_fs::resolves_locally(d)
+                        && d.is_dir()
                 });
                 let id = match shell {
                     Some(shell) => self.spawn_terminal(shell, cwd),
@@ -4686,7 +4694,9 @@ fn load_dashboard(root: PathBuf, trusted: &[PathBuf]) -> DashData {
             WorktreeChanges::Current
         } else if worktree.bare || i >= git_dash::MAX_WORKTREE_STATUS {
             WorktreeChanges::NotRead
-        } else if !path.to_str().is_some_and(forgeterm_terminal::is_local_path) {
+        } else if !path.to_str().is_some_and(forgeterm_terminal::is_local_path)
+            || !forgeterm_fs::resolves_locally(path)
+        {
             WorktreeChanges::NotLocal
         } else if !path.is_dir() {
             WorktreeChanges::Missing

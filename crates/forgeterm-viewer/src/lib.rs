@@ -87,19 +87,49 @@ pub fn modified(path: &Path) -> Option<SystemTime> {
 }
 
 pub fn load(path: &Path) -> Result<Document, String> {
+    if !forgeterm_fs::resolves_locally(path) {
+        return Err(format!(
+            "{} is not on this computer (a network path, or a link to one)",
+            file_name(path)
+        ));
+    }
     let meta = fs::metadata(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
     if meta.is_dir() {
         return Err(format!("{} is a folder", path.display()));
     }
-    if meta.len() > MAX_BYTES {
-        return Err(format!(
+    // Only regular files: a device (`/dev/zero`), FIFO or socket — e.g. behind a
+    // symlink in a cloned repository — reports length 0 and would be read forever
+    // or block the thread.
+    if !meta.is_file() {
+        return Err(format!("{} is not a regular file", file_name(path)));
+    }
+    let too_big = |len: u64| {
+        format!(
             "{} is {:.1} MB; the viewer opens files up to {} MB",
             file_name(path),
-            meta.len() as f64 / 1_048_576.0,
+            len as f64 / 1_048_576.0,
             MAX_BYTES / 1_048_576
-        ));
+        )
+    };
+    if meta.len() > MAX_BYTES {
+        return Err(too_big(meta.len()));
     }
-    let bytes = fs::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    // Read through the opened handle and never more than the limit: the file may
+    // have been swapped or grown since the check above.
+    let mut file =
+        fs::File::open(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    if !file.metadata().is_ok_and(|m| m.is_file()) {
+        return Err(format!("{} is not a regular file", file_name(path)));
+    }
+    let mut bytes = Vec::new();
+    std::io::Read::read_to_end(
+        &mut std::io::Read::take(&mut file, MAX_BYTES + 1),
+        &mut bytes,
+    )
+    .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    if bytes.len() as u64 > MAX_BYTES {
+        return Err(too_big(bytes.len() as u64));
+    }
     let (text, encoding) =
         decode(&bytes).ok_or_else(|| format!("{} looks like a binary file", file_name(path)))?;
     let mut crlf = false;
@@ -126,7 +156,7 @@ pub fn load(path: &Path) -> Result<Document, String> {
         display,
         encoding,
         crlf,
-        bytes: meta.len(),
+        bytes: bytes.len() as u64,
         modified: meta.modified().ok(),
         syntax,
     })
@@ -531,5 +561,32 @@ mod tests {
         // Shebang on the first line.
         let d = load(&temp("script", b"#!/usr/bin/env python3\nprint(1)\n")).unwrap();
         assert_eq!(d.syntax, "Python");
+    }
+
+    /// A repository can track `notes.txt -> /dev/zero`: reading it would grow
+    /// until the allocation fails and the whole app (every terminal) dies.
+    #[test]
+    #[cfg(unix)]
+    fn device_files_behind_symlinks_are_refused() {
+        let link =
+            std::env::temp_dir().join(format!("forgeterm-viewer-zero-{}", std::process::id()));
+        let _ = fs::remove_file(&link);
+        std::os::unix::fs::symlink("/dev/zero", &link).unwrap();
+        let err = load(&link).unwrap_err();
+        assert!(err.contains("not a regular file"), "{err}");
+        let _ = fs::remove_file(&link);
+    }
+
+    #[test]
+    fn files_over_the_limit_are_refused() {
+        let big = vec![b'a'; (MAX_BYTES + 1) as usize];
+        // Own file names: tests run in parallel in one temp folder.
+        let err = load(&temp("limit-over.txt", &big)).unwrap_err();
+        assert!(err.contains("up to 8 MB"), "{err}");
+        let ok = vec![b'a'; MAX_BYTES as usize];
+        assert_eq!(
+            load(&temp("limit-exact.txt", &ok)).unwrap().bytes,
+            MAX_BYTES
+        );
     }
 }

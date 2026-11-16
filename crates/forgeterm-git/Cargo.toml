@@ -9,6 +9,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+forgeterm-fs.workspace = true
 # Local calendar day of a commit (activity chart); only the clock feature.
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 

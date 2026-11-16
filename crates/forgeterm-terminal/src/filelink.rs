@@ -278,7 +278,11 @@ fn is_common_tld(ext: &str) -> bool {
 /// candidate must pass [`crate::is_local_path`] *before* `is_file` touches the
 /// file system (same rule as working-directory reports).
 pub fn resolve(path: &str, bases: &[PathBuf], is_file: impl Fn(&Path) -> bool) -> Option<PathBuf> {
-    let local_file = |p: &Path| p.to_str().is_some_and(crate::is_local_path) && is_file(p);
+    let local_file = |p: &Path| {
+        p.to_str().is_some_and(crate::is_local_path)
+            && forgeterm_fs::resolves_locally(p)
+            && is_file(p)
+    };
     let p = Path::new(path);
     if p.is_absolute() || p.has_root() {
         // `\foo` on Windows has a root but no drive: relative to the current drive,

@@ -808,6 +808,9 @@ checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
 [[package]]
 name = "forgeterm-agents"
 version = "0.1.1"
+dependencies = [
+ "forgeterm-fs",
+]
 
 [[package]]
 name = "forgeterm-app"
@@ -817,6 +820,7 @@ dependencies = [
  "embed-resource",
  "forgeterm-agents",
  "forgeterm-explorer",
+ "forgeterm-fs",
  "forgeterm-git",
  "forgeterm-prompts",
  "forgeterm-settings",
@@ -832,12 +836,20 @@ dependencies = [
 [[package]]
 name = "forgeterm-explorer"
 version = "0.1.1"
+dependencies = [
+ "forgeterm-fs",
+]
+
+[[package]]
+name = "forgeterm-fs"
+version = "0.1.1"
 
 [[package]]
 name = "forgeterm-git"
 version = "0.1.1"
 dependencies = [
  "chrono",
+ "forgeterm-fs",
 ]
 
 [[package]]
@@ -864,6 +876,7 @@ version = "0.1.1"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
+ "forgeterm-fs",
  "polling",
  "thiserror 2.0.21",
  "tracing",
@@ -873,6 +886,7 @@ dependencies = [
 name = "forgeterm-viewer"
 version = "0.1.1"
 dependencies = [
+ "forgeterm-fs",
  "syntect",
 ]
 

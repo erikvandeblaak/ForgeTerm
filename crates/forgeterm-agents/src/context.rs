@@ -53,7 +53,8 @@ pub struct ProjectContext {
 /// `.git` (a folder, or a file for worktrees/submodules). Without one, `start`.
 pub fn project_root(start: &Path) -> (PathBuf, bool) {
     for dir in start.ancestors() {
-        if dir.join(".git").exists() {
+        let git = dir.join(".git");
+        if forgeterm_fs::resolves_locally(&git) && git.exists() {
             return (dir.to_path_buf(), true);
         }
     }
@@ -76,7 +77,7 @@ pub fn scan_context(start: &Path) -> ProjectContext {
         (".mcp.json", ContextKind::Mcp),
     ] {
         let path = root.join(rel);
-        if path.is_file() {
+        if local_file(&path) {
             items.push(ContextItem {
                 kind,
                 name: rel.to_owned(),
@@ -104,7 +105,7 @@ pub fn scan_context(start: &Path) -> ProjectContext {
     // .claude/skills/<name>/SKILL.md
     for dir in sorted_entries(&claude.join("skills")) {
         let file = dir.join("SKILL.md");
-        if file.is_file() {
+        if local_file(&file) {
             let meta = front_matter(&file);
             items.push(ContextItem {
                 kind: ContextKind::Skill,
@@ -144,6 +145,9 @@ pub fn scan_context(start: &Path) -> ProjectContext {
 }
 
 fn sorted_entries(dir: &Path) -> Vec<PathBuf> {
+    if !forgeterm_fs::resolves_locally(dir) {
+        return Vec::new();
+    }
     let mut v: Vec<PathBuf> = fs::read_dir(dir)
         .map(|rd| rd.filter_map(Result::ok).map(|e| e.path()).collect())
         .unwrap_or_default();
@@ -157,7 +161,7 @@ fn collect_md(dir: &Path, out: &mut Vec<PathBuf>, depth: usize) {
         return;
     }
     for p in sorted_entries(dir) {
-        if p.is_dir() {
+        if forgeterm_fs::resolves_locally(&p) && p.is_dir() {
             collect_md(&p, out, depth + 1);
         } else if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("md")) {
             out.push(p);
@@ -176,6 +180,12 @@ fn file_stem(p: &Path) -> String {
 struct FrontMatter {
     name: Option<String>,
     description: Option<String>,
+}
+
+/// An existing regular file, reached without leaving this machine (a link in the
+/// project could point to a network share).
+fn local_file(p: &Path) -> bool {
+    forgeterm_fs::resolves_locally(p) && p.is_file()
 }
 
 /// Reads `name:` / `description:` from a leading `---` YAML block (first 8 KB only).
