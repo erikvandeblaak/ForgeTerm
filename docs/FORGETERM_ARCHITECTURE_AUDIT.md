@@ -65,7 +65,7 @@ forgeterm-app (iced 0.14, binary)
 
 | # | Bevinding | Plaats | Verif. |
 |---|---|---|---|
-| T1 | Een gecrashte achtergrondtaak wordt `Message::DismissSettingsProblems`. Dat wist de instellingenbanner, en busy-vlaggen (`git.refreshing`, `git.action_running`, `monitor.busy`, `explorer_checking`) blijven dan voor altijd staan. Git, monitor of verkenner stoppen stil tot je herstart. | `app.rs` `background()` | [Z] |
+| T1 ✅ opgelost 2026-11-16 (`Message::WorkerPanicked`: logt, zet alle busy-vlaggen terug, melding; de instellingenbanner blijft) | Een gecrashte achtergrondtaak wordt `Message::DismissSettingsProblems`. Dat wist de instellingenbanner, en busy-vlaggen (`git.refreshing`, `git.action_running`, `monitor.busy`, `explorer_checking`) blijven dan voor altijd staan. Git, monitor of verkenner stoppen stil tot je herstart. | `app.rs` `background()` | [Z] |
 | T2 | De zijpanelen zijn 4 losse booleans, op 5 plaatsen met de hand exclusief gemaakt. `load_settings` en `ExplorerGoToResult` slaan dat over, waardoor git en verkenner tegelijk "zichtbaar" kunnen zijn (git haalt dan onzichtbaar zijn log op). | `app.rs` `load_settings`, `ExplorerGoToResult` | [Z] |
 | T3 | Sneltoetshints staan hardcoded ("Ctrl+Shift+W", "Ctrl+Shift+Enter", "Alt+1…9") en kloppen niet meer na `[keys]`. | `app.rs` view-functies, shortcuts-overlay | [C] |
 | T4 | Ongeveer 30 `Message`-varianten voeren gebruikersacties direct uit (git stage/commit, prompt insert, tab select/close). Die staan dus niet in de palette en hebben geen sneltoets, in strijd met CLAUDE.md. | `app.rs` `handle` | [C] |
@@ -78,7 +78,7 @@ forgeterm-app (iced 0.14, binary)
 
 | # | Ernst | Bevinding | Verif. |
 |---|---|---|---|
-| S1 | **Hoog** | **Submodules omzeilen de git-trustpauze.** `repo_programs` leest alleen de config van het superproject, maar `git status` (zonder `--ignore-submodules`) recurseert in submodules en voert daar `filter.*.clean` uit. Gereproduceerd: het markerbestand werd 2× geschreven. Oplossing: `--ignore-submodules=all` + `-c diff.ignoreSubmodules=all`, of trustcontrole per submodule. | [R] |
+| S1 | **Hoog** — ✅ opgelost 2026-11-16 | **Submodules omzeilen de git-trustpauze.** `repo_programs` leest alleen de config van het superproject, maar `git status` (zonder `--ignore-submodules`) recurseert in submodules en voert daar `filter.*.clean` uit. Gereproduceerd: het markerbestand werd 2× geschreven. Oplossing: `--ignore-submodules=all` + `-c diff.ignoreSubmodules=all`, of trustcontrole per submodule. | [R] |
 | S2 | Middel (Win) | **Symlinks omzeilen de UNC-weigering.** `is_local_path` controleert alleen de tekst van het pad; `fs::metadata` (verkenner), `is_file` (bestandslinks) en `is_dir` (OSC 7) volgen reparse points. Op deze machine: een symlink naar `\\127.0.0.1\…` leidde tot een SMB-verbinding (NTLM-lek), en Developer Mode stond aan. Oplossing: `symlink_metadata` + `read_link` + `is_local_path` op het doel. | [R] primitief, [C] keten |
 | S3 | Middel (Linux) | **Viewer laadt apparaatbestanden.** Een repo met `x -> /dev/zero` laat `fs::read` groeien tot de app afbreekt; een FIFO laat de thread eeuwig hangen. Oplossing: `meta.is_file()` + `File::open(..).take(MAX+1)`. | [C] |
 | S4 | Laag | Plakbevestiging gebruikt gecachete modi, het encoderen live modi. Een programma dat net bracketed paste uitzet, krijgt meerregelige tekst met CR zonder bevestiging. Oplossing: beslissen en encoderen onder één lock in `Session`. | [C] |

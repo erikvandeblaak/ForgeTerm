@@ -11,6 +11,9 @@
 //! - git never prompts (`GIT_TERMINAL_PROMPT=0`, stdin closed), every call has a
 //!   timeout, and on Windows no console window appears.
 //!
+//! - submodules are never entered (`--ignore-submodules=all`): their own config is
+//!   not covered by [`repo_programs`];
+//!
 //! Only `stage`, `unstage` and `commit` change anything, and only when the user
 //! asks; a commit runs the repository's hooks exactly like `git commit` would.
 
@@ -19,6 +22,7 @@ mod history;
 mod refs;
 mod run;
 mod status;
+mod worktree;
 
 pub use head::{Head, head, parse_head};
 pub use history::activity;
@@ -28,6 +32,7 @@ pub use refs::{
 };
 pub use run::{Output, git};
 pub use status::{Branch, Change, Entry, Status, parse_status};
+pub use worktree::{FileStat, Worktree, numstat, parse_numstat, parse_worktrees, worktrees};
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -80,7 +85,7 @@ pub fn discover(dir: &Path) -> Result<Option<PathBuf>, String> {
 }
 
 /// Git prints `C:/x/y` on Windows; use the platform's separators.
-fn native_path(p: &str) -> PathBuf {
+pub(crate) fn native_path(p: &str) -> PathBuf {
     if cfg!(windows) {
         PathBuf::from(p.replace('/', "\\"))
     } else {
@@ -97,6 +102,9 @@ pub fn status(root: &Path) -> Result<Status, String> {
             "--branch",
             "-z",
             "--untracked-files=all",
+            // Submodules have their own config, which `repo_programs` does not
+            // see: descending into them could run their clean filters.
+            "--ignore-submodules=all",
         ],
         READ_TIMEOUT,
     )?;
@@ -123,7 +131,13 @@ pub struct Diff {
 
 /// Diff of one file (`path` relative to the repository root, as in [`Status`]).
 pub fn diff(root: &Path, path: &str, kind: DiffKind) -> Result<Diff, String> {
-    let mut args = vec!["diff", "--no-color", "--no-ext-diff", "--no-textconv"];
+    let mut args = vec![
+        "diff",
+        "--no-color",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--ignore-submodules=all",
+    ];
     match kind {
         DiffKind::Unstaged => {}
         DiffKind::Staged => args.push("--cached"),
@@ -589,5 +603,119 @@ mod tests {
         fs::remove_file(&marker).unwrap();
         status(root).unwrap();
         assert!(!marker.exists(), "status ran the repository's fsmonitor");
+    }
+
+    /// A submodule's own config can name a clean filter; the superproject's trust
+    /// check does not see it, so status must not descend into submodules.
+    #[test]
+    fn status_does_not_run_submodule_filters() {
+        let (Some(sup), Some(sub_repo)) = (Repo::new("super"), Repo::new("subm")) else {
+            return;
+        };
+        let run =
+            |dir: &Path, args: &[&str]| git(dir, args, READ_TIMEOUT).unwrap().check().unwrap();
+        sub_repo.write("a.txt", "one\n");
+        sub_repo.write(".gitattributes", "* filter=x\n");
+        run(&sub_repo.0, &["add", "-A"]);
+        run(&sub_repo.0, &["commit", "-q", "-m", "sub"]);
+        let url = sub_repo.0.to_string_lossy().replace('\\', "/");
+        run(
+            &sup.0,
+            &[
+                "-c",
+                "protocol.file.allow=always",
+                "submodule",
+                "add",
+                "-q",
+                &url,
+                "mod",
+            ],
+        );
+        run(&sup.0, &["commit", "-q", "-m", "add submodule"]);
+
+        let module = sup.0.join("mod");
+        let marker = sup.0.join("filter-ran");
+        let marker_s = marker.to_string_lossy().replace('\\', "/");
+        run(
+            &module,
+            &[
+                "config",
+                "filter.x.clean",
+                &format!("cat; echo x >> '{marker_s}'"),
+            ],
+        );
+        // Touch: same content, newer mtime, so git must re-hash the file through
+        // the filter (a size change would be detected without hashing).
+        std::thread::sleep(Duration::from_millis(1100));
+        fs::File::options()
+            .write(true)
+            .open(module.join("a.txt"))
+            .unwrap()
+            .set_modified(std::time::SystemTime::now())
+            .unwrap();
+
+        status(&sup.0).unwrap();
+        diff(&sup.0, "mod", DiffKind::Unstaged).unwrap();
+        numstat(&sup.0, false).unwrap();
+        assert!(!marker.exists(), "a submodule filter ran");
+
+        // Control: a plain status does descend and run it (else this proves nothing).
+        let _ = std::process::Command::new("git")
+            .args(["status", "--porcelain"])
+            .current_dir(&sup.0)
+            .output();
+        assert!(
+            marker.exists(),
+            "control: a plain git status should run the submodule filter"
+        );
+    }
+
+    #[test]
+    fn worktrees_and_numstat_against_real_git() {
+        let Some(repo) = Repo::new("worktrees") else {
+            return;
+        };
+        let root = &repo.0;
+        let run =
+            |dir: &Path, args: &[&str]| git(dir, args, READ_TIMEOUT).unwrap().check().unwrap();
+        repo.write("a.txt", "1\n2\n3\n");
+        run(root, &["add", "-A"]);
+        run(root, &["commit", "-q", "-m", "first"]);
+
+        let wt = std::env::temp_dir().join(format!("forgeterm-git-wt-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&wt);
+        let wt_s = wt.to_string_lossy().into_owned();
+        run(
+            root,
+            &["worktree", "add", "-q", "-b", "agent/claude", &wt_s],
+        );
+        let list = worktrees(root).unwrap();
+        assert_eq!(list.len(), 2, "{list:?}");
+        assert_eq!(list[0].branch.as_deref(), Some("main"));
+        assert_eq!(list[1].branch.as_deref(), Some("agent/claude"));
+        assert_eq!(
+            fs::canonicalize(&list[1].path).unwrap(),
+            fs::canonicalize(&wt).unwrap()
+        );
+        // The branch reader agrees without starting git.
+        assert_eq!(head(&wt).unwrap().name, "agent/claude");
+        assert!(head(&wt).unwrap().linked_worktree);
+
+        // Line counts: unstaged edit, then staged.
+        repo.write("a.txt", "1\nTWO\n3\n4\n");
+        let s = numstat(root, false).unwrap();
+        assert_eq!(s.len(), 1);
+        assert_eq!(
+            (s[0].path.as_str(), s[0].added, s[0].deleted),
+            ("a.txt", Some(2), Some(1))
+        );
+        assert!(numstat(root, true).unwrap().is_empty());
+        run(root, &["add", "a.txt"]);
+        assert_eq!(numstat(root, true).unwrap()[0].added, Some(2));
+        assert!(numstat(root, false).unwrap().is_empty());
+
+        run(root, &["worktree", "remove", &wt_s]);
+        assert_eq!(worktrees(root).unwrap().len(), 1);
+        let _ = fs::remove_dir_all(&wt);
     }
 }

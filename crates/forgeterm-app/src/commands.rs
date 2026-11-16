@@ -85,6 +85,11 @@ pub enum CommandId {
     TogglePromptStudioDock,
     OpenPromptsFolder,
     ToggleGitPanel,
+    /// Git Control Center: the repository overview in the main area.
+    ToggleGitDashboard,
+    /// New tab in a worktree of the Git Control Center's list, by its stable id
+    /// (`git_dash::worktree_id`): a list reloaded meanwhile can never redirect it.
+    WorktreeTerminal(u64),
     GitRefresh,
     GitShowHistory,
     About,
@@ -152,12 +157,29 @@ pub const STATIC_COMMANDS: &[CommandId] = &[
     CommandId::ToggleGitPanel,
     CommandId::GitRefresh,
     CommandId::GitShowHistory,
+    CommandId::ToggleGitDashboard,
     CommandId::About,
     CommandId::Website,
     CommandId::Quit,
 ];
 
 impl CommandId {
+    /// Whether the palette lists it under "recent": not for navigation, and not
+    /// for commands whose parameter (a terminal, a worktree) means nothing later.
+    pub fn is_recordable(self) -> bool {
+        use CommandId::*;
+        !matches!(
+            self,
+            CommandPalette
+                | SelectTab(_)
+                | GoToTerminal(_)
+                | TerminalFolder(_)
+                | TerminalGit(_)
+                | StopTerminal(_)
+                | WorktreeTerminal(_)
+        )
+    }
+
     /// Commands that create, show or act on a visible terminal. Mission Control
     /// covers the terminals, so it closes first: a new pane only starts at its
     /// first layout, which needs it on screen.
@@ -176,6 +198,7 @@ impl CommandId {
                 | FocusPane(_)
                 | RestartShell
                 | StartAgent(..)
+                | WorktreeTerminal(_)
                 | NewTabInSelectedFolder
                 | FindInTerminal
                 | PreviousCommand
@@ -236,7 +259,8 @@ impl CommandId {
             | OpenPromptStudio
             | TogglePromptStudioDock
             | OpenPromptsFolder => "AI",
-            ToggleGitPanel | GitRefresh | GitShowHistory => "Git",
+            ToggleGitPanel | GitRefresh | GitShowHistory | ToggleGitDashboard
+            | WorktreeTerminal(_) => "Git",
             About | Website | KeyboardShortcuts => "Help",
             Quit => "App",
         }
@@ -318,6 +342,8 @@ impl CommandId {
             ToggleGitPanel => "toggle_git_panel",
             GitRefresh => "git_refresh",
             GitShowHistory => "git_history",
+            ToggleGitDashboard => "git_dashboard",
+            WorktreeTerminal(_) => "worktree_terminal",
             ToggleViewer => "toggle_viewer",
             ViewSelectedFile => "view_selected_file",
             ToggleMonitor => "toggle_monitor",
@@ -414,6 +440,8 @@ impl CommandId {
             KeyboardShortcuts => "Keyboard Shortcuts",
             GitRefresh => "Refresh Git Status",
             GitShowHistory => "Show History and Activity",
+            ToggleGitDashboard => "Git Control Center (Dashboard)",
+            WorktreeTerminal(_) => "New Tab in Worktree",
             ReloadSettings => "Reload Settings",
             About => "About ForgeTerm",
             Website => "Open Website (vandeblaak.com)",
@@ -574,6 +602,7 @@ impl Default for Keymap {
             (b(CS, Char('d')), ToggleMissionControl),
             (b(CS, Char('i')), OpenPromptStudio),
             (b(CS, Char('g')), ToggleGitPanel),
+            (b(CS, Char('h')), ToggleGitDashboard),
             (b(CS, Char('o')), ToggleViewer),
             (b(CS, Char('f')), FindInTerminal),
             (b(CS, Char('m')), ToggleMonitor),
@@ -792,6 +821,22 @@ mod tests {
         }
         // Round trip through the display text.
         assert_eq!(p(&p("Ctrl+Alt+F3").to_string()), p("Ctrl+Alt+F3"));
+    }
+
+    #[test]
+    fn navigation_and_per_terminal_commands_are_not_recent() {
+        use CommandId::*;
+        for id in [
+            SelectTab(1),
+            GoToTerminal(3),
+            WorktreeTerminal(9),
+            CommandPalette,
+        ] {
+            assert!(!id.is_recordable(), "{id:?}");
+        }
+        for id in [NewTab, ToggleGitDashboard, ToggleMissionControl, Copy] {
+            assert!(id.is_recordable(), "{id:?}");
+        }
     }
 
     #[test]

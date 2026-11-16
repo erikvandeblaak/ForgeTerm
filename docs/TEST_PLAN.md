@@ -374,6 +374,23 @@ Wegwerp-repo `demo-shop` (branch `feature/checkout`, 1 wijziging). Claude Code 2
 | MC9 | Status *Needs you / Working / Done* via OSC 7501 | ⬜ alleen unit-getest (ConPTY geeft het query-antwoord niet door; Claude Code meldt dan niets) |
 | MC10 | Linux (WSLg) | ⬜ alleen clippy voor `x86_64-unknown-linux-gnu` |
 
+## Git Control Center (2026-11-16, Windows 11, wegwerp-repo)
+
+`demo-shop`: 17 commits verspreid over 4 weken (met `GIT_AUTHOR_DATE`), branches `feature/payments` en `fix/rounding`, 1 staged (+30), 1 unstaged (+1 −39), 1 untracked, linked worktree `demo-shop-claude` (branch `agent/claude`, 1 wijziging).
+
+| # | Scenario | Resultaat |
+|---|---|---|
+| GD1 | Ctrl+Shift+H: kop (branch, "no upstream", "3 changes"), tegels (1/+30 −0, 1/+1 −39, 1 new, 17 commits max 3/dag, 2 worktrees), werkboom met diffstat-balkjes, beide worktrees met wijzigingen, activiteit, commits | ✅ |
+| GD2 | *Terminal here* op `demo-shop-claude`: nieuwe tab in die worktree; Claude Code daar gestart (geen prompt) | ✅ |
+| GD3 | Dashboard volgt de gefocuste terminal: toont `demo-shop-claude` als *shown*, Claude-badge bij die worktree, `demo-shop` ernaast met "3 changes" (eigen status) | ✅ |
+| GD4 | Klik op een bestand: diff-overlay (`+// wip`), Esc sluit | ✅ |
+| GD5 | *Stage & commit*: Git-paneel naast het dashboard; lange paden worden afgeknipt, knoppen breken niet af (eerste versie wel, opgelost) | ✅ |
+| GD6 | Klik op de agentbadge: naar de Claude-terminal (eerste versie bleef het dashboard staan, opgelost) | ✅ |
+| GD7 | Klik op een tab terwijl het dashboard open is: dashboard dicht, die tab zichtbaar | ✅ |
+| GD8 | Submodule met clean-filter: status/diff/numstat draaien het niet; gewone `git status` wel (controle) | ✅ unit (echte git), mutatietest faalt zonder fix |
+| GD9 | Repository met programma's in de eigen config: kaart "Git is paused" met *Trust* | ⬜ alleen code (zelfde `Repo::Untrusted` als het paneel) |
+| GD10 | Linux (WSLg) | ⬜ alleen clippy voor `x86_64-unknown-linux-gnu` |
+
 ## Prestaties (release, Windows 11, i7 RaptorLake + RTX 4070 Laptop, 1200×760)
 
 Gemeten 2026-11-10. Opstarttijden uit de eigen tracing-tijdstempels; geheugen = working set na 5 s, idle prompt.

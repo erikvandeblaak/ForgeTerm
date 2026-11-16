@@ -25,6 +25,7 @@ use iced::{
 
 use crate::ai_view::{self, AgentState};
 use crate::commands::{CommandId, Dir, Keymap, STATIC_COMMANDS};
+use crate::git_dash::{self, DashData, GitDash, WorktreeChanges, WorktreeInfo};
 use crate::git_view::{self, DiffView, GitState, HistoryView, Repo, Snapshot};
 use crate::menu::{self, Menu, MenuState};
 use crate::mission_view::{self, EndKind, Ended, Mission};
@@ -137,6 +138,8 @@ pub enum Message {
     /// Periodic check whether settings.toml changed on disk.
     SettingsTick,
     DismissSettingsProblems,
+    /// A background task panicked (see `background`).
+    WorkerPanicked,
     AgentsDetected(Vec<(AgentKind, Option<Agent>)>),
     /// Project context scanned for the given start folder.
     ContextScanned(PathBuf, ProjectContext),
@@ -196,6 +199,8 @@ pub enum Message {
     MonitorSampled(Box<forgeterm_system::Sample>),
     /// Once per second while Mission Control is open (runtimes, branch refresh).
     MissionTick,
+    /// Git Control Center data, read in the background.
+    GitDashLoaded(Box<DashData>),
     /// Checked-out branch per project root, read in the background.
     MissionHeads(Vec<(PathBuf, Option<forgeterm_git::Head>)>),
     /// Test hook (FORGETERM_SCREENSHOT): capture the rendered frame.
@@ -314,6 +319,7 @@ pub struct App {
     saved_session: Option<String>,
     monitor: Monitor,
     mission: Mission,
+    git_dash: GitDash,
     shortcuts_open: bool,
 }
 
@@ -369,6 +375,7 @@ impl App {
             saved_session: None,
             monitor: Monitor::default(),
             mission: Mission::default(),
+            git_dash: GitDash::default(),
             shortcuts_open: false,
         };
         app.menus = menu::menus(app.shells.len());
@@ -862,7 +869,7 @@ impl App {
             } => {
                 // Mission Control covers the panes: nothing there is visible or
                 // "seen"; agent previews refresh once per second (MissionTick).
-                let visible = !self.mission.visible && self.workspace.is_visible(id);
+                let visible = !self.main_covered() && self.workspace.is_visible(id);
                 let seen = visible && self.window_focused;
                 let Some(terminal) = self.terminals.get_mut(&id) else {
                     return Task::none();
@@ -895,12 +902,9 @@ impl App {
             Message::ShellPicked(choice) => {
                 return self.run_command(CommandId::NewTabWithShell(choice.index));
             }
-            Message::SelectTab(index) => {
-                self.menu = None;
-                if self.workspace.select(index) {
-                    self.refresh_visible();
-                }
-            }
+            // Through the command, so a page covering the terminals (Mission Control,
+            // Git Control Center) closes too, also when the active tab is clicked.
+            Message::SelectTab(index) => return self.run_command(CommandId::SelectTab(index)),
             Message::CloseTab(index) => {
                 self.menu = None;
                 let ids = self
@@ -1182,6 +1186,19 @@ impl App {
                 return Task::batch(changed.into_iter().map(load_document).chain(sample));
             }
             Message::DismissSettingsProblems => self.settings_problems.clear(),
+            Message::WorkerPanicked => {
+                // Which task it was is unknown here: free every "running" flag, so
+                // nothing stays stuck (at worst one job runs twice), and say so.
+                tracing::error!("a background task panicked");
+                self.git.refreshing = None;
+                self.git.action_running = false;
+                self.monitor.busy = false;
+                self.explorer_checking = false;
+                self.git_dash.busy = false;
+                self.mission.heads_busy = false;
+                self.notice =
+                    Some("A background task failed unexpectedly; it will be retried.".to_owned());
+            }
             Message::AgentsDetected(found) => {
                 self.agents = found
                     .into_iter()
@@ -1244,6 +1261,14 @@ impl App {
                 // follow-up sync starts a refresh for the new one.
                 if snapshot.dir == self.git_dir() {
                     self.git.apply(*snapshot);
+                    return self.load_git_dash(false);
+                }
+            }
+            Message::GitDashLoaded(data) => {
+                self.git_dash.busy = false;
+                self.git_dash.data = Some(*data);
+                if std::mem::take(&mut self.git_dash.reload_pending) {
+                    return self.load_git_dash(true);
                 }
             }
             Message::GitStage(paths) => return self.git_action(GitAction::Stage(paths)),
@@ -1583,6 +1608,14 @@ impl App {
         if self.mission.visible {
             return self.mission_key(&key, mods);
         }
+        // The Git Control Center has no keyboard actions of its own besides Esc;
+        // nothing reaches the terminals hidden behind it.
+        if self.git_dash.visible {
+            if matches!(key, keyboard::Key::Named(Named::Escape)) {
+                return self.run_command(CommandId::ToggleGitDashboard);
+            }
+            return Task::none();
+        }
 
         let Some(focused) = self.workspace.focused() else {
             return Task::none();
@@ -1750,11 +1783,12 @@ impl App {
     /// The single place where commands are executed.
     pub fn run_command(&mut self, id: CommandId) -> Task<Message> {
         self.menu = None;
-        if self.mission.visible && id.shows_terminals() {
+        if self.main_covered() && id.shows_terminals() {
             self.mission.visible = false;
+            self.git_dash.visible = false;
             self.refresh_visible();
         }
-        if id != CommandId::CommandPalette {
+        if id.is_recordable() {
             self.recent_commands.retain(|c| *c != id);
             self.recent_commands.insert(0, id);
             self.recent_commands.truncate(command_palette::RECENT_LIMIT);
@@ -2006,7 +2040,23 @@ impl App {
                     return self.refresh_git(true);
                 }
             }
-            CommandId::GitRefresh => return self.refresh_git(true),
+            CommandId::GitRefresh => {
+                return Task::batch([self.refresh_git(true), self.load_git_dash(true)]);
+            }
+            CommandId::ToggleGitDashboard => {
+                self.git_dash.visible = !self.git_dash.visible;
+                if !self.git_dash.visible {
+                    self.refresh_visible();
+                    return Task::none();
+                }
+                self.mission.visible = false;
+                return Task::batch([self.refresh_git(true), self.load_git_dash(true)]);
+            }
+            CommandId::WorktreeTerminal(i) => {
+                if let Some(path) = self.worktree_path(i) {
+                    return self.new_tab(None, Some(path));
+                }
+            }
             CommandId::GitShowHistory => {
                 if let Some(root) = self.git.root().cloned() {
                     self.git.history = Some(HistoryView::default());
@@ -2146,6 +2196,8 @@ impl App {
             CommandId::SelectTab(i) => i < self.workspace.tabs.len() && i != self.workspace.active,
             CommandId::OpenPromptsFolder => self.prompts_dir().is_some(),
             CommandId::GitShowHistory => self.git.root().is_some(),
+            CommandId::ToggleGitDashboard => true,
+            CommandId::WorktreeTerminal(i) => self.worktree_path(i).is_some(),
             CommandId::ToggleViewer | CommandId::ToggleMonitor | CommandId::KeyboardShortcuts => {
                 true
             }
@@ -2342,8 +2394,89 @@ impl App {
 
     // ---- mission control ------------------------------------------------------------
 
+    /// Mission Control or the Git Control Center covers the terminals.
+    fn main_covered(&self) -> bool {
+        self.mission.visible || self.git_dash.visible
+    }
+
+    // ---- git control center ---------------------------------------------------------
+
+    /// Folder of the worktree with this id in the dashboard's list, when it is
+    /// still there and usable.
+    fn worktree_path(&self, id: u64) -> Option<PathBuf> {
+        let list = self.git_dash.data.as_ref()?.worktrees.as_ref().ok()?;
+        let info = list
+            .iter()
+            .find(|i| git_dash::worktree_id(&i.worktree.path) == id)?;
+        let usable = !info.worktree.bare
+            && !matches!(
+                info.changes,
+                WorktreeChanges::Missing | WorktreeChanges::NotLocal
+            );
+        usable.then(|| info.worktree.path.clone())
+    }
+
+    /// Reloads the dashboard's data when it is open and out of date: a different
+    /// status than at the last load (a commit, stage or edit), another repository,
+    /// or older than 10 s (other worktrees, commits made elsewhere). `force`: always.
+    fn load_git_dash(&mut self, force: bool) -> Task<Message> {
+        if !self.git_dash.visible {
+            return Task::none();
+        }
+        if self.git_dash.busy {
+            self.git_dash.reload_pending |= force;
+            return Task::none();
+        }
+        let Some(Repo::Found { root, status }) = self.git.repo.as_ref() else {
+            return Task::none();
+        };
+        let fresh =
+            self.git_dash.data.as_ref().is_some_and(|d| {
+                &d.root == root && d.loaded_at.elapsed() < Duration::from_secs(10)
+            }) && self.git_dash.loaded_for.as_ref() == Some(status);
+        if fresh && !force {
+            return Task::none();
+        }
+        self.git_dash.busy = true;
+        self.git_dash.loaded_for = Some(status.clone());
+        let root = root.clone();
+        let trusted: Vec<PathBuf> = self.git.trusted.iter().cloned().collect();
+        background(
+            move || Box::new(load_dashboard(root, &trusted)),
+            Message::GitDashLoaded,
+        )
+    }
+
+    fn view_git_dash(&self) -> Element<'_, Message> {
+        let mut agents = Vec::new();
+        for (tab, t) in self.workspace.tabs.iter().enumerate() {
+            for id in t.terminals() {
+                if let Some(term) = self.terminals.get(&id)
+                    && let (Some(kind), Some(dir)) = (term.agent, term.directory())
+                {
+                    agents.push(git_dash::AgentAt {
+                        id,
+                        kind,
+                        tab,
+                        dir: dir.to_path_buf(),
+                    });
+                }
+            }
+        }
+        git_dash::view(git_dash::View {
+            repo: self.git.repo.as_ref(),
+            dash: &self.git_dash,
+            agents,
+            dir: self.focused().and_then(TerminalPane::directory),
+            now: std::time::Instant::now(),
+        })
+    }
+
     fn toggle_mission(&mut self) -> Task<Message> {
         self.mission.visible = !self.mission.visible;
+        if self.mission.visible {
+            self.git_dash.visible = false;
+        }
         if !self.mission.visible {
             self.refresh_visible();
             return Task::none();
@@ -2370,7 +2503,9 @@ impl App {
         if !self.terminals.contains_key(&id) {
             return;
         }
+        // Whichever page covers the terminals (Mission Control, Git Control Center).
         self.mission.visible = false;
+        self.git_dash.visible = false;
         self.mission.selected = Some(id);
         self.focus_terminal(id);
         self.refresh_visible();
@@ -3268,7 +3403,7 @@ impl App {
 
     /// Terminals the user is looking at no longer need attention.
     fn acknowledge_seen(&mut self) {
-        if !self.window_focused || self.mission.visible {
+        if !self.window_focused || self.main_covered() {
             return;
         }
         let Some(tab) = self.workspace.active_tab() else {
@@ -3472,6 +3607,7 @@ impl App {
                 .center(Length::Fill)
                 .into(),
             (None, _) if self.mission.visible => self.view_mission(),
+            (None, _) if self.git_dash.visible => self.view_git_dash(),
             (None, Some(tab)) => self.view_panes(tab),
             (None, None) => space::vertical().into(),
         };
@@ -4342,8 +4478,8 @@ fn background<T: Send + 'static>(
         },
         move |result| match result {
             Ok(v) => to_message(v),
-            // The worker thread panicked; nothing to report beyond the log.
-            Err(_) => Message::DismissSettingsProblems,
+            // The worker thread panicked: reset the busy flags (and log it).
+            Err(_) => Message::WorkerPanicked,
         },
     )
 }
@@ -4536,6 +4672,69 @@ fn git_snapshot(
         repo,
         log,
         branches,
+    }
+}
+
+/// Everything the Git Control Center shows besides the status (background thread).
+/// Other worktrees are read like the main one: paused when their config names
+/// programs and they are not trusted, and never when their folder is not local.
+fn load_dashboard(root: PathBuf, trusted: &[PathBuf]) -> DashData {
+    let root_key = git_dash::path_key(&root);
+    let read = |i: usize, worktree: &forgeterm_git::Worktree| -> WorktreeChanges {
+        let path = &worktree.path;
+        if git_dash::path_key(path) == root_key {
+            WorktreeChanges::Current
+        } else if worktree.bare || i >= git_dash::MAX_WORKTREE_STATUS {
+            WorktreeChanges::NotRead
+        } else if !path.to_str().is_some_and(forgeterm_terminal::is_local_path) {
+            WorktreeChanges::NotLocal
+        } else if !path.is_dir() {
+            WorktreeChanges::Missing
+        } else {
+            match forgeterm_git::repo_programs(path) {
+                Err(e) => WorktreeChanges::Error(e),
+                Ok(p) if !p.is_empty() && !trusted.contains(path) => WorktreeChanges::Paused,
+                Ok(_) => match forgeterm_git::status(path) {
+                    Ok(s) => WorktreeChanges::Count {
+                        changes: s.change_count(),
+                        conflicts: s.conflicted().count(),
+                    },
+                    Err(e) => WorktreeChanges::Error(e),
+                },
+            }
+        }
+    };
+    // In parallel: one slow worktree must not hold up the others.
+    let worktrees = forgeterm_git::worktrees(&root).map(|list| {
+        let changes: Vec<WorktreeChanges> = std::thread::scope(|scope| {
+            let handles: Vec<_> = list
+                .iter()
+                .enumerate()
+                .map(|(i, w)| scope.spawn(move || read(i, w)))
+                .collect();
+            handles
+                .into_iter()
+                .map(|h| {
+                    h.join().unwrap_or_else(|_| {
+                        WorktreeChanges::Error("reading it failed unexpectedly".to_owned())
+                    })
+                })
+                .collect()
+        });
+        list.into_iter()
+            .zip(changes)
+            .map(|(worktree, changes)| WorktreeInfo { worktree, changes })
+            .collect()
+    });
+    DashData {
+        unstaged: forgeterm_git::numstat(&root, false),
+        staged: forgeterm_git::numstat(&root, true),
+        activity: forgeterm_git::activity(&root, 30),
+        commits: forgeterm_git::history(&root, 8),
+        branches: forgeterm_git::branches(&root),
+        worktrees,
+        root,
+        loaded_at: std::time::Instant::now(),
     }
 }
 
