@@ -472,11 +472,11 @@ mod tests {
             // Every color a program may print text in; black (0) is the exception
             // on dark themes, where programs use it as a background.
             let light = luminance(bg) > 0.5;
-            for i in 0..16 {
+            for (i, color) in p.ansi.iter().enumerate() {
                 if i == 0 && !light {
                     continue;
                 }
-                let c = contrast(to_color(p.ansi[i]), bg);
+                let c = contrast(to_color(*color), bg);
                 assert!(c >= 3.0, "{name}: ansi {i} {c:.2}");
             }
             let c = contrast(to_color(p.selection_fg), to_color(p.selection_bg));
