@@ -2,6 +2,38 @@
 
 All notable changes to ForgeTerm. Dates are release dates.
 
+## [0.2.0] – 2026-11-16
+
+Source only for now: there is no 0.2.0 download yet (the latest installer is 0.1.1).
+
+### Added
+- **Mission Control** (Ctrl+Shift+D): a live card for every agent in the window, with status (from the agent itself, the bell or the process), project, branch, runtime, last output, a live miniature and measured CPU and memory. Open, Files, Changes and Stop from the card, plus a list of ended sessions.
+- **Git Control Center** (Ctrl+Shift+H): branch, upstream, staged, unstaged and untracked files, worktrees, recent commits and activity on one page.
+- **An agent in its own worktree:** start Claude Code or Codex on a new branch in a new worktree, and remove the worktree again when you are done. Removal refuses while a terminal still works in it.
+- **Compare Worktrees** (Ctrl+Shift+K): the changes of two worktrees since their common commit, side by side, with test terminals in both and one prompt for both agents (inserted without Enter).
+- **Five color themes:** Midnight (the original look), Graphite, Arctic (light), Cyber and High Contrast. Set one with `[appearance] theme` in `settings.toml`, or try one with *View → Theme*. Switching needs no restart, and every theme's contrast is tested.
+- **GPU usage in the monitor:** NVIDIA GPUs through the driver (NVML), and AMD GPUs on Linux through sysfs. Load, VRAM and temperature, measured only while the panel is open. Other GPUs show *not available* with the reason.
+- **SSH profiles:** the hosts of your `~/.ssh/config` appear as *New SSH Tab* in the palette, the File menu and the new-tab picker. The tab runs your own OpenSSH client, and ForgeTerm never sees a password.
+- **Commands** for closing a tab, inserting, copying and reloading a prompt, committing, staging or unstaging everything, trusting a repository and showing remote branches. They are in the palette and the menus.
+
+### Changed
+- **Search in the terminal** waits for a short pause in typing, so large scrollbacks no longer slow down every key press.
+- **Background work:** Git status and the settings check pause while the window has no focus.
+- **Side panels:** only one is open at a time.
+- **Shortcut hints** in the screens follow your own `[keys]`.
+- **Shortcuts that do not apply** at that moment do nothing.
+
+### Fixed
+- **PowerShell 7 with `NO_COLOR` set** lost its command marks, so copying the last output, jumping between commands and exit codes did not work.
+- **About and Keyboard Shortcuts** opened from the command palette closed again at once.
+- **A failed session save** now shows one clear message, instead of a log line every two seconds.
+- **A network folder as start folder** can no longer make the window hang.
+- **A refused branch name** stays in the field so you can correct it.
+- **Security:**
+  - Git submodules respect the repository trust check.
+  - The code viewer only opens regular files.
+  - Links to network shares through symlinks are not followed.
+
 ## [0.1.1] – 2026-11-11
 
 ### Added

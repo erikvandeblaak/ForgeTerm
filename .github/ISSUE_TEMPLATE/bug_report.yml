@@ -7,7 +7,7 @@ body:
     attributes:
       label: ForgeTerm version
       description: Help › About
-      placeholder: "0.1.1"
+      placeholder: "0.2.0"
     validations:
       required: true
   - type: dropdown
