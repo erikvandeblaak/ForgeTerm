@@ -33,6 +33,12 @@ pub struct Integration {
 
 /// Wraps the current prompt; works in Windows PowerShell 5.1 (no `` `e ``) and pwsh 7.
 /// One statement per line; the lines are joined with spaces.
+///
+/// pwsh 7 with `$PSStyle.OutputRendering = 'PlainText'` (set by `NO_COLOR`) strips
+/// every escape sequence from the returned prompt, marks included. Then the prompt is
+/// written to the console directly and an SGR reset is returned instead: it is not
+/// empty (an empty prompt would show `PS>`), and the host strips it, so nothing extra
+/// shows.
 const POWERSHELL: &str = r#"$global:__ForgeTermPrompt = $function:prompt;
 $global:__ForgeTermN = 0;
 $global:__ForgeTermRan = $false;
@@ -72,7 +78,8 @@ if ($l.Provider.Name -eq 'FileSystem') { $out += "$e]9;9;$($l.ProviderPath)$e\" 
 $global:__ForgeTermN++;
 $global:LASTEXITCODE = $code;
 $p = & $global:__ForgeTermPrompt;
-$out + "$e]133;A$e\$e]8;;forgeterm-prompt:$($global:__ForgeTermN)$e\" + $p + "$e]8;;$e\$e]133;B$e\"
+$s = $out + "$e]133;A$e\$e]8;;forgeterm-prompt:$($global:__ForgeTermN)$e\" + $p + "$e]8;;$e\$e]133;B$e\";
+if ($PSStyle -and $PSStyle.OutputRendering -eq 'PlainText') { [Console]::Write($s); "$e[0m" } else { $s }
 }"#;
 
 /// bash: exit code of the previous command, then the directory report (`{cwd}`),
