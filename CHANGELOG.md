@@ -6,6 +6,7 @@ All notable changes to ForgeTerm. Dates are release dates.
 
 ### Added
 - **Docker** (when the `docker` CLI is installed): the containers appear in the command palette. Open a shell in a running container or follow its log, each in its own tab, and start or stop a container. ForgeTerm never removes containers, images or volumes, and without a running engine it says so.
+- **Hooks and MCP servers in the AI panel:** the hooks in `.claude/settings.json` / `settings.local.json` with the event, matcher and the command they run (in amber), and the servers in `.mcp.json` with their command or url. ForgeTerm only shows them and never runs them.
 
 ### Changed
 - An SSH or container tab no longer shows the local folder's Git status in the status bar.
