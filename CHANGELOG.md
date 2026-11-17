@@ -2,20 +2,11 @@
 
 All notable changes to ForgeTerm. Dates are release dates.
 
-## [Unreleased]
+## [0.2.0] – 2026-11-17
 
 ### Added
 - **Docker** (when the `docker` CLI is installed): the containers appear in the command palette. Open a shell in a running container or follow its log, each in its own tab, and start or stop a container. ForgeTerm never removes containers, images or volumes, and without a running engine it says so.
 - **Hooks and MCP servers in the AI panel:** the hooks in `.claude/settings.json` / `settings.local.json` with the event, matcher and the command they run (in amber), and the servers in `.mcp.json` with their command or url. ForgeTerm only shows them and never runs them.
-
-### Changed
-- An SSH or container tab no longer shows the local folder's Git status in the status bar.
-
-## [0.2.0] – 2026-11-16
-
-Source only for now: there is no 0.2.0 download yet (the latest installer is 0.1.1).
-
-### Added
 - **Mission Control** (Ctrl+Shift+D): a live card for every agent in the window, with status (from the agent itself, the bell or the process), project, branch, runtime, last output, a live miniature and measured CPU and memory. Open, Files, Changes and Stop from the card, plus a list of ended sessions.
 - **Git Control Center** (Ctrl+Shift+H): branch, upstream, staged, unstaged and untracked files, worktrees, recent commits and activity on one page.
 - **An agent in its own worktree:** start Claude Code or Codex on a new branch in a new worktree, and remove the worktree again when you are done. Removal refuses while a terminal still works in it.
@@ -26,6 +17,7 @@ Source only for now: there is no 0.2.0 download yet (the latest installer is 0.1
 - **Commands** for closing a tab, inserting, copying and reloading a prompt, committing, staging or unstaging everything, trusting a repository and showing remote branches. They are in the palette and the menus.
 
 ### Changed
+- An SSH or container tab no longer shows the local folder's Git status in the status bar.
 - **Search in the terminal** waits for a short pause in typing, so large scrollbacks no longer slow down every key press.
 - **Background work:** Git status and the settings check pause while the window has no focus.
 - **Side panels:** only one is open at a time.
@@ -56,5 +48,6 @@ Source only for now: there is no 0.2.0 download yet (the latest installer is 0.1
 
 First public build: GPU-rendered terminal (ConPTY / PTY with alacritty_terminal), tabs and splits, Command Palette and menu bar, file explorer, code viewer with minimap, Git panel, AI workspace for Claude Code and Codex, Prompt Studio, monitor, session restore, `settings.toml` with live reload. Windows installer, portable zip and a `.deb` for Linux Mint 22 / Ubuntu 24.04.
 
+[0.2.0]: https://github.com/erikvandeblaak/ForgeTerm/releases/tag/v0.2.0
 [0.1.1]: https://github.com/erikvandeblaak/ForgeTerm/releases/tag/v0.1.1
 [0.1.0]: https://github.com/erikvandeblaak/ForgeTerm/releases/tag/v0.1.0
