@@ -66,7 +66,7 @@ A terminal that runs AI agents has to be predictable. ForgeTerm puts the tools y
 
 Download the latest version from the [releases page](https://github.com/erikvandeblaak/ForgeTerm/releases/latest) or from [vandeblaak.com/downloads](https://www.vandeblaak.com/downloads/?lang=en). Every file comes with a `.sha256` file.
 
-The latest download is **0.2.0** (Mission Control, Git Control Center, worktrees, themes, GPU, SSH, Docker, hooks and MCP in the AI panel; see the [changelog](CHANGELOG.md)).
+The latest download is **0.2.1**, a bug fix for 0.2.0 (Mission Control, Git Control Center, worktrees, themes, GPU, SSH, Docker, hooks and MCP in the AI panel; see the [changelog](CHANGELOG.md)).
 
 **Windows 11 (x64)**
 
@@ -74,14 +74,14 @@ The latest download is **0.2.0** (Mission Control, Git Control Center, worktrees
 - `ForgeTerm-<version>-windows-x64.zip` is the portable version: unzip and start `forgeterm.exe`.
 
 ```powershell
-Get-FileHash .\ForgeTerm-0.2.0-setup-x64.exe -Algorithm SHA256
+Get-FileHash .\ForgeTerm-0.2.1-setup-x64.exe -Algorithm SHA256
 ```
 
 **Linux Mint 22 / Ubuntu 24.04 (amd64)**
 
 ```bash
-sha256sum -c forgeterm_0.2.0-1_amd64.deb.sha256
-sudo apt install ./forgeterm_0.2.0-1_amd64.deb      # remove: sudo apt remove forgeterm
+sha256sum -c forgeterm_0.2.1-1_amd64.deb.sha256
+sudo apt install ./forgeterm_0.2.1-1_amd64.deb      # remove: sudo apt remove forgeterm
 ```
 
 apt installs the missing libraries itself (X11/Wayland, xkbcommon, EGL). Git and Vulkan are recommended.

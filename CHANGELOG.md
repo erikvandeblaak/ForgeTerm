@@ -2,7 +2,7 @@
 
 All notable changes to ForgeTerm. Dates are release dates.
 
-## [Unreleased]
+## [0.2.1] – 2026-11-17
 
 ### Fixed
 - **Git Control Center:** the WORKTREES tile counted the main worktree as a linked one ("3 linked worktrees in use" with two linked worktrees). It now reads, for example, *main + 2 linked* ([#1](https://github.com/erikvandeblaak/ForgeTerm/issues/1)).
@@ -53,6 +53,7 @@ All notable changes to ForgeTerm. Dates are release dates.
 
 First public build: GPU-rendered terminal (ConPTY / PTY with alacritty_terminal), tabs and splits, Command Palette and menu bar, file explorer, code viewer with minimap, Git panel, AI workspace for Claude Code and Codex, Prompt Studio, monitor, session restore, `settings.toml` with live reload. Windows installer, portable zip and a `.deb` for Linux Mint 22 / Ubuntu 24.04.
 
+[0.2.1]: https://github.com/erikvandeblaak/ForgeTerm/releases/tag/v0.2.1
 [0.2.0]: https://github.com/erikvandeblaak/ForgeTerm/releases/tag/v0.2.0
 [0.1.1]: https://github.com/erikvandeblaak/ForgeTerm/releases/tag/v0.1.1
 [0.1.0]: https://github.com/erikvandeblaak/ForgeTerm/releases/tag/v0.1.0

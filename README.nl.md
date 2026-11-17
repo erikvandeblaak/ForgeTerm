@@ -3,7 +3,7 @@
 **AI-Native Developer Workspace** — Erik van de Blaak Edition
 Created by Erik van de Blaak.
 
-Status: versie 0.2.0 (ook als download). Getest op Windows 11 en in WSL Ubuntu 24.04 (basis van Linux Mint 22), nog niet op een echte Mint-desktop. Zie [docs/ROADMAP.md](docs/ROADMAP.md) voor wat wel en niet af is, en [CHANGELOG.md](CHANGELOG.md) voor wat er per versie bij kwam.
+Status: versie 0.2.1 (ook als download). Getest op Windows 11 en in WSL Ubuntu 24.04 (basis van Linux Mint 22), nog niet op een echte Mint-desktop. Zie [docs/ROADMAP.md](docs/ROADMAP.md) voor wat wel en niet af is, en [CHANGELOG.md](CHANGELOG.md) voor wat er per versie bij kwam.
 
 ## Starten
 
@@ -85,7 +85,7 @@ Veilig in onbekende repositories: lezen voert nooit door de repository geconfigu
 **Linux Mint 22 / Ubuntu 24.04** — `forgeterm_<versie>-1_amd64.deb`:
 
 ```
-sudo apt install ./forgeterm_0.2.0-1_amd64.deb     # verwijderen: sudo apt remove forgeterm
+sudo apt install ./forgeterm_0.2.1-1_amd64.deb     # verwijderen: sudo apt remove forgeterm
 ```
 
 Installeert `/usr/bin/forgeterm`, een menu-item (*Systeemgereedschap / Ontwikkeling*) met icoon, en de documentatie in `/usr/share/doc/forgeterm`. apt haalt ontbrekende bibliotheken zelf op (X11/Wayland, xkbcommon, EGL; aanbevolen: git en Vulkan). Getest in WSL Ubuntu 24.04 (pakketinhoud, afhankelijkheden via `apt-get install --simulate`, starten en Wayland-app-id); nog niet op een echte Mint-desktop.
