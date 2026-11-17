@@ -3,7 +3,7 @@
 **AI-Native Developer Workspace** — Erik van de Blaak Edition
 Created by Erik van de Blaak.
 
-Status: versie 0.2 (broncode; de laatste download is 0.1.1). Getest op Windows 11 en in WSL Ubuntu 24.04 (basis van Linux Mint 22), nog niet op een echte Mint-desktop. Zie [docs/ROADMAP.md](docs/ROADMAP.md) voor wat wel en niet af is, en [CHANGELOG.md](CHANGELOG.md) voor wat er per versie bij kwam.
+Status: versie 0.2.0 (ook als download). Getest op Windows 11 en in WSL Ubuntu 24.04 (basis van Linux Mint 22), nog niet op een echte Mint-desktop. Zie [docs/ROADMAP.md](docs/ROADMAP.md) voor wat wel en niet af is, en [CHANGELOG.md](CHANGELOG.md) voor wat er per versie bij kwam.
 
 ## Starten
 
@@ -32,7 +32,7 @@ Vereist: Rust (stable) en op Windows de Visual Studio C++ Build Tools + Windows 
 | Bestandsverkenner | **Ctrl+Shift+E**: verborgen → tonen met toetsenbord, zichtbaar → toetsenbord erheen, al actief → verbergen. In de boom: ↑↓ PgUp/PgDn Home/End, → uitklappen / naar eerste item, ← inklappen / naar oudermap, Enter = map open/dicht of bestand in de viewer (die krijgt dan het toetsenbord), Esc = terug naar de terminal (gewoon typen ook: de toets gaat meteen naar de terminal). Ververst vanzelf als er bestanden bijkomen of verdwijnen |
 | Andere map in de verkenner | knop **…** of View → Go to Folder…: pad typen of plakken (`~` = thuismap, relatief = vanaf de huidige map), Enter |
 | Instellingen openen (`settings.toml`, wordt live toegepast) | **Ctrl+,** of File → Open Settings File |
-| AI-werkplek (Claude Code / Codex starten, projectcontext) | **Ctrl+Shift+A** of menu AI |
+| AI-werkplek (Claude Code / Codex starten, projectcontext incl. hooks en MCP-servers: alleen tonen, nooit uitvoeren) | **Ctrl+Shift+A** of menu AI |
 | Prompt Studio (sjabloon kiezen, variabelen invullen, invoegen zonder Enter) | **Ctrl+Shift+I** of AI → Prompt Studio |
 | Prompt Studio naast de terminal (of weer zwevend) | knop *Dock beside terminal* / *Float* in de studio, of AI → Prompt Studio Beside Terminal / Floating |
 | Monitor: CPU en geheugen van het systeem en per terminal, GPU (NVIDIA via de driver, AMD op Linux; anders "not available" met de reden). Alleen echte metingen, alleen zolang het paneel open is | **Ctrl+Shift+M** of View → Toggle Monitor |
@@ -85,7 +85,7 @@ Veilig in onbekende repositories: lezen voert nooit door de repository geconfigu
 **Linux Mint 22 / Ubuntu 24.04** — `forgeterm_<versie>-1_amd64.deb`:
 
 ```
-sudo apt install ./forgeterm_0.1.1-1_amd64.deb     # verwijderen: sudo apt remove forgeterm
+sudo apt install ./forgeterm_0.2.0-1_amd64.deb     # verwijderen: sudo apt remove forgeterm
 ```
 
 Installeert `/usr/bin/forgeterm`, een menu-item (*Systeemgereedschap / Ontwikkeling*) met icoon, en de documentatie in `/usr/share/doc/forgeterm`. apt haalt ontbrekende bibliotheken zelf op (X11/Wayland, xkbcommon, EGL; aanbevolen: git en Vulkan). Getest in WSL Ubuntu 24.04 (pakketinhoud, afhankelijkheden via `apt-get install --simulate`, starten en Wayland-app-id); nog niet op een echte Mint-desktop.
