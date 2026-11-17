@@ -418,15 +418,7 @@ fn tiles<'a>(status: &'a Status, data: Option<&'a DashData>) -> Element<'a, Mess
     };
     let wts = match data.map(|d| &d.worktrees) {
         None => ("…".to_owned(), "loading".to_owned()),
-        Some(Ok(w)) => (
-            w.len().to_string(),
-            if w.len() > 1 {
-                "linked worktrees in use"
-            } else {
-                "main only"
-            }
-            .to_owned(),
-        ),
+        Some(Ok(w)) => (w.len().to_string(), worktree_caption(w.len())),
         Some(Err(_)) => ("—".to_owned(), "not available".to_owned()),
     };
     row![
@@ -458,6 +450,15 @@ fn tiles<'a>(status: &'a Status, data: Option<&'a DashData>) -> Element<'a, Mess
     ]
     .spacing(theme::space::XL)
     .into()
+}
+
+/// Caption under the WORKTREES tile. The number above it is every worktree
+/// `git worktree list` gives, the main one included, so the caption splits it.
+fn worktree_caption(total: usize) -> String {
+    match total {
+        0 | 1 => "main only".to_owned(),
+        n => format!("main + {} linked", n - 1),
+    }
 }
 
 pub(crate) fn tile<'a>(
@@ -1140,6 +1141,14 @@ mod tests {
         let wts = vec![PathBuf::from("C:/Work/Shop")];
         assert_eq!(worktree_of(Path::new(r"c:\work\shop\src"), &wts), Some(0));
         assert_eq!(path_key(Path::new(r"C:\A\B\")), "c:/a/b");
+    }
+
+    #[test]
+    fn worktree_tile_counts_the_main_worktree_apart() {
+        // The tile shows the total; the caption names how many are linked (#1).
+        assert_eq!(worktree_caption(1), "main only");
+        assert_eq!(worktree_caption(2), "main + 1 linked");
+        assert_eq!(worktree_caption(3), "main + 2 linked");
     }
 
     #[test]

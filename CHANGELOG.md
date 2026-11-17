@@ -2,6 +2,11 @@
 
 All notable changes to ForgeTerm. Dates are release dates.
 
+## [Unreleased]
+
+### Fixed
+- **Git Control Center:** the WORKTREES tile counted the main worktree as a linked one ("3 linked worktrees in use" with two linked worktrees). It now reads, for example, *main + 2 linked* ([#1](https://github.com/erikvandeblaak/ForgeTerm/issues/1)).
+
 ## [0.2.0] – 2026-11-17
 
 ### Added
