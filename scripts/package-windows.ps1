@@ -51,7 +51,8 @@ $zip = Join-Path $dist "$name.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Compress-Archive -Path "$stage\*" -DestinationPath $zip
 $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
-Set-Content -Path "$zip.sha256" -Value "$hash  $name.zip" -Encoding ascii
+# LF line ending, so `sha256sum -c` works on Linux and macOS too.
+Set-Content -Path "$zip.sha256" -Value "$hash  $name.zip`n" -NoNewline -Encoding ascii
 
 Write-Host "Created $zip"
 Write-Host "SHA-256 $hash"
@@ -77,6 +78,6 @@ $setup = Join-Path $dist "ForgeTerm-$version-setup-x64.exe"
     "/DSIDEBAR=$sidebar" "/DOUTFILE=$setup" packaging\windows\forgeterm.nsi
 if ($LASTEXITCODE -ne 0) { throw "makensis failed" }
 $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLower()
-Set-Content -Path "$setup.sha256" -Value "$hash  $(Split-Path -Leaf $setup)" -Encoding ascii
+Set-Content -Path "$setup.sha256" -Value "$hash  $(Split-Path -Leaf $setup)`n" -NoNewline -Encoding ascii
 Write-Host "Created $setup"
 Write-Host "SHA-256 $hash"
